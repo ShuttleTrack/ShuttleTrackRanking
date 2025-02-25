@@ -67,6 +67,16 @@ public class ScorePersister {
     }
 
     @Transactional
+    public void updatePlayerWithScore(double newScore, int encounterId, LocalDate encounterDate, Integer playerId) {
+        var player = playerRepository.findById(playerId).orElseThrow();
+        Double oldScore = player.getRankScore();
+        player.setRankScore(newScore);
+        playerRepository.save(player);
+
+        updateScoreHistory(player, encounterId, encounterDate, oldScore, newScore);
+    }
+
+    @Transactional
     public void deactivatePlayer(Player player, int encounterId, LocalDate encounterDate) {
         // Loading again in the current transactional context
         player = playerRepository.findById(player.getId()).orElseThrow();
