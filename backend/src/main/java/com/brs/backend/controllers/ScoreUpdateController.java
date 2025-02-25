@@ -2,6 +2,8 @@ package com.brs.backend.controllers;
 
 import com.brs.backend.core.ScorePersister;
 import com.brs.backend.repositories.PlayerRepository;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,6 +22,7 @@ public class ScoreUpdateController {
     private final ScorePersister scorePersister;
 
     @PostMapping("/score/compress")
+    @Parameter(name = "x-api-key", required = true, example = "sample-api-key", in = ParameterIn.HEADER)
     public void compressScores() {
         var players = playerRepository.findAll();
         var playerScoresMap = new HashMap<Integer, Double>();
