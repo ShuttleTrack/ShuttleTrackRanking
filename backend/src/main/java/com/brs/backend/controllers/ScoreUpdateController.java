@@ -26,7 +26,7 @@ public class ScoreUpdateController {
         players.forEach(player -> {
             playerScoresMap.put(player.getId(), player.getRankScore());
         });
-        var compressedScores = convergeScores(playerScoresMap, 30.0);
+        var compressedScores = convergeScores(playerScoresMap, 37.5);
 
         compressedScores.forEach((playerId, newScore) -> {
             scorePersister.updatePlayerWithScore(newScore, COMPRESS_SCORE_ENCOUNTER_ID, LocalDate.now(), playerId);
