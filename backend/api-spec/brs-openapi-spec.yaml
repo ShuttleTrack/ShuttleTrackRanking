@@ -1,0 +1,411 @@
+openapi: 3.0.1
+info:
+  title: OpenAPI definition
+  version: v1
+servers:
+  - url: https://brs.aragorn-media-server.duckdns.org
+    description: Generated server url
+paths:
+  /players/update-ranking:
+    post:
+      tags:
+        - player-controller
+      operationId: updateRanking
+      parameters:
+        - name: x-api-key
+          in: header
+          required: true
+          example: sample-api-key
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Player'
+  /encounters/{date}/process:
+    post:
+      tags:
+        - encounter-controller
+      operationId: processEncounter
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: x-api-key
+          in: header
+          required: true
+          example: sample-api-key
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+  /encounters/{date}/add:
+    post:
+      tags:
+        - encounter-controller
+      operationId: addEncounters
+      parameters:
+        - name: date
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: x-api-key
+          in: header
+          required: true
+          example: sample-api-key
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EncounterResult'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+  /encounters/add-by-file:
+    post:
+      tags:
+        - encounter-controller
+      operationId: addEncountersByFile
+      parameters:
+        - name: x-api-key
+          in: header
+          required: true
+          example: sample-api-key
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              required:
+                - file
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: string
+  /players:
+    get:
+      tags:
+        - player-controller
+      operationId: getAllPlayers
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlayerInfo'
+  /players/{playerId}/history:
+    get:
+      tags:
+        - player-controller
+      operationId: gePlayerHistory
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            default: RANK
+            enum:
+              - RANK
+              - SCORE
+              - ALL
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PlayerHistory'
+  /players/{playerId}/encounters:
+    get:
+      tags:
+        - player-controller
+      operationId: getPlayerEncounterHistory
+      parameters:
+        - name: playerId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/PlayerEncounterHistory'
+  /players/history:
+    get:
+      tags:
+        - player-controller
+      operationId: getAllPlayersHistory
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            default: RANK
+            enum:
+              - RANK
+              - SCORE
+              - ALL
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlayerHistory'
+  /history/rank:
+    get:
+      tags:
+        - history-controller
+      operationId: getRankHistory
+      parameters:
+      - name: pageNumber
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: pageSize
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: sort
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ASC
+          enum:
+            - ASC
+            - DESC
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DatePlayerRankInfo'
+  /encounters:
+    get:
+      tags:
+        - encounter-controller
+      operationId: getAllEncounters
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Encounter'
+components:
+  schemas:
+    Player:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        name:
+          type: string
+        rankScore:
+          type: number
+          format: double
+        playerRank:
+          type: integer
+          format: int32
+        colorHex:
+          type: string
+        highestRank:
+          type: integer
+          format: int32
+        rankSince:
+          type: string
+          format: date
+    EncounterResult:
+      type: object
+      properties:
+        team1:
+          $ref: '#/components/schemas/Team'
+        team2:
+          $ref: '#/components/schemas/Team'
+    Team:
+      type: object
+      properties:
+        player1:
+          type: string
+        player2:
+          type: string
+        setPoints:
+          type: integer
+          format: int32
+    PlayerInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        name:
+          type: string
+        rankScore:
+          type: number
+          format: double
+        playerRank:
+          type: integer
+          format: int32
+        previousRank:
+          type: integer
+          format: int32
+        colorHex:
+          type: string
+        highestRank:
+          type: integer
+          format: int32
+        timeInHighestRank:
+          type: string
+    PlayerHistory:
+      type: object
+      properties:
+        playerName:
+          type: string
+        playerId:
+          type: integer
+          format: int32
+    PlayerEncounterHistory:
+      type: object
+      properties:
+        playerName:
+          type: string
+        playerId:
+          type: integer
+          format: int32
+        encounterHistory:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerEncounterHistoryRecord'
+    PlayerEncounterHistoryRecord:
+      type: object
+      properties:
+        encounterDate:
+          type: string
+          format: date
+        encounterId:
+          type: integer
+          format: int32
+        encounterScore:
+          type: number
+          format: double
+        opponentTeam:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerHistory'
+        opponentTeamPoints:
+          type: integer
+          format: int32
+        playerTeam:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerHistory'
+        playerTeamPoints:
+          type: integer
+          format: int32
+    Encounter:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        team1:
+          type: string
+        team2:
+          type: string
+        encounterDate:
+          type: string
+          format: date
+        processed:
+          type: boolean
+        team1SetPoints:
+          type: integer
+          format: int32
+        team2SetPoints:
+          type: integer
+          format: int32
+        calculatedScore:
+          type: number
+          format: double
+    DatePlayerRankInfo:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        rankInfo:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerRankInfo'
+    PlayerRankInfo:
+      type: object
+      properties:
+        playerId:
+          type: integer
+          format: int32
+        playerName:
+          type: string
+        oldRank:
+          type: integer
+          format: int32
+        newRank:
+          type: integer
+          format: int32
