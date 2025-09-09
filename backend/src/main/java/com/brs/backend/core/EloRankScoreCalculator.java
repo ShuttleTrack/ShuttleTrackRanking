@@ -40,6 +40,7 @@ public class EloRankScoreCalculator implements RankScoreCalculator {
         double team1WinActual = encounter.getTeam1SetPoints() > encounter.getTeam2SetPoints() ? 1 : 0;
 
         // K value lowered to 20 from 40 in Sep, 2024
+        // K value lowered to 15 from 20 in Sep, 2025
         double team1Score = BigDecimal.valueOf(20 * (team1WinActual - team1WinExpected)).setScale(2, RoundingMode.HALF_UP).doubleValue();
         double team2Score = -1 * team1Score;
 
