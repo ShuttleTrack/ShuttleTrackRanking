@@ -34,16 +34,16 @@ public class CommonAbsenteeManager {
             var games = scoreHistoryRepository.findAllByPlayerId(player.getId());
             var inactiveGamesBefore = countAbsentTimes(games);
 
-            if (inactiveGamesBefore > 5) {
+            if (inactiveGamesBefore >= 5) {
                 longTermAbsentees.add(player);
             } else {
                 var inactiveMultiplier = 1;
-                if(inactiveGamesBefore == 1) {
+                if (inactiveGamesBefore == 1) {
                     inactiveMultiplier = 2;
-                } else if(inactiveGamesBefore >= 2) {
+                } else if (inactiveGamesBefore >= 2) {
                     inactiveMultiplier = 3;
                 }
-                absentees.put(player, inactiveMultiplier*DEMERIT_POINTS_ABSENTEE);
+                absentees.put(player, inactiveMultiplier * DEMERIT_POINTS_ABSENTEE);
             }
         }
         deductPointsForAbsentees(absentees);
@@ -63,11 +63,11 @@ public class CommonAbsenteeManager {
 
     public static int countAbsentTimes(List<ScoreHistory> scoreHistories) {
         return scoreHistories == null || scoreHistories.isEmpty() ? 0 :
-                scoreHistories.stream()
+                (int) scoreHistories.stream()
                         .map(ScoreHistory::getEncounterId)
-                        .takeWhile(n -> n == -1)
-                        .mapToInt(n -> 1)
-                        .sum();
+                        .limit(5)
+                        .filter(encouterId -> encouterId==-1)
+                        .count();
     }
 
 }
