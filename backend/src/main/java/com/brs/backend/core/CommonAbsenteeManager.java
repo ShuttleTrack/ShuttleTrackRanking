@@ -9,9 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 import static com.brs.backend.common.Constants.*;
 
@@ -27,26 +25,22 @@ public class CommonAbsenteeManager {
     private final ScoreHistoryRepository scoreHistoryRepository;
 
     public void calculateAbsenteeScoreAndPersist(List<Player> players) {
-        var absentees = new ArrayList<Player>();
+        var absentees = new HashMap<Player, Integer>();
         var longTermAbsentees = new ArrayList<Player>();
-        var encountersDates = encounterRepository.findAllDistinctEncounterDateOrdered();
-        if (encountersDates.size() <= 6) {
-            log.info("There are not enough encounters played to disable players");
-            deductPointsForAbsentees(players);
-            return;
-        }
-        var cutOverDate = encountersDates.get(6);
         for (Player player : players) {
             var games = scoreHistoryRepository.findAllByPlayerId(player.getId());
-            var lastActiveGame = games.stream().filter(g -> g.getEncounterId() > 0).max(Comparator.comparing(ScoreHistory::getEncounterDate));
-            if(lastActiveGame.isEmpty()) {
-                continue;
-            }
-            var lastActiveGameDate = lastActiveGame.get().getEncounterDate();
-            if (lastActiveGameDate.isBefore(cutOverDate)) {
+            var inactiveGamesBefore = countAbsentTimes(games);
+
+            if (inactiveGamesBefore > 5) {
                 longTermAbsentees.add(player);
             } else {
-                absentees.add(player);
+                var inactiveMultiplier = 1;
+                if(inactiveGamesBefore == 1) {
+                    inactiveMultiplier = 2;
+                } else if(inactiveGamesBefore >= 2) {
+                    inactiveMultiplier = 3;
+                }
+                absentees.put(player, inactiveMultiplier*DEMERIT_POINTS_ABSENTEE);
             }
         }
         deductPointsForAbsentees(absentees);
@@ -57,10 +51,20 @@ public class CommonAbsenteeManager {
         longTermAbsentees.forEach(player -> scorePersister.deactivatePlayer(player, DISABLE_PLAYER_ENCOUNTER_ID, LocalDate.now()));
     }
 
-    private void deductPointsForAbsentees(List<Player> players) {
-        for (Player player : players) {
-            scorePersister.updatePlayer(DEMERIT_POINTS_ABSENTEE, ABSENTEE_ENCOUNTER_ID, LocalDate.now(), player);
+    private void deductPointsForAbsentees(Map<Player, Integer> players) {
+        for(Map.Entry<Player, Integer> entry : players.entrySet()) {
+            scorePersister.updatePlayer(entry.getValue(), ABSENTEE_ENCOUNTER_ID, LocalDate.now(), entry.getKey());
         }
+
+    }
+
+    public static int countAbsentTimes(List<ScoreHistory> scoreHistories) {
+        return scoreHistories == null || scoreHistories.isEmpty() ? 0 :
+                scoreHistories.stream()
+                        .map(ScoreHistory::getEncounterId)
+                        .takeWhile(n -> n == -1)
+                        .mapToInt(n -> 1)
+                        .sum();
     }
 
 }
