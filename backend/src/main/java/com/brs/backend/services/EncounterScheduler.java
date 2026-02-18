@@ -4,6 +4,7 @@ import com.brs.backend.configuration.TelegramGroupConfig;
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.request.SendPoll;
 import com.pengrad.telegrambot.response.SendResponse;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,11 @@ public class EncounterScheduler {
 
     public EncounterScheduler(TelegramGroupConfig telegramGroupConfig) {
         this.telegramGroupConfig = telegramGroupConfig;
+    }
+
+    @PostConstruct
+    public void init (){
+        log.info("configuration groups on startup: {}", telegramGroupConfig.getGroups());
     }
 
     @Scheduled(cron = "0 0 17 * * *")
