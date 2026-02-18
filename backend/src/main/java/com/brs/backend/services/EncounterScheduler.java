@@ -22,8 +22,10 @@ public class EncounterScheduler {
         this.telegramGroupConfig = telegramGroupConfig;
     }
 
-    @Scheduled(cron = "0 0 17 * * *")
+    @Scheduled(cron = "0 0 19 * * *")
     public void scheduleEncounter() {
+        log.info("scheduleEncounter running at {}", LocalDate.now());
+        log.info("configuration groups: {}", telegramGroupConfig.getGroups());
         DayOfWeek today = LocalDate.now().getDayOfWeek();
 
         // Check if there's a group configuration for today
