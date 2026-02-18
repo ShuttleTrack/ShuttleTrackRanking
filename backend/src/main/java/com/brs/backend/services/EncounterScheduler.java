@@ -22,7 +22,7 @@ public class EncounterScheduler {
         this.telegramGroupConfig = telegramGroupConfig;
     }
 
-    @Scheduled(cron = "0 0 19 * * *")
+    @Scheduled(cron = "0 0 17 * * *")
     public void scheduleEncounter() {
         log.info("scheduleEncounter running at {}", LocalDate.now());
         log.info("configuration groups: {}", telegramGroupConfig.getGroups());
