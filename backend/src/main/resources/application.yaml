@@ -16,8 +16,19 @@ api:
   admin:
     emails: test@test.com, test2@test.com
   tg:
-    key: sample-telegram-key
-    group: sample-group-id
+    groups:
+      - day: SATURDAY
+        matchDay: MONDAY
+        botKey: sample-telegram-key-1
+        groupId: sample-group-id-1
+      - day: MONDAY
+        matchDay: WEDNESDAY
+        botKey: sample-telegram-key-2
+        groupId: sample-group-id-2
+      - day: WEDNESDAY
+        matchDay: FRIDAY
+        botKey: sample-telegram-key-3
+        groupId: sample-group-id-3
 
 server:
   forward-headers-strategy: NATIVE
