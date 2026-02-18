@@ -26,13 +26,17 @@ public class EncounterScheduler {
     public void scheduleEncounter() {
         DayOfWeek today = LocalDate.now().getDayOfWeek();
 
-        // Find the group configuration for today
-        telegramGroupConfig.getGroups().stream()
-            .filter(group -> group.getDay() == today)
-            .forEach(this::sendEncounterPoll);
+        // Check if there's a group configuration for today
+        TelegramGroupConfig.GroupConfig groupConfig = telegramGroupConfig.getGroups().get(today);
+
+        if (groupConfig != null) {
+            sendEncounterPoll(today, groupConfig);
+        } else {
+            log.debug("No group configured for {}", today);
+        }
     }
 
-    private void sendEncounterPoll(TelegramGroupConfig.GroupConfig groupConfig) {
+    private void sendEncounterPoll(DayOfWeek day, TelegramGroupConfig.GroupConfig groupConfig) {
         try {
             LocalDate matchDate = LocalDate.now().with(TemporalAdjusters.next(groupConfig.getMatchDay()));
             TelegramBot bot = new TelegramBot(groupConfig.getBotKey());
@@ -45,15 +49,15 @@ public class EncounterScheduler {
             SendResponse pollResponse = bot.execute(poll);
 
             if (pollResponse.isOk()) {
-                log.info("Successfully sent poll to group {} for match on {}",
-                    groupConfig.getGroupId(), matchDate);
+                log.info("Successfully sent poll on {} to group {} for match on {}",
+                    day, groupConfig.getGroupId(), matchDate);
             } else {
-                log.error("Failed to send poll to group {}. Error: {}",
-                    groupConfig.getGroupId(), pollResponse.description());
+                log.error("Failed to send poll on {} to group {}. Error: {}",
+                    day, groupConfig.getGroupId(), pollResponse.description());
             }
         } catch (Exception e) {
-            log.error("Error sending encounter poll to group {}",
-                groupConfig.getGroupId(), e);
+            log.error("Error sending encounter poll on {} to group {}",
+                day, groupConfig.getGroupId(), e);
         }
     }
 

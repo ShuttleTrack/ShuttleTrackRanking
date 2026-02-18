@@ -17,15 +17,15 @@ api:
     emails: test@test.com, test2@test.com
   tg:
     groups:
-      - day: SATURDAY
+      SATURDAY:
         matchDay: MONDAY
         botKey: sample-telegram-key-1
         groupId: sample-group-id-1
-      - day: MONDAY
+      MONDAY:
         matchDay: WEDNESDAY
         botKey: sample-telegram-key-2
         groupId: sample-group-id-2
-      - day: WEDNESDAY
+      WEDNESDAY:
         matchDay: FRIDAY
         botKey: sample-telegram-key-3
         groupId: sample-group-id-3
