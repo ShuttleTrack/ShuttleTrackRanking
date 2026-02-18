@@ -1,10 +1,10 @@
 package com.brs.backend.services;
 
+import com.brs.backend.configuration.TelegramGroupConfig;
 import com.pengrad.telegrambot.TelegramBot;
 import com.pengrad.telegrambot.request.SendPoll;
 import com.pengrad.telegrambot.response.SendResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -16,25 +16,45 @@ import java.time.temporal.TemporalAdjusters;
 @Slf4j
 public class EncounterScheduler {
 
-    @Value("${api.tg.key}")
-    private String botKey;
+    private final TelegramGroupConfig telegramGroupConfig;
 
-    @Value("${api.tg.group}")
-    private String groupId;
-
-    @Scheduled(cron = "0 0 15 * * MON")
-    public void scheduleEncounter() {
-        LocalDate nextWednesday = getNextWednesday();
-        TelegramBot bot = new TelegramBot(botKey);
-        SendPoll poll = new SendPoll(groupId, "Joining Badminton on " + nextWednesday, "In", "Out");
-        poll.allowsMultipleAnswers(false);
-        poll.isAnonymous(false);
-        SendResponse pollResponse = bot.execute(poll);
+    public EncounterScheduler(TelegramGroupConfig telegramGroupConfig) {
+        this.telegramGroupConfig = telegramGroupConfig;
     }
 
-    private LocalDate getNextWednesday() {
-        LocalDate ld = LocalDate.now();
-        return ld.with(TemporalAdjusters.next(DayOfWeek.WEDNESDAY));
+    @Scheduled(cron = "0 0 17 * * *")
+    public void scheduleEncounter() {
+        DayOfWeek today = LocalDate.now().getDayOfWeek();
+
+        // Find the group configuration for today
+        telegramGroupConfig.getGroups().stream()
+            .filter(group -> group.getDay() == today)
+            .forEach(this::sendEncounterPoll);
+    }
+
+    private void sendEncounterPoll(TelegramGroupConfig.GroupConfig groupConfig) {
+        try {
+            LocalDate matchDate = LocalDate.now().with(TemporalAdjusters.next(groupConfig.getMatchDay()));
+            TelegramBot bot = new TelegramBot(groupConfig.getBotKey());
+
+            SendPoll poll = new SendPoll(groupConfig.getGroupId(),
+                "Joining Badminton on " + matchDate, "In", "In (from overflow)", "Out", "Out (slot passed to someone else)");
+            poll.allowsMultipleAnswers(false);
+            poll.isAnonymous(false);
+
+            SendResponse pollResponse = bot.execute(poll);
+
+            if (pollResponse.isOk()) {
+                log.info("Successfully sent poll to group {} for match on {}",
+                    groupConfig.getGroupId(), matchDate);
+            } else {
+                log.error("Failed to send poll to group {}. Error: {}",
+                    groupConfig.getGroupId(), pollResponse.description());
+            }
+        } catch (Exception e) {
+            log.error("Error sending encounter poll to group {}",
+                groupConfig.getGroupId(), e);
+        }
     }
 
 }
