@@ -10,6 +10,80 @@ import { isValidPlayerCount } from '@/utils/game-validation';
 
 const MAX_PLAYERS = 20;
 
+// Deterministically distribute players into group sizes for a game day.
+//
+// The size *composition* (how many groups of 4 vs 5) is fixed by the player
+// count, but their *order* is shuffled using a Fisher-Yates shuffle seeded by
+// the caller-supplied `seed` (typically the game day's date). This means the
+// larger (5-player) groups no longer always land in the lowest-ranked group,
+// while still being stable for a given seed: recreating the game on the same
+// day with the same player count always yields the same distribution, so the
+// creator cannot re-roll for a more favourable grouping.
+export const calculateGroupDistribution = (totalPlayers: number, seed: string): number[] => {
+  if (totalPlayers < 4) return [];
+
+  // Base composition of group sizes for the supported player counts.
+  let distribution: number[];
+  switch (totalPlayers) {
+    case 4: distribution = [4]; break;
+    case 5: distribution = [5]; break;
+    case 8: distribution = [4, 4]; break;
+    case 9: distribution = [4, 5]; break;
+    case 10: distribution = [5, 5]; break;
+    case 12: distribution = [4, 4, 4]; break;
+    case 13: distribution = [4, 4, 5]; break;
+    case 14: distribution = [4, 5, 5]; break;
+    case 15: distribution = [5, 5, 5]; break;
+    case 16: distribution = [4, 4, 4, 4]; break;
+    case 17: distribution = [4, 4, 4, 5]; break;
+    case 18: distribution = [4, 4, 5, 5]; break;
+    case 19: distribution = [4, 5, 5, 5]; break;
+    case 20: distribution = [5, 5, 5, 5]; break;
+    default: {
+      // Fallback for any unexpected count (shouldn't happen due to validation).
+      const numGroups = Math.ceil(totalPlayers / 5);
+      const minPlayersPerGroup = 4;
+      distribution = new Array(numGroups).fill(minPlayersPerGroup);
+
+      let remaining = totalPlayers - numGroups * minPlayersPerGroup;
+      let groupIndex = numGroups - 1; // Start from last group
+      while (remaining > 0) {
+        distribution[groupIndex] += 1;
+        remaining -= 1;
+        groupIndex = (groupIndex - 1 + numGroups) % numGroups; // wrap around
+      }
+    }
+  }
+
+  // Hash the seed string into a 32-bit unsigned int.
+  const hashSeed = (str: string): number => {
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++) {
+      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    return h >>> 0;
+  };
+
+  // mulberry32: small, fast seeded PRNG returning values in [0, 1).
+  const mulberry32 = (a: number): (() => number) => () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  // Seeded Fisher-Yates shuffle of the group sizes.
+  const rng = mulberry32(hashSeed(seed));
+  for (let i = distribution.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [distribution[i], distribution[j]] = [distribution[j], distribution[i]];
+  }
+
+  return distribution;
+};
+
 const GamePlannerPage = () => {
   const router = useRouter();
   const { players, isLoading: playersLoading } = useGamePlayers();
@@ -70,9 +144,15 @@ const GamePlannerPage = () => {
       .sort((a, b) => a.playerRank - b.playerRank);
 
     const totalPlayers = selectedPlayerDetails.length;
-    
+
+    // Use the local calendar date as a deterministic seed so the group-size
+    // ordering is fixed for the day but varies day to day. Folding in the
+    // player count keeps different counts decorrelated.
+    const today = new Date();
+    const dateSeed = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+
     // Calculate number of groups and distribution
-    const distribution = calculateGroupDistribution(totalPlayers);
+    const distribution = calculateGroupDistribution(totalPlayers, `${dateSeed}:${totalPlayers}`);
     const groups: Record<string, number[]> = {};
     
     let playerIndex = 0;
@@ -101,46 +181,6 @@ const GamePlannerPage = () => {
       console.error('Failed to create/update game:', error);
       // Show error toast/notification
     }
-  };
-
-  // Helper function to calculate group distribution
-  const calculateGroupDistribution = (totalPlayers: number): number[] => {
-    if (totalPlayers < 4) return [];
-    
-    // Special cases
-    switch (totalPlayers) {
-      case 4: return [4];
-      case 5: return [5];
-      case 8: return [4, 4];
-      case 9: return [4, 5];
-      case 10: return [5, 5];
-      case 12: return [4, 4, 4];
-      case 13: return [4, 4, 5];
-      case 14: return [4, 5, 5];
-      case 15: return [5, 5, 5];
-      case 16: return [4, 4, 4, 4];
-      case 17: return [4, 4, 4, 5];
-      case 18: return [4, 4, 5, 5];
-      case 19: return [4, 5, 5, 5];
-      case 20: return [5, 5, 5, 5];
-    }
-    
-    // For any unexpected number of players (shouldn't happen due to validation)
-    const numGroups = Math.ceil(totalPlayers / 5);
-    const minPlayersPerGroup = 4;
-    const distribution = new Array(numGroups).fill(minPlayersPerGroup);
-    
-    // Distribute remaining players
-    let remaining = totalPlayers - (numGroups * minPlayersPerGroup);
-    let groupIndex = numGroups - 1; // Start from last group
-    
-    while (remaining > 0) {
-      distribution[groupIndex] += 1;
-      remaining -= 1;
-      groupIndex = (groupIndex - 1 + numGroups) % numGroups; // Move to previous group, wrap around
-    }
-    
-    return distribution;
   };
 
   const validationMessage = getValidationMessage(selectedPlayers.length);

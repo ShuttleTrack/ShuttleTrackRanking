@@ -37,3 +37,5 @@ frontend/.env
 frontend/.cursor/rules/
 
 frontend/.cursor/llmstxt/
+
+frontend/*.tsbuildinfo
