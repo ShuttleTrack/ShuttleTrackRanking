@@ -31,7 +31,7 @@ public class CommonAbsenteeManager {
         var absentees = new HashMap<Player, Integer>();
         var longTermAbsentees = new ArrayList<Player>();
         for (Player player : players) {
-            var games = scoreHistoryRepository.findAllByPlayerId(player.getId());
+            var games = scoreHistoryRepository.findAllByPlayerIdOrderByEncounterDateDescIdDesc(player.getId());
             var inactiveGamesBefore = countAbsentTimes(games);
 
             if (inactiveGamesBefore >= 5) {

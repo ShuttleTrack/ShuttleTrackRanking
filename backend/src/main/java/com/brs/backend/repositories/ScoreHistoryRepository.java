@@ -11,6 +11,11 @@ public interface ScoreHistoryRepository extends JpaRepository<ScoreHistory, Inte
 
     List<ScoreHistory> findAllByPlayerId(Integer id);
 
+    // Ordered newest-first so callers that take a recent window (e.g. the absentee
+    // streak in CommonAbsenteeManager) genuinely get the most recent rows. Plain
+    // findAllByPlayerId has no defined order, so a positional limit on it is unreliable.
+    List<ScoreHistory> findAllByPlayerIdOrderByEncounterDateDescIdDesc(Integer playerId);
+
     List<ScoreHistory> findAllByPlayerIdAndEncounterDate(Integer playerId, LocalDate encounterDate);
 
     Optional<ScoreHistory> findFirstByPlayerIdOrderByEncounterDateDesc(Integer playerId);
