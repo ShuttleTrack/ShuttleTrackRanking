@@ -15,6 +15,8 @@ import java.time.LocalDate;
  *   `team_1_set_points` int NOT NULL,
  *   `team_2_set_points` int NOT NULL,
  *   `calculated_score` double DEFAULT NULL,
+ *   `group_index` int DEFAULT NULL,
+ *   `total_groups` int DEFAULT NULL,
  *   PRIMARY KEY (`id`),
  *   UNIQUE KEY `team_uniqness` (`team_1`,`team_2`,`encounter_date`)
  * ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -44,4 +46,8 @@ public class Encounter {
     private int team2SetPoints;
     @Column(name = "calculated_score")
     private Double calculatedScore;
+    @Column(name = "group_index")
+    private Integer groupIndex;
+    @Column(name = "total_groups")
+    private Integer totalGroups;
 }

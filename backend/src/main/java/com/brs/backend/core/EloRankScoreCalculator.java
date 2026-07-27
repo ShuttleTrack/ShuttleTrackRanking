@@ -26,6 +26,10 @@ public class EloRankScoreCalculator implements RankScoreCalculator {
 
     private final PlayerRepository playerRepository;
 
+    private static final int K = 20;
+    private static final double WIN_BOOST = 0.5;
+    private static final double LOSS_SHIELD = 0.5;
+
     @Override
     public void calculateAndPersist(Encounter encounter) {
 
@@ -41,13 +45,34 @@ public class EloRankScoreCalculator implements RankScoreCalculator {
 
         // K value lowered to 20 from 40 in Sep, 2024
         // K value lowered to 15 from 20 in Sep, 2025
-        double team1Score = BigDecimal.valueOf(20 * (team1WinActual - team1WinExpected)).setScale(2, RoundingMode.HALF_UP).doubleValue();
+        double team1Score = BigDecimal.valueOf(K * (team1WinActual - team1WinExpected)).setScale(2, RoundingMode.HALF_UP).doubleValue();
         double team2Score = -1 * team1Score;
+
+        double tierMultiplier = getTierMultiplier(encounter);
+        if (tierMultiplier != 1.0) {
+            team1Score = applyTierMultiplier(team1Score, tierMultiplier);
+            team2Score = applyTierMultiplier(team2Score, tierMultiplier);
+        }
 
         scorePersister.persistScores(encounter.getId(), team1Score, team2Score);
 
         ensurePlayersAreActive(Stream.concat(team1Players.stream(), team2Players.stream()).toList());
 
+    }
+
+    private double getTierMultiplier(Encounter encounter) {
+        if (encounter.getGroupIndex() == null || encounter.getTotalGroups() == null
+                || encounter.getTotalGroups() <= 1) {
+            return 1.0;
+        }
+        return (double) (encounter.getGroupIndex() - 1) / (encounter.getTotalGroups() - 1);
+    }
+
+    private double applyTierMultiplier(double score, double tierFactor) {
+        double multiplier = score > 0
+                ? 1 + tierFactor * WIN_BOOST
+                : 1 - tierFactor * LOSS_SHIELD;
+        return BigDecimal.valueOf(score * multiplier).setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 
     @Override

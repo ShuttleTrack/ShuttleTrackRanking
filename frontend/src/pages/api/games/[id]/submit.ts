@@ -57,9 +57,13 @@ export default async function handler(
     let hasErrors = false;
     const errors: Array<{ group: string; match: string; error: string }> = [];
 
+    const groupNames = Object.keys(groups);
+    const totalGroups = groupNames.length;
+
     for (const [groupName, groupScores] of Object.entries(scores)) {
       updatedScores[groupName] = { ...groupScores };
       const groupPlayers = groups[groupName];
+      const groupIndex = groupNames.indexOf(groupName) + 1;
       
       for (const [matchIndex, score] of Object.entries(groupScores)) {
         if (score.team1Score === 0 && score.team2Score === 0) continue;
@@ -101,7 +105,9 @@ export default async function handler(
                   player1: team2[0],
                   player2: team2[1],
                   setPoints: score.team2Score
-                }
+                },
+                groupIndex,
+                totalGroups
               })
             }
           );
