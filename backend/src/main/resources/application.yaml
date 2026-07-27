@@ -17,10 +17,6 @@ api:
     emails: test@test.com, test2@test.com
   tg:
     groups:
-      SATURDAY:
-        matchDay: MONDAY
-        botKey: sample-telegram-key-1
-        groupId: sample-group-id-1
       MONDAY:
         matchDay: WEDNESDAY
         botKey: sample-telegram-key-2
