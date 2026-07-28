@@ -29,6 +29,7 @@ public class EloRankScoreCalculator implements RankScoreCalculator {
     private static final int K = 20;
     private static final double WIN_BOOST = 0.5;
     private static final double LOSS_SHIELD = 0.5;
+    private static final double TIER_BOOST_MIN_SCORE_GAP = 200;
 
     @Override
     public void calculateAndPersist(Encounter encounter) {
@@ -65,7 +66,18 @@ public class EloRankScoreCalculator implements RankScoreCalculator {
                 || encounter.getTotalGroups() <= 1) {
             return 1.0;
         }
+        if (!isScoreGapLargeEnough()) {
+            return 1.0;
+        }
         return (double) (encounter.getGroupIndex() - 1) / (encounter.getTotalGroups() - 1);
+    }
+
+    private boolean isScoreGapLargeEnough() {
+        var stats = playerRepository.findAll().stream()
+                .filter(Player::isActive)
+                .mapToDouble(Player::getRankScore)
+                .summaryStatistics();
+        return stats.getCount() >= 2 && (stats.getMax() - stats.getMin()) >= TIER_BOOST_MIN_SCORE_GAP;
     }
 
     private double applyTierMultiplier(double score, double tierFactor) {
