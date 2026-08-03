@@ -3,6 +3,7 @@ package com.brs.backend.core;
 import com.brs.backend.dto.PlayerStatus;
 import com.brs.backend.model.Encounter;
 import com.brs.backend.model.Player;
+import com.brs.backend.repositories.EncounterRepository;
 import com.brs.backend.repositories.PlayerRepository;
 import com.brs.backend.util.PlayerUtil;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -25,6 +27,8 @@ public class EloRankScoreCalculator implements RankScoreCalculator {
     private final CommonAbsenteeManager commonAbsenteeManager;
 
     private final PlayerRepository playerRepository;
+
+    private final EncounterRepository encounterRepository;
 
     private static final int K = 20;
     private static final double WIN_BOOST = 0.5;
@@ -66,15 +70,17 @@ public class EloRankScoreCalculator implements RankScoreCalculator {
                 || encounter.getTotalGroups() <= 1) {
             return 1.0;
         }
-        if (!isScoreGapLargeEnough()) {
+        if (!isScoreGapLargeEnough(encounter.getEncounterDate())) {
             return 1.0;
         }
         return (double) (encounter.getGroupIndex() - 1) / (encounter.getTotalGroups() - 1);
     }
 
-    private boolean isScoreGapLargeEnough() {
-        var stats = playerRepository.findAll().stream()
-                .filter(Player::isActive)
+    private boolean isScoreGapLargeEnough(LocalDate encounterDate) {
+        var stats = encounterRepository.findAllByEncounterDate(encounterDate).stream()
+                .flatMap(e -> Stream.of(e.getTeam1(), e.getTeam2()))
+                .distinct()
+                .flatMap(ids -> playerUtil.getPlayersByIdsString(ids).stream())
                 .mapToDouble(Player::getRankScore)
                 .summaryStatistics();
         return stats.getCount() >= 2 && (stats.getMax() - stats.getMin()) >= TIER_BOOST_MIN_SCORE_GAP;
