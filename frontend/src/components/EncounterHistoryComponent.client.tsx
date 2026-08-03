@@ -2,6 +2,8 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { usePlayers } from '@/hooks/usePlayers';
 import { useEncounterHistory } from '@/hooks/useEncounterHistory';
 import { capitalizeFirstLetter } from '@/utils/string';
+import { ScoreBreakdown } from '@/types/encounter';
+import ScoreBreakdownPills from './ScoreBreakdownPills';
 
 interface Encounter {
   encounterDate: string;
@@ -11,6 +13,9 @@ interface Encounter {
   opponentTeamPoints: number;
   playerTeam: { playerName: string; playerId: number }[];
   playerTeamPoints: number;
+  scoreBreakdown?: ScoreBreakdown | null;
+  groupIndex?: number | null;
+  totalGroups?: number | null;
 }
 
 const EncounterHistoryComponent = () => {
@@ -224,7 +229,7 @@ const EncounterHistoryComponent = () => {
                       </div>
                     </td>
                     <td className="text-center">
-                      <span 
+                      <span
                         className={`font-medium ${
                           encounter.encounterScore > 0 ? 'text-success' : 'text-error'
                         }`}
@@ -232,6 +237,11 @@ const EncounterHistoryComponent = () => {
                         {encounter.encounterScore > 0 ? '+' : ''}
                         {encounter.encounterScore.toFixed(2)}
                       </span>
+                      <ScoreBreakdownPills
+                        breakdown={encounter.scoreBreakdown}
+                        groupIndex={encounter.groupIndex}
+                        totalGroups={encounter.totalGroups}
+                      />
                     </td>
                   </tr>
                 );
@@ -253,14 +263,21 @@ const EncounterHistoryComponent = () => {
                   <span className="text-gray-600">
                     {new Date(encounter.encounterDate).toLocaleDateString()}
                   </span>
-                  <span 
-                    className={`font-medium ${
-                      encounter.encounterScore > 0 ? 'text-success' : 'text-error'
-                    }`}
-                  >
-                    {encounter.encounterScore > 0 ? '+' : ''}
-                    {encounter.encounterScore.toFixed(2)}
-                  </span>
+                  <div className="text-right">
+                    <span
+                      className={`font-medium ${
+                        encounter.encounterScore > 0 ? 'text-success' : 'text-error'
+                      }`}
+                    >
+                      {encounter.encounterScore > 0 ? '+' : ''}
+                      {encounter.encounterScore.toFixed(2)}
+                    </span>
+                    <ScoreBreakdownPills
+                      breakdown={encounter.scoreBreakdown}
+                      groupIndex={encounter.groupIndex}
+                      totalGroups={encounter.totalGroups}
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 items-center">
