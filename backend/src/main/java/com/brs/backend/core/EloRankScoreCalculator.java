@@ -35,6 +35,9 @@ public class EloRankScoreCalculator implements RankScoreCalculator {
     private static final double LOSS_SHIELD = 0.5;
     private static final double TIER_BOOST_MIN_SCORE_GAP = 200;
 
+    private LocalDate cachedScoreGapDate;
+    private boolean cachedScoreGapResult;
+
     @Override
     public void calculateAndPersist(Encounter encounter) {
 
@@ -77,13 +80,18 @@ public class EloRankScoreCalculator implements RankScoreCalculator {
     }
 
     private boolean isScoreGapLargeEnough(LocalDate encounterDate) {
+        if (encounterDate.equals(cachedScoreGapDate)) {
+            return cachedScoreGapResult;
+        }
         var stats = encounterRepository.findAllByEncounterDate(encounterDate).stream()
                 .flatMap(e -> Stream.of(e.getTeam1(), e.getTeam2()))
                 .distinct()
                 .flatMap(ids -> playerUtil.getPlayersByIdsString(ids).stream())
                 .mapToDouble(Player::getRankScore)
                 .summaryStatistics();
-        return stats.getCount() >= 2 && (stats.getMax() - stats.getMin()) >= TIER_BOOST_MIN_SCORE_GAP;
+        cachedScoreGapDate = encounterDate;
+        cachedScoreGapResult = stats.getCount() >= 2 && (stats.getMax() - stats.getMin()) >= TIER_BOOST_MIN_SCORE_GAP;
+        return cachedScoreGapResult;
     }
 
     private double applyTierMultiplier(double score, double tierFactor) {
