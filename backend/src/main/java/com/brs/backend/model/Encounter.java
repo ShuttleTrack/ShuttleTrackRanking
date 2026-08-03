@@ -17,6 +17,7 @@ import java.time.LocalDate;
  *   `calculated_score` double DEFAULT NULL,
  *   `group_index` int DEFAULT NULL,
  *   `total_groups` int DEFAULT NULL,
+ *   `score_breakdown` json DEFAULT NULL,
  *   PRIMARY KEY (`id`),
  *   UNIQUE KEY `team_uniqness` (`team_1`,`team_2`,`encounter_date`)
  * ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -50,4 +51,6 @@ public class Encounter {
     private Integer groupIndex;
     @Column(name = "total_groups")
     private Integer totalGroups;
+    @Column(name = "score_breakdown", columnDefinition = "json")
+    private String scoreBreakdown;
 }
