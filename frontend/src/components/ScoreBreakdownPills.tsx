@@ -13,8 +13,6 @@ const ScoreBreakdownPills: React.FC<ScoreBreakdownPillsProps> = ({ breakdown, gr
   const hasTier = breakdown.tierAdjustment !== 0;
   const hasConsolation = breakdown.consolation !== 0;
 
-  if (!hasTier && !hasConsolation) return null;
-
   const formatValue = (val: number) => (val > 0 ? '+' : '') + val.toFixed(1);
 
   return (
