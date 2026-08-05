@@ -1,6 +1,7 @@
 import React from 'react';
 import { Encounter, EncounterPlayer } from '@/types/encounter';
 import { capitalizeFirstLetter } from '@/utils/string';
+import ScoreBreakdownPills from './ScoreBreakdownPills';
 
 interface PlayerEncounterComponentProps {
   encounter: Encounter;
@@ -43,14 +44,21 @@ const PlayerEncounterComponent: React.FC<PlayerEncounterComponentProps> = ({
           </span>
           <span>{isWin ? 'Won' : 'Lost'}</span>
         </div>
-        <span
-          className={`font-bold ${
-            encounter.encounterScore > 0 ? 'text-green-600' : 'text-red-600'
-          }`}
-        >
-          {encounter.encounterScore > 0 ? '+' : '-'}
-          {Math.abs(encounter.encounterScore)}
-        </span>
+        <div className="text-right">
+          <span
+            className={`font-bold ${
+              encounter.encounterScore > 0 ? 'text-green-600' : 'text-red-600'
+            }`}
+          >
+            {encounter.encounterScore > 0 ? '+' : '-'}
+            {Math.abs(encounter.encounterScore)}
+          </span>
+          <ScoreBreakdownPills
+            breakdown={encounter.scoreBreakdown}
+            groupIndex={encounter.groupIndex}
+            totalGroups={encounter.totalGroups}
+          />
+        </div>
       </div>
       <div className='mb-8 overflow-x-auto'>
         <div className='grid grid-cols-1 md:grid-cols-3 gap-4 items-center text-center'>

@@ -35,11 +35,12 @@ public class ScorePersister {
     private PlayerUtil playerUtil;
 
     @Transactional
-    public void persistScores(int encounterId, double team1Score, double team2Score) {
+    public void persistScores(int encounterId, double team1Score, double team2Score, String scoreBreakdown) {
 
         Encounter encounter = encounterRepository.findById(encounterId).orElseThrow();
         encounter.setCalculatedScore(Math.abs(team1Score));
         encounter.setProcessed(true);
+        encounter.setScoreBreakdown(scoreBreakdown);
         encounterRepository.save(encounter);
 
         updatePlayers(team1Score, encounter.getTeam1(), encounter);

@@ -9,5 +9,8 @@ public record PlayerEncounterHistoryRecord(LocalDate encounterDate,
                                            List<PlayerHistory> opponentTeam,
                                            Integer opponentTeamPoints,
                                            List<PlayerHistory> playerTeam,
-                                           Integer playerTeamPoints) {
+                                           Integer playerTeamPoints,
+                                           TeamScoreBreakdown scoreBreakdown,
+                                           Integer groupIndex,
+                                           Integer totalGroups) {
 }

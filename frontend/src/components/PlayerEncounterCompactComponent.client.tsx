@@ -5,6 +5,7 @@ import { capitalizeFirstLetter, groupBy, sumBy } from '@/utils/string';
 import { usePlayers } from '@/hooks/usePlayers';
 import { Player } from '@/types/player';
 import PlayerEncounterComponent from './PlayerEncounterComponent';
+import ScoreBreakdownPills from './ScoreBreakdownPills';
 import { Disclosure } from '@headlessui/react';
 import { ChevronUpIcon } from '@heroicons/react/24/solid';
 import Link from 'next/link';
@@ -99,6 +100,11 @@ const PlayerEncountersCompactComponent: React.FC<PlayerEncountersComponentProps>
         >
           {encounter.encounterScore > 0 ? '+' : '-'}
           {Math.abs(encounter.encounterScore)}
+          <ScoreBreakdownPills
+            breakdown={encounter.scoreBreakdown}
+            groupIndex={encounter.groupIndex}
+            totalGroups={encounter.totalGroups}
+          />
         </td>
       </tr>
     );

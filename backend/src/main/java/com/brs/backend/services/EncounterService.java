@@ -1,19 +1,20 @@
 package com.brs.backend.services;
 
-import com.brs.backend.dto.PlayerEncounterHistory;
-import com.brs.backend.dto.PlayerEncounterHistoryRecord;
-import com.brs.backend.dto.PlayerHistory;
+import com.brs.backend.dto.*;
 import com.brs.backend.model.Encounter;
 import com.brs.backend.model.Player;
 import com.brs.backend.model.ScoreHistory;
 import com.brs.backend.repositories.EncounterRepository;
 import com.brs.backend.repositories.PlayerRepository;
 import com.brs.backend.repositories.ScoreHistoryRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EncounterService {
@@ -23,6 +24,8 @@ public class EncounterService {
     private final ScoreHistoryRepository scoreHistoryRepository;
 
     private final PlayerRepository playerRepository;
+
+    private final ObjectMapper objectMapper;
 
     private static final String ENCOUNTER_SEPARATOR = ":";
     Map<Integer, Player> playerCache = new HashMap<>();
@@ -65,6 +68,7 @@ public class EncounterService {
             if (playerTeamPoints < opponentTeamPoints) {
                 calculatedScore *= -1;
             }
+            TeamScoreBreakdown playerBreakdown = getPlayerTeamBreakdown(encounter, playerId);
             playerEncounterHistoryRecords.add(
                     new PlayerEncounterHistoryRecord(
                             encounter.getEncounterDate(),
@@ -73,7 +77,10 @@ public class EncounterService {
                             opponentTeam,
                             opponentTeamPoints,
                             playerTeam,
-                            playerTeamPoints
+                            playerTeamPoints,
+                            playerBreakdown,
+                            encounter.getGroupIndex(),
+                            encounter.getTotalGroups()
                     ));
         }
 
@@ -114,6 +121,19 @@ public class EncounterService {
             return null;
         }
         return new PlayerHistory(player.getName(), playerId);
+    }
+
+    private TeamScoreBreakdown getPlayerTeamBreakdown(Encounter encounter, int playerId) {
+        if (encounter.getScoreBreakdown() == null) {
+            return null;
+        }
+        try {
+            ScoreBreakdown breakdown = objectMapper.readValue(encounter.getScoreBreakdown(), ScoreBreakdown.class);
+            return getPlayerTeam(encounter, playerId) == 1 ? breakdown.team1() : breakdown.team2();
+        } catch (Exception e) {
+            log.warn("Failed to parse score breakdown for encounter {}", encounter.getId(), e);
+            return null;
+        }
     }
 
     private int getPlayerTeam(Encounter encounter, Integer playerId) {

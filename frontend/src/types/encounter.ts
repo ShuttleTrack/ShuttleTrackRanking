@@ -3,6 +3,13 @@ export interface EncounterPlayer {
   playerId: number;
 }
 
+export interface ScoreBreakdown {
+  baseElo: number;
+  tierAdjustment: number;
+  consolation: number;
+  finalScore: number;
+}
+
 export interface Encounter {
   encounterDate: string;
   encounterId: number;
@@ -11,6 +18,9 @@ export interface Encounter {
   opponentTeamPoints: number;
   playerTeam: EncounterPlayer[];
   playerTeamPoints: number;
+  scoreBreakdown?: ScoreBreakdown | null;
+  groupIndex?: number | null;
+  totalGroups?: number | null;
 }
 
 export interface EncountersResponse {

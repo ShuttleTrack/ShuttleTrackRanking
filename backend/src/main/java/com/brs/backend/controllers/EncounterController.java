@@ -208,6 +208,8 @@ public class EncounterController {
                 .processed(false)
                 .team1SetPoints(result.team1().setPoints())
                 .team2SetPoints(result.team2().setPoints())
+                .groupIndex(result.groupIndex())
+                .totalGroups(result.totalGroups())
                 .build();
 
         return encounterRepository.save(encounter);
