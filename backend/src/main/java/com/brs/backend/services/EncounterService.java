@@ -64,11 +64,16 @@ public class EncounterService {
                 playerTeamPoints = encounter.getTeam2SetPoints();
                 opponentTeamPoints = encounter.getTeam1SetPoints();
             }
-            var calculatedScore = encounter.getCalculatedScore();
-            if (playerTeamPoints < opponentTeamPoints) {
-                calculatedScore *= -1;
-            }
             TeamScoreBreakdown playerBreakdown = getPlayerTeamBreakdown(encounter, playerId);
+            double calculatedScore;
+            if (playerBreakdown != null) {
+                calculatedScore = playerBreakdown.finalScore();
+            } else {
+                calculatedScore = encounter.getCalculatedScore();
+                if (playerTeamPoints < opponentTeamPoints) {
+                    calculatedScore *= -1;
+                }
+            }
             playerEncounterHistoryRecords.add(
                     new PlayerEncounterHistoryRecord(
                             encounter.getEncounterDate(),
