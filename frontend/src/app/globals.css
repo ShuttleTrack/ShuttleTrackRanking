@@ -8,6 +8,13 @@
   }
 }
 
+@layer utilities {
+  .font-numeric {
+    @apply font-bold tabular-nums;
+    font-synthesis: weight;
+  }
+}
+
 .kinetic-gradient {
   background: linear-gradient(135deg, #EE8A33 0%, #F7B375 100%);
 }

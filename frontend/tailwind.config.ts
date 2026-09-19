@@ -38,6 +38,7 @@ const config: Config = {
         headline: ['var(--font-headline)', 'Manrope', 'sans-serif'],
         body: ['var(--font-body)', 'Inter', 'sans-serif'],
         label: ['var(--font-label)', 'Space Grotesk', 'sans-serif'],
+        numeric: ['var(--font-numeric)', 'Share Tech Mono', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         DEFAULT: '0.125rem',

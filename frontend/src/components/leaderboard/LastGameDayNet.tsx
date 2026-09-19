@@ -3,7 +3,7 @@ import type { RowVariant } from './RankBadge';
 interface LastGameDayNetProps {
   value: number | null;
   variant: RowVariant;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 function netColor(variant: RowVariant, value: number): string {
@@ -30,7 +30,12 @@ function netColor(variant: RowVariant, value: number): string {
 }
 
 const LastGameDayNet = ({ value, variant, size = 'md' }: LastGameDayNetProps) => {
-  const sizeClass = size === 'sm' ? 'text-xs font-bold' : 'font-headline font-bold text-sm';
+  const sizeClass =
+    size === 'sm'
+      ? 'text-xs font-numeric tabular-nums'
+      : size === 'lg'
+        ? 'font-numeric tabular-nums text-xl'
+        : 'font-numeric tabular-nums text-sm';
 
   if (value === null) {
     return (

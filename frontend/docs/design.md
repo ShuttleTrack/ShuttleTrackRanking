@@ -50,6 +50,7 @@ Use Tailwind theme keys (see `tailwind.config.ts`), not raw hex in components wh
 | Headlines | Manrope | `font-headline` |
 | Body | Inter | `font-body` |
 | Column labels | Space Grotesk | `font-label` |
+| Numeric values (scores, ranks, nets) | Share Tech Mono (400, synthesized bold) | `font-numeric` — `font-bold` + `font-synthesis: weight` in `globals.css` |
 
 - Rankings page title: `font-headline text-3xl`–`text-4xl font-extrabold`; `px-8 sm:px-16` aligns left edge with the `RANK` column; a thin `h-0.5 w-10 bg-primary` accent rule sits beneath the heading.
 - Column headers: `font-label text-xs font-bold uppercase tracking-widest opacity-60`
@@ -88,13 +89,13 @@ Last day shows net rank score on the player’s most recent played date.
 
 ## Do
 
-- Dark-only public chrome; single visual system on rankings and shared nav/footer.
+- Dark-only public chrome; single visual system on rankings, player encounter history (`/player/{id}/encounters`), and shared nav/footer.
 - Link player names to `/player/{id}/encounters`.
 - Use Heroicons for crown, medal, trend (no Material Symbols dependency required).
 
 ## Don’t
 
-- DaisyUI `table`, `stat`, or `alert-*` on the public leaderboard page.
+- DaisyUI `table`, `stat`, or `alert-*` on public rankings or player encounter history pages.
 - Invent nav items (Tournaments, Stats) or footer legal pages without real routes.
 - Light/emerald theme toggle on restyled public chrome.
 - Fake placeholder player or country data from the Stitch HTML.
