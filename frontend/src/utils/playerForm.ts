@@ -8,6 +8,8 @@ export interface RawEncounter {
   processed: boolean;
   team1SetPoints: number;
   team2SetPoints: number;
+  calculatedScore?: number | null;
+  scoreBreakdown?: string | null;
 }
 
 export interface PlayerFormStats {

@@ -2,7 +2,7 @@
 
 Dark, performance-oriented leaderboard aesthetic derived from the Stitch player-rankings mock. **Brand:** Dutch Lankan Shuttle Masters. Do not use placeholder names from the mock (e.g. COURTCLAN).
 
-**Header:** Solid black band (`#000000` / `surface-header`), no gradient, no blur. Logo seated inside the bar — **desktop** `h-16` centered in a `h-20` band; **mobile** `h-12` centered in a `h-16` band. Active nav link uses an orange `border-b-2 border-primary` underline. **Footer:** full club name as italic wordmark.
+**Footer:** full club name as italic wordmark on **`md+` only**; mobile shows copyright + compact link row (no duplicate wordmark).
 
 **Page background:** `dutch-lankan-shuttle-masters-logo-gray.png` (transparent gray PNG — near-black pixels knocked out, foreground luminance boosted via `min(255, int(lum * 1.35 + 40))` for light-gray-on-dark legibility) rendered `fixed`, centered, `w-[min(78vw,44rem)]`, `opacity-[0.13]`, `z-0`, `pointer-events-none`. Decorative only — all content is `z-10` above it.
 
@@ -67,23 +67,24 @@ Use Tailwind theme keys (see `tailwind.config.ts`), not raw hex in components wh
 
 ## Leaderboard grid (desktop)
 
-12-column grid aligned with mock:
+7-column CSS grid (`LEADERBOARD_DESKTOP_GRID` in `leaderboardGrid.ts`), shared by header and rows with no column gap:
 
-| Col span | Column |
-|----------|--------|
-| 1 | Rank |
-| 4 | Player details |
-| 2 | Last 5 games (center) |
-| 2 | Win rate (center) |
-| 2 | Points (right) |
-| 1 | Trend (right) |
+| Track | Column |
+|-------|--------|
+| `4.5rem` | Rank |
+| `minmax(10rem, 1.6fr)` | Player details |
+| `7.5rem` | Last 5 games (center) |
+| `1fr` (×4 equal) | Win rate, Points, Last day, Trend — each centered |
+
+Last day shows net rank score on the player’s most recent played date.
 
 ## Data display rules
 
 - **Points** = real `rankScore` (typically one decimal). Do not inflate to mock-style large integers.
+- **Last day** = sum of signed encounter scores on the player’s latest **played** date (`scoreBreakdown.finalScore` when present, else signed `calculatedScore`); `—` if none. Matches player history “Net Score” for that date.
 - **Win rate** = percentage from encounter history (`XX.X%` or consistent decimal style).
 - **Subtitle** under player name = highest rank + time in highest rank (we have no country field).
-- **Last 5** = five vertical ticks; filled = win, muted = loss.
+- **Last 5** = five vertical ticks on every row: win `rgb(238 138 51)`, loss `rgb(185 28 28)`, empty `rgb(255 255 255 / 0.45)`; each bar has a `1px` dark ring (`rgb(0 0 0 / 0.45)`) for contrast on podium gradients.
 
 ## Do
 

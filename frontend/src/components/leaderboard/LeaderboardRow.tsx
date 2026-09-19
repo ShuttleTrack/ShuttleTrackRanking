@@ -3,7 +3,9 @@ import type { CSSProperties } from 'react';
 import type { PlayerRankingData } from '@/types/rankings';
 import { capitalizeFirstLetter } from '@/utils/string';
 import FormBars from './FormBars';
+import { LEADERBOARD_DESKTOP_GRID } from './leaderboardGrid';
 import RankBadge, { type RowVariant } from './RankBadge';
+import LastGameDayNet from './LastGameDayNet';
 import TrendIndicator from './TrendIndicator';
 
 function variantForRank(rank: number): RowVariant {
@@ -100,7 +102,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
 
   return (
     <div
-      className={`relative overflow-hidden group rounded-xl px-4 sm:px-8 py-2.5 md:py-4 ${rowClass} ${hoverBorder}`}
+      className={`relative overflow-hidden group rounded-xl px-3 sm:px-8 py-2 md:py-4 ${rowClass} ${hoverBorder}`}
       style={style}
     >
       {(variant === 'gold' || variant === 'dark') && (
@@ -108,11 +110,11 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
       )}
 
       {/* Desktop grid */}
-      <div className="hidden md:grid grid-cols-12 items-center gap-2 relative z-10">
-        <div className="col-span-1">
+      <div className={`${LEADERBOARD_DESKTOP_GRID} relative z-10`}>
+        <div>
           <RankBadge rank={player.playerRank} variant={variant} />
         </div>
-        <div className="col-span-4">
+        <div>
           <Link
             href={`/player/${player.id}/encounters`}
             className={`font-headline font-bold hover:underline ${nameClass[variant]}`}
@@ -123,28 +125,31 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
             {subtitle}
           </p>
         </div>
-        <div className="col-span-2">
+        <div className="flex justify-center">
           <FormBars results={player.lastFive} variant={variant} />
         </div>
-        <div className="col-span-2 text-center">
+        <div className="text-center">
           <span className={`font-headline font-bold text-lg ${metricClass[variant]}`}>
             {player.winRate.toFixed(1)}%
           </span>
         </div>
-        <div className="col-span-2 text-right">
+        <div className="text-center">
           <p className={`font-headline font-bold text-lg ${nameClass[variant]}`}>
             {player.rankScore.toFixed(1)}
           </p>
         </div>
-        <div className="col-span-1 flex justify-end">
+        <div className="flex justify-center">
+          <LastGameDayNet value={player.lastGameDayNet} variant={variant} />
+        </div>
+        <div className="flex justify-center">
           <TrendIndicator rankChange={player.rankChange} variant={variant} />
         </div>
       </div>
 
       {/* Mobile compact two-row layout */}
-      <div className="md:hidden relative z-10 space-y-2">
+      <div className="md:hidden relative z-10 space-y-1">
         {/* Row 1: rank | name+subtitle | trend */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <div className="flex-shrink-0">
             <RankBadge rank={player.playerRank} variant={variant} />
           </div>
@@ -161,17 +166,17 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
             <TrendIndicator rankChange={player.rankChange} variant={variant} />
           </div>
         </div>
-        {/* Row 2: last 5 | win rate | points */}
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
-          <div>
+        {/* Row 2: last 5 | win rate | last day | points */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col gap-0.5">
             <p
-              className={`text-[10px] uppercase tracking-widest mb-1 ${labelClass[variant]}`}
+              className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}
             >
               Last 5
             </p>
-            <FormBars results={player.lastFive} variant={variant} />
+            <FormBars results={player.lastFive} variant={variant} align="start" />
           </div>
-          <div className="text-right">
+          <div className="flex flex-col gap-0.5 text-right">
             <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
               Win rate
             </p>
@@ -179,7 +184,13 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
               {player.winRate.toFixed(1)}%
             </span>
           </div>
-          <div className="text-right">
+          <div className="flex flex-col gap-0.5 text-right items-end">
+            <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
+              Last day
+            </p>
+            <LastGameDayNet value={player.lastGameDayNet} variant={variant} />
+          </div>
+          <div className="flex flex-col gap-0.5 text-right items-end">
             <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
               Points
             </p>

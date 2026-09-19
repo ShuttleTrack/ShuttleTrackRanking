@@ -19,6 +19,7 @@ export interface PlayerRankingData {
   isAboveAverage: boolean;
   lastFive: ('W' | 'L')[];
   winRate: number;
+  lastGameDayNet: number | null;
 }
 
 export interface RankingsResponse {

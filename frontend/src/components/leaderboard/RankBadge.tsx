@@ -19,15 +19,15 @@ const RankBadge = ({ rank, variant }: RankBadgeProps) => {
   const padded = String(rank).padStart(2, '0');
 
   return (
-    <div className="flex items-center gap-2">
-      <span className={`font-headline font-extrabold text-2xl ${rankTextClass[variant]}`}>
+    <div className="flex items-center gap-1 md:gap-2">
+      <span className={`font-headline font-extrabold text-xl md:text-2xl ${rankTextClass[variant]}`}>
         {padded}
       </span>
       {rank === 1 ? (
-        <TrophyIcon className={`h-6 w-6 ${rankTextClass[variant]}`} aria-hidden />
+        <TrophyIcon className={`h-4 w-4 md:h-6 md:w-6 ${rankTextClass[variant]}`} aria-hidden />
       ) : rank >= 2 && rank <= 4 ? (
         <TrophyIcon
-          className={`h-5 w-5 ${variant === 'dark' ? 'text-secondary/80' : rankTextClass[variant]} opacity-90`}
+          className={`h-4 w-4 md:h-5 md:w-5 ${variant === 'dark' ? 'text-secondary/80' : rankTextClass[variant]} opacity-90`}
           aria-hidden
         />
       ) : null}

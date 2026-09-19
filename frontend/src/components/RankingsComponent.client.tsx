@@ -34,7 +34,7 @@ const RankingsComponent = () => {
 
   return (
     <>
-      <PageHeader title="Club Leaderboard" />
+      <PageHeader title="Leaderboard" />
       <Leaderboard players={activePlayers} />
     </>
   );
