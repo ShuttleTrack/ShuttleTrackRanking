@@ -1,9 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
-import { requireAuth, AuthSession } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { processEncountersForDate } from '@/lib/ranking/processEncounters';
 
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
+}
+
+function parseDateOnly(dateString: string): Date {
+  const [y, m, d] = dateString.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
 export default async function handler(
@@ -19,9 +25,6 @@ export default async function handler(
   if (!session) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
-
-  // Now TypeScript knows session has accessToken
-  const { accessToken } = session;
 
   const { id } = req.query;
   if (typeof id !== 'string') {
@@ -55,21 +58,8 @@ export default async function handler(
       }
     }
 
-    // Call external API to process scores
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL}/v2/encounters/${gameDate}/process`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to process scores: ${response.statusText}`);
-    }
+    // Process scores
+    await processEncountersForDate(parseDateOnly(gameDate));
 
     // Update game status to COMPLETED
     const updatedGame = await prisma.game.update({

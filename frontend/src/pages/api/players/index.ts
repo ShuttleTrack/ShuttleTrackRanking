@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getPlayers } from '@/services/playerService';
+import { getPlayers, addPlayer } from '@/lib/ranking/players';
 import { requireAuth } from '@/lib/auth';
 
 export default async function handler(
@@ -18,30 +18,12 @@ export default async function handler(
     }
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v2/players`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.accessToken}`,
-        },
-        body: JSON.stringify({ 
-          name, 
-          email, 
-          initialScore: Number(initialScore)
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create player');
-      }
-
-      const player = await response.json();
+      const player = await addPlayer({ name, email, initialScore: Number(initialScore) });
       res.status(201).json(player);
     } catch (error) {
       console.error('Create Player API Error:', error);
-      res.status(500).json({ 
-        message: error instanceof Error ? error.message : 'Failed to create player' 
+      res.status(500).json({
+        message: error instanceof Error ? error.message : 'Failed to create player'
       });
     }
   } else {

@@ -27,8 +27,10 @@
     "@sentry/nextjs": "^8.53.0",
     "axios": "^1.6.7",
     "date-fns": "^3.3.1",
+    "google-auth-library": "^11.1.0",
     "next": "^14.2.23",
     "next-auth": "^4.24.11",
+    "node-cron": "^4.6.0",
     "prisma": "^6.3.0",
     "react": "^18",
     "react-dom": "^18",
@@ -40,6 +42,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
+    "@types/node-cron": "^3.0.11",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",

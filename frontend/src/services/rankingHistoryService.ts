@@ -1,27 +1,27 @@
 import { RankingHistoryData } from '@/types/rankings';
 import { parseISO, subDays, format } from 'date-fns';
 import { capitalizeFirstLetter } from '@/utils/string';
+import { getAllPlayersHistory } from '@/lib/ranking/players';
 
 interface PlayerHistory {
   playerName: string;
   playerId: number;
   history: {
     date: string;
-    oldRank: number;
-    newRank: number;
+    // Nullable, unlike the Java DTO's primitive int (which would actually NPE on an
+    // unboxed-null player_old_rank/player_new_rank) - see MIGRATION_PLAN.md Phase 1's finding
+    // that these columns are nullable in the real DB despite the Java entity assuming otherwise.
+    oldRank: number | null;
+    newRank: number | null;
   }[];
 }
 
 export const getRankingHistory = async (): Promise<RankingHistoryData[]> => {
-  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/players/history?type=RANK`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch ranking history');
-  }
-  const data: PlayerHistory[] = await response.json();
-  
+  const data = (await getAllPlayersHistory('RANK')) as PlayerHistory[];
+
   // Transform data for graph
   let graphData = transformDataForGraph(data);
-  
+
   // Post-process data to add previous dates
   return postProcessDataToAddPreviousDates(graphData, data);
 };

@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getInactivePlayers } from '@/services/playerService';
+import { getPlayers } from '@/lib/ranking/players';
 import { requireAuth } from '@/lib/auth';
 
 export default async function handler(
@@ -15,7 +15,7 @@ export default async function handler(
   if (!session) return;
 
   try {
-    const players = await getInactivePlayers();
+    const players = await getPlayers('inactive');
     res.status(200).json(players);
   } catch (error) {
     console.error('Inactive Players API Error:', error);

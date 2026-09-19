@@ -1,0 +1,343 @@
+import type { Player as PrismaPlayer, ScoreHistory as PrismaScoreHistory } from '@prisma/client';
+import prisma from '@/lib/prisma';
+import { derivePlayerStatus, filterPlayersByStatusParam, isActive, RawPlayerStatus } from './playerStatus';
+import { timeInHighestRankLabel } from './period';
+import { getRankedPlayers } from './playerUtil';
+
+// Ported from backend PlayerService.java + ScoreHistoryService.java (MIGRATION_PLAN.md Phase 2).
+// Field names match the real Java DTOs (PlayerInfo / SecurePlayerInfo / PlayerRankHistory /
+// PlayerScoreHistory / PlayerFlatHistory) exactly, since that's the JSON shape the frontend
+// already consumes from the Java backend today.
+
+export interface PlayerInfo {
+  id: number;
+  name: string;
+  rankScore: number | null;
+  playerRank: number | null;
+  previousRank: number | null;
+  colorHex: string;
+  highestRank: number | null;
+  // null in the real API response for PlayerService.addPlayer's `convert()` (never computed
+  // there), a real string everywhere else. Preserved rather than always defaulting to "".
+  timeInHighestRank: string | null;
+  status: RawPlayerStatus;
+}
+
+export interface SecurePlayerInfo extends PlayerInfo {
+  email: string | null;
+}
+
+export type HistoryType = 'RANK' | 'SCORE' | 'ALL';
+
+export interface RankHistoryItem {
+  date: string;
+  oldRank: number | null;
+  newRank: number | null;
+}
+
+export interface ScoreHistoryItem {
+  encounterId: number;
+  encounterDate: string;
+  oldRankScore: number;
+  newRankScore: number;
+}
+
+export interface FlatHistoryItem {
+  encounterId: number;
+  encounterDate: string;
+  oldRank: number | null;
+  newRank: number | null;
+  oldRankScore: number;
+  newRankScore: number;
+}
+
+export interface PlayerHistoryResponse<T> {
+  playerName: string;
+  playerId: number;
+  history: T[];
+}
+
+// PlayerService.getMaxRank: when a player has no score history at all, previousRank falls
+// back to their current playerRank rather than being null.
+function mostRecentPlayerOldRank(player: PrismaPlayer, mostRecent: PrismaScoreHistory | null): number | null {
+  return mostRecent ? mostRecent.playerOldRank : player.playerRank;
+}
+
+function toDateOnlyString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+// PlayerService.getPlayerInfoByStatus mapping (one player).
+export function toPlayerInfo(player: PrismaPlayer, mostRecentScoreHistory: PrismaScoreHistory | null): PlayerInfo {
+  const active = isActive(player);
+  return {
+    id: player.id,
+    name: player.name,
+    rankScore: active ? player.rankScore : null,
+    playerRank: active ? player.playerRank : null,
+    previousRank: mostRecentPlayerOldRank(player, mostRecentScoreHistory),
+    colorHex: player.colorHex,
+    highestRank: player.highestRank,
+    timeInHighestRank: timeInHighestRankLabel(player.rankSince),
+    status: derivePlayerStatus(player),
+  };
+}
+
+export function toSecurePlayerInfo(
+  player: PrismaPlayer,
+  mostRecentScoreHistory: PrismaScoreHistory | null
+): SecurePlayerInfo {
+  return { ...toPlayerInfo(player, mostRecentScoreHistory), email: player.email };
+}
+
+async function mostRecentScoreHistoryFor(playerId: number): Promise<PrismaScoreHistory | null> {
+  // Mirrors ScoreHistoryRepository.findFirstByPlayerIdOrderByEncounterDateDesc exactly: no
+  // secondary sort key, so ties on encounterDate have no defined order (same as the original).
+  return prisma.scoreHistory.findFirst({
+    where: { playerId },
+    orderBy: { encounterDate: 'desc' },
+  });
+}
+
+// GET /players ?status=
+export async function getPlayers(status?: string): Promise<PlayerInfo[]> {
+  const allPlayers = await prisma.player.findMany();
+  const eligible = filterPlayersByStatusParam(allPlayers, status);
+  return Promise.all(
+    eligible.map(async (player) => toPlayerInfo(player, await mostRecentScoreHistoryFor(player.id)))
+  );
+}
+
+// GET /v2/auth/players ?status=
+export async function getSecurePlayers(status?: string): Promise<SecurePlayerInfo[]> {
+  const allPlayers = await prisma.player.findMany();
+  const eligible = filterPlayersByStatusParam(allPlayers, status);
+  return Promise.all(
+    eligible.map(async (player) => toSecurePlayerInfo(player, await mostRecentScoreHistoryFor(player.id)))
+  );
+}
+
+// Ported from ScoreHistoryService.getPlayerHistory. Duplicates are collapsed (Java: Collectors.
+// toSet() on the record, which dedups on every field) and the result is sorted - by date for
+// RANK, by encounterId for SCORE/ALL. Preserve both: the dedup is intentional (collapses
+// identical rank transitions recorded from separate encounters on the same day, e.g. two
+// matches with the same score-tier outcome) and the sort key differs by type.
+export function buildPlayerHistory(
+  playerName: string,
+  playerId: number,
+  scoreHistoryRows: PrismaScoreHistory[],
+  type: HistoryType
+): PlayerHistoryResponse<RankHistoryItem | ScoreHistoryItem | FlatHistoryItem> {
+  if (type === 'RANK') {
+    const items = dedupeByKey(
+      scoreHistoryRows.map(
+        (e): RankHistoryItem => ({
+          date: toDateOnlyString(e.encounterDate),
+          oldRank: e.playerOldRank,
+          newRank: e.playerNewRank,
+        })
+      ),
+      (i) => `${i.date}|${i.oldRank}|${i.newRank}`
+    ).sort((a, b) => a.date.localeCompare(b.date));
+    return { playerName, playerId, history: items };
+  }
+
+  if (type === 'SCORE') {
+    const items = dedupeByKey(
+      scoreHistoryRows.map(
+        (e): ScoreHistoryItem => ({
+          encounterId: e.encounterId,
+          encounterDate: toDateOnlyString(e.encounterDate),
+          oldRankScore: e.oldRankScore,
+          newRankScore: e.newRankScore,
+        })
+      ),
+      (i) => `${i.encounterId}|${i.encounterDate}|${i.oldRankScore}|${i.newRankScore}`
+    ).sort((a, b) => a.encounterId - b.encounterId);
+    return { playerName, playerId, history: items };
+  }
+
+  // ALL
+  const items = dedupeByKey(
+    scoreHistoryRows.map(
+      (e): FlatHistoryItem => ({
+        encounterId: e.encounterId,
+        encounterDate: toDateOnlyString(e.encounterDate),
+        oldRank: e.playerOldRank,
+        newRank: e.playerNewRank,
+        oldRankScore: e.oldRankScore,
+        newRankScore: e.newRankScore,
+      })
+    ),
+    (i) => `${i.encounterId}|${i.encounterDate}|${i.oldRank}|${i.newRank}|${i.oldRankScore}|${i.newRankScore}`
+  ).sort((a, b) => a.encounterId - b.encounterId);
+  return { playerName, playerId, history: items };
+}
+
+function dedupeByKey<T>(items: T[], keyOf: (item: T) => string): T[] {
+  const seen = new Map<string, T>();
+  for (const item of items) {
+    seen.set(keyOf(item), item);
+  }
+  return Array.from(seen.values());
+}
+
+// GET /players/history ?type= (defaults RANK) - only active players, per PlayerController.
+export async function getAllPlayersHistory(type: HistoryType = 'RANK') {
+  const allPlayers = await prisma.player.findMany();
+  const activePlayers = allPlayers.filter(isActive);
+  return Promise.all(
+    activePlayers.map(async (player) => {
+      const rows = await prisma.scoreHistory.findMany({ where: { playerId: player.id } });
+      return buildPlayerHistory(player.name, player.id, rows, type);
+    })
+  );
+}
+
+// GET /players/{playerId}/history ?type= (defaults RANK). No not-found handling in the
+// original (player.orElseThrow()) - mirrors that by letting a missing player throw.
+export async function getPlayerHistory(playerId: number, type: HistoryType = 'RANK') {
+  const player = await prisma.player.findUnique({ where: { id: playerId } });
+  if (!player) {
+    throw new Error(`Player not found: ${playerId}`);
+  }
+  const rows = await prisma.scoreHistory.findMany({ where: { playerId } });
+  return buildPlayerHistory(player.name, player.id, rows, type);
+}
+
+// ---------------------------------------------------------------- Phase 4: write endpoints
+
+function generateRandomColorHex(): string {
+  return Math.floor(Math.random() * 0xffffff)
+    .toString(16)
+    .padStart(6, '0');
+}
+
+export interface NewPlayerInput {
+  name: string;
+  initialScore: number;
+  email: string | null;
+}
+
+// PlayerService.addPlayer: POST /v2/players. Note the real Java return type declares
+// `PlayerInfo` but the method body actually returns a `SecurePlayerInfo` (covariant return) -
+// Jackson serializes the *runtime* object, so `email` genuinely is present in the real
+// response despite the narrower declared type. `previousRank` is the player's own brand-new
+// rank (not looked up from history) and `timeInHighestRank` is left unset - preserved exactly.
+export async function addPlayer(input: NewPlayerInput): Promise<SecurePlayerInfo> {
+  const activePlayers = await prisma.player.findMany({ where: { playerStatus: 'ACTIVE' } });
+  const lastActivePlayer = activePlayers.reduce((max, p) =>
+    (p.playerRank ?? -Infinity) > (max.playerRank ?? -Infinity) ? p : max
+  );
+  const newRank = (lastActivePlayer.playerRank ?? 0) + 1;
+
+  const player = await prisma.player.create({
+    data: {
+      name: input.name,
+      playerRank: newRank,
+      highestRank: newRank,
+      rankScore: input.initialScore,
+      rankSince: new Date(),
+      colorHex: generateRandomColorHex(),
+      email: input.email ? input.email.toLowerCase() : null,
+    },
+  });
+
+  return {
+    id: player.id,
+    name: player.name,
+    rankScore: player.rankScore,
+    playerRank: player.playerRank,
+    previousRank: player.playerRank,
+    colorHex: player.colorHex,
+    highestRank: player.highestRank,
+    timeInHighestRank: null,
+    status: derivePlayerStatus(player),
+    email: player.email,
+  };
+}
+
+export interface UpdatePlayerInput {
+  id: number;
+  name?: string;
+  email?: string;
+}
+
+// PlayerService.updatePlayer: PUT /v2/players/{id}. Returns plain PlayerInfo (no email, even
+// though email may have just been updated) with `timeInHighestRank` hardcoded to "0 day(s)"
+// rather than computed - both preserved exactly as quirks of the original.
+export async function updatePlayer(input: UpdatePlayerInput): Promise<PlayerInfo> {
+  const existing = await prisma.player.findUniqueOrThrow({ where: { id: input.id } });
+  const data: { name?: string; email?: string } = {};
+  if (input.name !== undefined && input.name !== null) data.name = input.name;
+  if (input.email !== undefined && input.email !== null) data.email = input.email.toLowerCase();
+
+  const player = Object.keys(data).length > 0
+    ? await prisma.player.update({ where: { id: input.id }, data })
+    : existing;
+
+  return {
+    id: player.id,
+    name: player.name,
+    rankScore: player.rankScore,
+    playerRank: player.playerRank,
+    previousRank: player.playerRank,
+    colorHex: player.colorHex,
+    highestRank: player.highestRank,
+    timeInHighestRank: '0 day(s)',
+    status: derivePlayerStatus(player),
+  };
+}
+
+export interface GamePlayer {
+  id: number;
+  rank: number;
+}
+
+// GameService.getAvailablePlayersForGame: GET /v2/game/players. Ranked list (by rankScore desc,
+// current playerRank asc tiebreak) of every non-disabled player, with a fresh sequential
+// game-day rank (distinct from their persisted `playerRank`).
+export async function getAvailablePlayersForGame(): Promise<GamePlayer[]> {
+  const allPlayers = await prisma.player.findMany();
+  const available = allPlayers.filter((p) => p.playerStatus !== 'DISABLED');
+  const ranked = getRankedPlayers(available.map((p) => ({ ...p, playerRank: p.playerRank ?? 0 })));
+  return ranked.map((player, index) => ({ id: player.id, rank: index + 1 }));
+}
+
+export interface RawPlayerJson {
+  id: number;
+  name: string;
+  rankScore: number;
+  playerRank: number | null;
+  colorHex: string;
+  highestRank: number | null;
+  rankSince: string | null;
+  status: string | null;
+  email: string | null;
+  // Jackson auto-detects `isXxx()` boolean getters as bean properties, so the real Java
+  // `List<Player>` response (POST /v2/players/update-ranking - the entity, not a DTO) actually
+  // includes these three derived fields too, not just the raw columns.
+  availableForGame: boolean;
+  active: boolean;
+  disabled: boolean;
+}
+
+// Raw JPA `Player` entity as Jackson would serialize it (used only where the backend genuinely
+// returns the entity directly, e.g. POST /v2/players/update-ranking) - see playerStatus.ts for
+// the isActive/isDisabled/isAvailableForGame semantics being mirrored here.
+export function toRawPlayerJson(player: PrismaPlayer): RawPlayerJson {
+  return {
+    id: player.id,
+    name: player.name,
+    rankScore: player.rankScore,
+    playerRank: player.playerRank,
+    colorHex: player.colorHex,
+    highestRank: player.highestRank,
+    rankSince: player.rankSince ? player.rankSince.toISOString().slice(0, 10) : null,
+    status: player.playerStatus,
+    email: player.email,
+    availableForGame: player.playerStatus !== 'DISABLED',
+    active: player.playerStatus === 'ACTIVE',
+    disabled: player.playerStatus === 'DISABLED',
+  };
+}

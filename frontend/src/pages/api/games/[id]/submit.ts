@@ -2,9 +2,15 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { getMatchCombinations } from '@/utils/match';
+import { addEncounter } from '@/lib/ranking/processEncounters';
 
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
+}
+
+function parseDateOnly(dateString: string): Date {
+  const [y, m, d] = dateString.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
 // Helper function to get players for a match using IDs instead of names
@@ -87,53 +93,33 @@ export default async function handler(
             date: gameDate
           });
 
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_BACKEND_URL}/v2/encounters/${gameDate}/add`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.accessToken}`,
-              },
-              body: JSON.stringify({
-                team1: {
-                  player1: team1[0],
-                  player2: team1[1],
-                  setPoints: score.team1Score
-                },
-                team2: {
-                  player1: team2[0],
-                  player2: team2[1],
-                  setPoints: score.team2Score
-                },
-                groupIndex,
-                totalGroups
-              })
-            }
-          );
+          await addEncounter(parseDateOnly(gameDate), {
+            team1: {
+              player1: team1[0],
+              player2: team1[1],
+              setPoints: score.team1Score
+            },
+            team2: {
+              player1: team2[0],
+              player2: team2[1],
+              setPoints: score.team2Score
+            },
+            groupIndex,
+            totalGroups
+          });
 
-          if (response.ok) {
-            console.log(`✓ Successfully submitted match ${parseInt(matchIndex) + 1} for ${groupName}`);
-            // Mark individual score as submitted on success
-            updatedScores[groupName][matchIndex] = {
-              ...score,
-              submitted: true
-            };
+          console.log(`✓ Successfully submitted match ${parseInt(matchIndex) + 1} for ${groupName}`);
+          // Mark individual score as submitted on success
+          updatedScores[groupName][matchIndex] = {
+            ...score,
+            submitted: true
+          };
 
-            // Save progress after each successful submission
-            await prisma.game.update({
-              where: { id },
-              data: { scores: updatedScores }
-            });
-          } else {
-            console.error(`✗ Failed to submit match ${parseInt(matchIndex) + 1} for ${groupName}:`, response.statusText);
-            hasErrors = true;
-            errors.push({
-              group: groupName,
-              match: matchIndex,
-              error: `Failed with status: ${response.status}`
-            });
-          }
+          // Save progress after each successful submission
+          await prisma.game.update({
+            where: { id },
+            data: { scores: updatedScores }
+          });
         } catch (error) {
           console.error(`✗ Error submitting match ${parseInt(matchIndex) + 1} for ${groupName}:`, error);
           hasErrors = true;
