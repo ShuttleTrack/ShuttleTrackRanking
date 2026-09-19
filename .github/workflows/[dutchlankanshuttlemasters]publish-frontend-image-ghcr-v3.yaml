@@ -36,7 +36,6 @@ jobs:
 
       - name: 'Build and push'
         run: |
-          echo "NEXT_PUBLIC_BACKEND_URL=${{ secrets.NEXT_PUBLIC_BACKEND_URL_V3 || secrets.NEXT_PUBLIC_BACKEND_URL }}" >> .env.production
           echo "NEXT_PUBLIC_AUTH_ENABLED=${{ secrets.NEXT_PUBLIC_AUTH_ENABLED_V3 || secrets.NEXT_PUBLIC_AUTH_ENABLED }}" >> .env.production
           echo "NEXTAUTH_URL=${{ secrets.NEXTAUTH_URL_V3 || secrets.NEXTAUTH_URL }}" >> .env.production
           echo "ALLOWED_ADMIN_EMAILS=${{ secrets.ALLOWED_ADMIN_EMAILS_V3 || secrets.ALLOWED_ADMIN_EMAILS }}" >> .env.production

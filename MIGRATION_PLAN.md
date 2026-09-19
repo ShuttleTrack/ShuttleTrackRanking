@@ -243,12 +243,26 @@ Deployment image versioning (raised mid-migration, deferred to here): the deploy
 
 </details>
 
-### Phase 8 — Decommission
+### Phase 8 — Decommission 🚧 in progress (2026-09-19)
 Only after all routes are cut over and stable:
 - Remove `backend` service from `docker-compose.yml`.
 - Remove/disable the backend's GH Actions build-and-push-to-GHCR workflow.
 - Remove `8080` port mapping, backend-only env vars (`SPRING_DATASOURCE_*`, `API_KEY`, `API_TG_*`, `API_ADMIN*`, `GOOGLE_CLIENT_ID` if only used by BE) from the compose file and GH secrets, once confirmed nothing else reads them.
 - Optionally, later: delete `backend/` directory from the repo (separate decision, not required for functional decommissioning).
+
+**Done, on branch `chore/phase8-decommission-backend`:**
+- Deleted `.github/workflows/publish-backend-image-ghcr.yaml` (the backend's build/push workflow).
+- Removed the `backend:` service block (including the `8080:8080` port mapping and its `SPRING_DATASOURCE_*`/`API_KEY`/`API_ADMIN_EMAILS`/`GOOGLE_CLIENT_ID` env vars) from `deployment/ansible-playbook/.../docker-compose.yml.j2` - **note this template is confirmed stale/not the real deployed config** (§3), so this edit is documentation-accuracy cleanup only, with no effect on the actual live stack. Also bumped this template's `frontend` image tag from `v2.0` to `v3.0` while in there, for the same documentation-accuracy reason.
+- Deleted `frontend/src/services/playerService.ts` and `frontend/src/services/encounterHistoryService.ts` - confirmed zero remaining importers (grepped the whole `frontend/src` tree) now that Phase 7's cutover replaced every call site. These were the last two files still referencing `NEXT_PUBLIC_BACKEND_URL`; removed that var from `frontend/.env.example` and from the CI workflow's `.env.production` step too, now that nothing reads it.
+- Verified: `tsc`/lint/108 tests clean, production build clean.
+
+**Still needs the user, outside this repo (same pattern as every runtime-config step in this migration - Portainer, not files here):**
+- Actually stop/remove the `backend` container in Portainer (or wherever it's really running) - the functional decommissioning step. Nothing in this repo controls that directly.
+- Once confirmed stopped: remove its runtime env vars from wherever they were configured there (`SPRING_DATASOURCE_*`, `API_KEY`, `API_TG_*`, `API_ADMIN*`) - these were never GitHub Actions secrets (the backend's build workflow didn't inject any at build time, confirmed by reading it before deletion), so there's nothing to clean up in GH Secrets for these specifically.
+- `GOOGLE_CLIENT_ID` is **not** backend-only - the frontend uses its own (NextAuth + Phase 5's local token verification) - don't remove the shared one, only a backend-specific duplicate if one exists separately.
+- `NEXT_PUBLIC_BACKEND_URL` (and any `_V3` variant) *can* safely be removed from GitHub Secrets now - confirmed nothing reads it, and the workflow no longer references it.
+
+**Not yet decided: deleting the `backend/` directory itself.** Explicitly called out in this plan as a separate, optional, later decision - not done as part of this cleanup pass without an explicit go-ahead.
 
 ## 7. Open items to resolve during implementation (not blocking, but don't forget)
 
