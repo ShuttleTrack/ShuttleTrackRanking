@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body {
+    @apply bg-background text-on-background font-body antialiased;
+  }
+}
+
+.kinetic-gradient {
+  background: linear-gradient(135deg, #EE8A33 0%, #F7B375 100%);
+}
+
+.form-strip {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 5px,
+    rgba(238, 138, 51, 0.05) 5px,
+    rgba(238, 138, 51, 0.05) 10px
+  );
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

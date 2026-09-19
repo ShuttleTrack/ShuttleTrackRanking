@@ -1,21 +1,18 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment } from 'react';
 import { Disclosure, Menu, Transition } from '@headlessui/react';
-import { Bars3Icon, BellIcon, XMarkIcon, ChevronDownIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import { Bars3Icon, XMarkIcon, ChevronDownIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { capitalizeFirstLetter } from '@/utils/string';
-import { useSession, signIn, signOut } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { usePlayers } from '@/hooks/usePlayers';
 import Image from 'next/image';
 import { useLiveGames } from '@/hooks/useLiveGames';
 
-// Add build identifier from env
 const BUILD_IDENTIFIER = process.env.NEXT_PUBLIC_BUILD_IDENTIFIER;
 
-const navigation = [
-  { name: 'Ranking', href: '/' },
-  { name: 'Encounters', href: '#' },
-  { name: 'History', href: '/player-ranking-history' },
+const historyLinks = [
+  { name: 'Ranking History', href: '/player-ranking-history' },
   { name: 'Encounter History', href: '/encounter-history' },
 ];
 
@@ -23,45 +20,47 @@ function classNames(...classes: (string | boolean)[]): string {
   return classes.filter(Boolean).join(' ');
 }
 
-interface LiveGame {
-  id: string;
-  progress: number;
-  createdAt: string;
-}
+const menuPanelClass =
+  'absolute mt-2 rounded-xl bg-surface-container border border-white/5 shadow-xl focus:outline-none z-[60] py-1';
+
+const menuItemClass = (active: boolean) =>
+  classNames(
+    'block px-4 py-2 text-sm text-on-surface transition-colors',
+    active ? 'bg-white/10' : 'hover:bg-white/5'
+  );
+
+const mobileItemClass = (active: boolean) =>
+  classNames(
+    'block px-3 py-2 rounded-md text-base font-headline font-medium w-full text-left',
+    active ? 'text-white bg-white/10' : 'text-white/80 hover:bg-white/5 hover:text-white'
+  );
 
 const NavigationComponent = () => {
   const router = useRouter();
   const { players, isLoading } = usePlayers();
-  const [theme, setTheme] = useState('emerald');
-  const [isScrolled, setIsScrolled] = useState(false);
   const { data: session } = useSession();
   const { liveGames, isLoading: liveGamesLoading } = useLiveGames();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  useEffect(() => {
-    document.body.setAttribute('data-theme', theme);
-  }, [theme]);
+  const isEncountersPage = () =>
+    router.pathname.includes('/player') && router.pathname.includes('/encounters');
 
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollPosition = window.scrollY;
-      setIsScrolled(scrollPosition > 0);
-    };
+  const isHistoryPage = () =>
+    historyLinks.some((link) => router.pathname === link.href);
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const toggleTheme = () => {
-    setTheme(theme === 'emerald' ? 'dark' : 'emerald');
-  };
-
-  const isEncountersPage = () => {
-    return router.pathname.includes('/player') && router.pathname.includes('/encounters');
-  };
+  const navLinkClass = (active: boolean) =>
+    classNames(
+      'font-headline text-sm tracking-tight font-semibold transition-colors duration-300 inline-flex items-center',
+      active
+        ? 'border-b-2 border-primary pb-1 text-white'
+        : 'text-white/80 hover:text-white'
+    );
 
   const renderPlayersList = () => {
-    if (isLoading) return null;
+    if (isLoading) {
+      return (
+        <div className="px-4 py-3 text-sm text-on-surface-variant">Loading players…</div>
+      );
+    }
 
     return players
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -70,10 +69,7 @@ const NavigationComponent = () => {
           {({ active }) => (
             <Link
               href={`/player/${player.id}/encounters`}
-              className={classNames(
-                active ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
-                'block px-4 py-2 text-sm hover:text-emerald-600 transition-colors duration-150'
-              )}
+              className={menuItemClass(active)}
             >
               {capitalizeFirstLetter(player.name)}
             </Link>
@@ -82,525 +78,459 @@ const NavigationComponent = () => {
       ));
   };
 
-  // Add close handler
-  const handleMobileItemClick = (close: () => void) => {
-    close();
+  const renderLiveGameItems = (onNavigate?: () => void) => {
+    if (liveGamesLoading) {
+      return (
+        <div className="px-4 py-3 flex justify-center">
+          <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        </div>
+      );
+    }
+    if (liveGames.length === 0) {
+      return (
+        <div className="px-4 py-3 text-sm text-on-surface-variant text-center">
+          No live games
+        </div>
+      );
+    }
+    return liveGames.map((game) => (
+      <Menu.Item key={game.id}>
+        {({ active, close }) => (
+          <Link
+            href={`/game-viewer?gameId=${game.id}`}
+            className={classNames(menuItemClass(active), 'px-4 py-3')}
+            onClick={() => {
+              close();
+              onNavigate?.();
+            }}
+          >
+            <div className="flex justify-between items-center mb-1">
+              <span>Game #{game.id.slice(-4)}</span>
+              <span className="text-sm text-on-surface-variant">{game.progress}%</span>
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-1.5">
+              <div
+                className="bg-primary h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${game.progress}%` }}
+              />
+            </div>
+          </Link>
+        )}
+      </Menu.Item>
+    ));
+  };
+
+  const logoLink = (
+    <Link href="/" className="flex-shrink-0 inline-flex items-stretch self-stretch">
+      <Image
+        src={`/dutch-lankan-shuttle-masters-logo.jpeg?v=${BUILD_IDENTIFIER}`}
+        alt="Dutch Lankan Shuttle Masters"
+        width={64}
+        height={64}
+        className="h-16 w-auto md:h-20 object-cover"
+        priority
+      />
+      <span className="sr-only">Dutch Lankan Shuttle Masters</span>
+    </Link>
+  );
+
+  const userMenu = () => {
+    if (session) {
+      return (
+        <Menu as="div" className="relative">
+          <Menu.Button
+            className="flex items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            aria-label="Account menu"
+          >
+            {session.user?.image ? (
+              <Image
+                src={session.user.image}
+                alt=""
+                width={40}
+                height={40}
+                className="w-9 h-9 md:w-10 md:h-10 rounded-full object-cover ring-2 ring-primary/20"
+              />
+            ) : (
+              <UserCircleIcon className="h-9 w-9 md:h-10 md:w-10 text-white/80" />
+            )}
+          </Menu.Button>
+          <Transition
+            as={Fragment}
+            enter="transition ease-out duration-100"
+            enterFrom="transform opacity-0 scale-95"
+            enterTo="transform opacity-100 scale-100"
+            leave="transition ease-in duration-75"
+            leaveFrom="transform opacity-100 scale-100"
+            leaveTo="transform opacity-0 scale-95"
+          >
+            <Menu.Items className={classNames(menuPanelClass, 'w-48 right-0 origin-top-right')}>
+              {session.user.accessLevel?.includes('USER') && (
+                <Menu.Item>
+                  {({ active }) => (
+                    <Link href="/user/management" className={menuItemClass(active)}>
+                      Management
+                    </Link>
+                  )}
+                </Menu.Item>
+              )}
+              {session.user.accessLevel?.includes('ADMIN') && (
+                <Menu.Item>
+                  {({ active }) => (
+                    <Link href="/admin/dashboard" className={menuItemClass(active)}>
+                      Admin Dashboard
+                    </Link>
+                  )}
+                </Menu.Item>
+              )}
+              <Menu.Item>
+                {({ active }) => (
+                  <button
+                    type="button"
+                    onClick={() => signOut()}
+                    className={classNames(menuItemClass(active), 'w-full text-left')}
+                  >
+                    Sign Out
+                  </button>
+                )}
+              </Menu.Item>
+            </Menu.Items>
+          </Transition>
+        </Menu>
+      );
+    }
+    return (
+      <Link href="/login" className={navLinkClass(false)}>
+        Sign In
+      </Link>
+    );
   };
 
   return (
-    <>
-      {/* Placeholder div to prevent content jump when nav becomes fixed */}
-      <div className={`h-16 ${isScrolled ? 'block' : 'hidden'}`} />
-
-      <Disclosure as='nav'
-        className={`${isScrolled
-            ? 'fixed top-0 left-0 right-0 animate-slideDown z-[100]'
-            : 'relative z-[100]'
-          } bg-gradient-to-r from-gray-900 to-gray-800 shadow-lg`}
-      >
-        {({ open, close }) => (
-          <>
-            <div className='mx-auto max-w-7xl px-4 sm:px-6 lg:px-8'>
-              <div className='relative flex items-center justify-between h-16'>
-                {/* Mobile menu button */}
-                <div className='absolute inset-y-0 left-0 flex items-center sm:hidden'>
-                  <Disclosure.Button className='inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500 transition duration-150'>
-                    <span className='sr-only'>Open main menu</span>
-                    {open ? (
-                      <XMarkIcon className='block h-6 w-6' aria-hidden='true' />
-                    ) : (
-                      <Bars3Icon className='block h-6 w-6' aria-hidden='true' />
-                    )}
-                  </Disclosure.Button>
-                </div>
-
-                {/* Logo and brand */}
-                <div className='flex-1 flex items-center justify-center sm:items-stretch sm:justify-start'>
-                  <Link href='/' className='flex-shrink-0 flex items-center'>
-                    <Image
-                      src={`/dutch-lankan-shuttle-masters-logo.jpeg?v=${BUILD_IDENTIFIER}`}
-                      alt="Dutch Lankan Shuttle Masters"
-                      width={40}
-                      height={40}
-                      className="h-10 w-auto"
-                      priority
-                    />
-                    <div className='text-base sm:text-xl font-bold text-white ml-2 sm:ml-4 tracking-tight truncate'>
-                      Dutch Lankan Shuttle Masters
-                    </div>
-                  </Link>
-
-                  {/* Desktop navigation */}
-                  <div className='hidden sm:flex sm:ml-6 sm:items-center sm:justify-between flex-1'>
-                    {/* Left side navigation items */}
-                    <div className="flex items-center space-x-4">
-                      <Link
-                        href={navigation[0].href}
-                        className={classNames(
-                          router.pathname === navigation[0].href
-                            ? 'bg-emerald-600 text-white'
-                            : 'text-gray-300 hover:bg-gray-700 hover:text-white',
-                          'px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150'
-                        )}
-                      >
-                        {navigation[0].name}
-                      </Link>
-
-                      {/* Player Encounters Dropdown */}
-                      <Menu as="div" className="relative">
-                        <Menu.Button
-                          className={classNames(
-                            isEncountersPage()
-                              ? 'bg-emerald-600 text-white'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white',
-                            'px-3 py-2 rounded-md text-sm font-medium inline-flex items-center'
-                          )}
-                        >
-                          Encounters
-                          <ChevronDownIcon className="ml-2 -mr-1 h-5 w-5" aria-hidden="true" />
-                        </Menu.Button>
-                        <Transition
-                          as={Fragment}
-                          enter="transition ease-out duration-100"
-                          enterFrom="transform opacity-0 scale-95"
-                          enterTo="transform opacity-100 scale-100"
-                          leave="transition ease-in duration-75"
-                          leaveFrom="transform opacity-100 scale-100"
-                          leaveTo="transform opacity-0 scale-95"
-                        >
-                          <Menu.Items className="absolute right-0 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none divide-y divide-gray-100 max-h-96 overflow-y-auto z-[60]">
-                            <div className="py-1">
-                              {renderPlayersList()}
-                            </div>
-                          </Menu.Items>
-                        </Transition>
-                      </Menu>
-
-                      {/* Live Games Dropdown */}
-                      <Menu as="div" className="relative">
-                        <Menu.Button
-                          className={classNames(
-                            'text-gray-300 hover:bg-gray-700 hover:text-white',
-                            'px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150 inline-flex items-center',
-                            liveGames.length > 0 && 'relative animate-glow bg-red-500/10'
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            {liveGames.length > 0 && (
-                              <span className="animate-pulse bg-red-500 w-2 h-2 rounded-full"></span>
-                            )}
-                            Live
-                            <ChevronDownIcon className="h-5 w-5" aria-hidden="true" />
-                          </div>
-                        </Menu.Button>
-                        <Transition
-                          as={Fragment}
-                          enter="transition ease-out duration-100"
-                          enterFrom="transform opacity-0 scale-95"
-                          enterTo="transform opacity-100 scale-100"
-                          leave="transition ease-in duration-75"
-                          leaveFrom="transform opacity-100 scale-100"
-                          leaveTo="transform opacity-0 scale-95"
-                        >
-                          <Menu.Items className="absolute right-0 mt-2 w-64 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                            <div className="py-1">
-                              {liveGamesLoading ? (
-                                <div className="text-center py-2">
-                                  <span className="loading loading-spinner loading-sm"></span>
-                                </div>
-                              ) : liveGames.length > 0 ? (
-                                liveGames.map((game) => (
-                                  <Menu.Item key={game.id}>
-                                    {({ active, close }) => (
-                                      <Link
-                                        href={`/game-viewer?gameId=${game.id}`}
-                                        className={classNames(
-                                          active ? 'bg-gray-100' : '',
-                                          'block px-4 py-2 text-sm text-gray-700'
-                                        )}
-                                        onClick={() => close()}
-                                      >
-                                        <div className="w-full">
-                                          <div className="flex justify-between items-center mb-1">
-                                            <span>Game #{game.id.slice(-4)}</span>
-                                            <span className="text-sm opacity-70">
-                                              {game.progress}%
-                                            </span>
-                                          </div>
-                                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                            <div 
-                                              className="bg-emerald-600 h-1.5 rounded-full transition-all duration-500"
-                                              style={{ width: `${game.progress}%` }}
-                                            />
-                                          </div>
-                                        </div>
-                                      </Link>
-                                    )}
-                                  </Menu.Item>
-                                ))
-                              ) : (
-                                <div className="text-center py-2 text-gray-500">
-                                  No live games
-                                </div>
-                              )}
-                            </div>
-                          </Menu.Items>
-                        </Transition>
-                      </Menu>
-
-                      {/* Remaining navigation items */}
-                      {navigation.slice(2).map((item) => (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          className={classNames(
-                            router.pathname === item.href
-                              ? 'bg-emerald-600 text-white'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white',
-                            'px-3 py-2 rounded-md text-sm font-medium transition-colors duration-150'
-                          )}
-                        >
-                          {item.name}
-                        </Link>
-                      ))}
-                    </div>
-
-                    {/* Right side items */}
-                    <div className="flex items-center space-x-4">
-                      {session ? (
-                        <Menu as="div" className="relative">
-                          <Menu.Button className="flex items-center gap-2 text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
-                            <UserCircleIcon className="h-6 w-6" />
-                            <span>{session.user.name}</span>
-                          </Menu.Button>
-                          <Transition
-                            as={Fragment}
-                            enter="transition ease-out duration-100"
-                            enterFrom="transform opacity-0 scale-95"
-                            enterTo="transform opacity-100 scale-100"
-                            leave="transition ease-in duration-75"
-                            leaveFrom="transform opacity-100 scale-100"
-                            leaveTo="transform opacity-0 scale-95"
-                          >
-                            <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                              {session.user.accessLevel?.includes('USER') && (
-                                <Menu.Item>
-                                  {({ active }) => (
-                                    <Link
-                                      href="/user/management"
-                                      className={classNames(
-                                        active ? 'bg-gray-100' : '',
-                                        'block px-4 py-2 text-sm text-gray-700'
-                                      )}
-                                    >
-                                      Management
-                                    </Link>
-                                  )}
-                                </Menu.Item>
-                              )}
-                              {session.user.accessLevel?.includes('ADMIN') && (
-                                <Menu.Item>
-                                  {({ active }) => (
-                                    <Link
-                                      href="/admin/dashboard"
-                                      className={classNames(
-                                        active ? 'bg-gray-100' : '',
-                                        'block px-4 py-2 text-sm text-gray-700'
-                                      )}
-                                    >
-                                      Admin Dashboard
-                                    </Link>
-                                  )}
-                                </Menu.Item>
-                              )}
-                              <Menu.Item>
-                                {({ active }) => (
-                                  <button
-                                    onClick={() => signOut()}
-                                    className={classNames(
-                                      active ? 'bg-gray-100' : '',
-                                      'block w-full text-left px-4 py-2 text-sm text-gray-700'
-                                    )}
-                                  >
-                                    Sign Out
-                                  </button>
-                                )}
-                              </Menu.Item>
-                            </Menu.Items>
-                          </Transition>
-                        </Menu>
-                      ) : (
-                        <Link
-                          href="/login"
-                          className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
-                        >
-                          Sign In
-                        </Link>
-                      )}
-
-                      <button
-                        onClick={toggleTheme}
-                        className="p-2 rounded-full text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-150"
-                        title={`Switch to ${theme === 'emerald' ? 'dark' : 'light'} mode`}
-                      >
-                        {theme === 'emerald' ? (
-                          <svg
-                            className='swap-on fill-current w-6 h-6'
-                            xmlns='http://www.w3.org/2000/svg'
-                            viewBox='0 0 24 24'
-                          >
-                            <path d='M5.64,17l-.71.71a1,1,0,0,0,0,1.41,1,1,0,0,0,1.41,0l.71-.71A1,1,0,0,0,5.64,17ZM5,12a1,1,0,0,0-1-1H3a1,1,0,0,0,0,2H4A1,1,0,0,0,5,12Zm7-7a1,1,0,0,0,1-1V3a1,1,0,0,0-2,0V4A1,1,0,0,0,12,5ZM5.64,7.05a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29,1,1,0,0,0,0-1.41l-.71-.71A1,1,0,0,0,4.93,6.34Zm12,.29a1,1,0,0,0,.7-.29l.71-.71a1,1,0,1,0-1.41-1.41L17,5.64a1,1,0,0,0,0,1.41A1,1,0,0,0,17.66,7.34ZM21,11H20a1,1,0,0,0,0,2h1a1,1,0,0,0,0-2Zm-9,8a1,1,0,0,0-1,1v1a1,1,0,0,0,2,0V20A1,1,0,0,0,12,19ZM18.36,17A1,1,0,0,0,17,18.36l.71.71a1,1,0,0,0,1.41,0,1,1,0,0,0,0-1.41ZM12,6.5A5.5,5.5,0,1,0,17.5,12,5.51,5.51,0,0,0,12,6.5Zm0,9A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z' />
-                          </svg>
-                        ) : (
-                          <svg
-                            className='swap-off fill-current w-6 h-6'
-                            xmlns='http://www.w3.org/2000/svg'
-                            viewBox='0 0 24 24'
-                          >
-                            <path d='M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z' />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+    <Disclosure
+      as="nav"
+      className="fixed top-0 left-0 right-0 z-[100] bg-surface-header border-b border-white/10"
+    >
+      {({ open, close }) => (
+        <>
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            {/* Mobile bar */}
+            <div className="grid grid-cols-3 items-stretch h-16 md:hidden">
+              <div className="flex justify-start items-center">
+                <Disclosure.Button className="inline-flex items-center justify-center p-2 rounded-md text-white/70 hover:text-white hover:bg-white/5 transition duration-150">
+                  <span className="sr-only">Open main menu</span>
+                  {open ? (
+                    <XMarkIcon className="h-6 w-6" aria-hidden />
+                  ) : (
+                    <Bars3Icon className="h-6 w-6" aria-hidden />
+                  )}
+                </Disclosure.Button>
+              </div>
+              <div className="flex justify-center items-stretch">{logoLink}</div>
+              <div className="flex justify-end items-center gap-2">
+                {liveGames.length > 0 && (
+                  <span
+                    className="animate-pulse bg-red-500 w-2 h-2 rounded-full"
+                    aria-hidden
+                  />
+                )}
+                {userMenu()}
               </div>
             </div>
 
-            {/* Mobile menu panel */}
-            <Disclosure.Panel className='sm:hidden fixed top-16 left-0 right-0 bottom-0 bg-gray-800 overflow-y-auto z-[90]'>
-              {({ close }) => (
-                <div className='px-2 pt-2 pb-3 space-y-1'>
-                  <Disclosure.Button
-                    as={Link}
-                    href={navigation[0].href}
-                    className={classNames(
-                      router.pathname === navigation[0].href
-                        ? 'bg-emerald-600 text-white'
-                        : 'text-gray-300 hover:bg-gray-700 hover:text-white',
-                      'block px-3 py-2 rounded-md text-base font-medium'
-                    )}
+            {/* Desktop three-zone bar */}
+            <div className="hidden md:block">
+              <div className="grid grid-cols-3 h-20 items-stretch">
+                <div className="flex items-stretch">{logoLink}</div>
+
+                <div className="flex justify-center items-center gap-8">
+                <Link href="/" className={navLinkClass(router.pathname === '/')}>
+                  Rankings
+                </Link>
+
+                <Menu as="div" className="relative">
+                  <Menu.Button className={navLinkClass(isEncountersPage())}>
+                    Encounters
+                    <ChevronDownIcon className="ml-1 h-4 w-4" aria-hidden />
+                  </Menu.Button>
+                  <Transition
+                    as={Fragment}
+                    enter="transition ease-out duration-100"
+                    enterFrom="transform opacity-0 scale-95"
+                    enterTo="transform opacity-100 scale-100"
+                    leave="transition ease-in duration-75"
+                    leaveFrom="transform opacity-100 scale-100"
+                    leaveTo="transform opacity-0 scale-95"
                   >
-                    {navigation[0].name}
-                  </Disclosure.Button>
-
-                  {/* Mobile Player Encounters Submenu */}
-                  <Disclosure>
-                    {({ open }) => (
-                      <>
-                        <Disclosure.Button
-                          className={classNames(
-                            isEncountersPage()
-                              ? 'bg-emerald-600 text-white'
-                              : 'text-gray-300 hover:bg-gray-700 hover:text-white',
-                            'flex w-full justify-between px-3 py-2 text-base font-medium rounded-md'
-                          )}
-                        >
-                          <span>Encounters</span>
-                          <ChevronDownIcon
-                            className={`${open ? 'transform rotate-180' : ''
-                              } w-5 h-5 text-gray-400`}
-                          />
-                        </Disclosure.Button>
-                        <Disclosure.Panel className="px-4 pt-2 pb-2 space-y-1">
-                          {players
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                            .map((player) => (
-                              <Link
-                                key={player.id}
-                                href={`/player/${player.id}/encounters`}
-                                className="block px-3 py-2 text-base text-gray-300 hover:bg-gray-700 hover:text-white rounded-md"
-                                onClick={() => handleMobileItemClick(close)}
-                              >
-                                {capitalizeFirstLetter(player.name)}
-                              </Link>
-                            ))}
-                        </Disclosure.Panel>
-                      </>
-                    )}
-                  </Disclosure>
-
-                  {/* Live Games Section */}
-                  <Disclosure>
-                    {({ open }) => (
-                      <>
-                        <Disclosure.Button
-                          className={classNames(
-                            'text-gray-300 hover:bg-gray-700 hover:text-white',
-                            'flex w-full justify-between px-3 py-2 text-base font-medium rounded-md',
-                            liveGames.length > 0 && 'relative animate-glow bg-red-500/10'
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            {liveGames.length > 0 && (
-                              <span className="animate-pulse bg-red-500 w-2 h-2 rounded-full"></span>
-                            )}
-                            <span>Live</span>
-                          </div>
-                          <ChevronDownIcon
-                            className={`${open ? 'transform rotate-180' : ''} w-5 h-5 text-gray-400`}
-                          />
-                        </Disclosure.Button>
-                        <Disclosure.Panel className="px-4 pt-2 pb-2 space-y-1">
-                          {liveGamesLoading ? (
-                            <div className="text-center py-2">
-                              <span className="loading loading-spinner loading-sm"></span>
-                            </div>
-                          ) : liveGames.length > 0 ? (
-                            liveGames.map((game) => (
-                              <Link
-                                key={game.id}
-                                href={`/game-viewer?gameId=${game.id}`}
-                                className="block px-3 py-2 text-base text-gray-300 hover:bg-gray-700 hover:text-white rounded-md"
-                                onClick={() => handleMobileItemClick(close)}
-                              >
-                                <div className="w-full">
-                                  <div className="flex justify-between items-center mb-1">
-                                    <span>Game #{game.id.slice(-4)}</span>
-                                    <span className="text-sm opacity-70">
-                                      {game.progress}%
-                                    </span>
-                                  </div>
-                                  <div className="w-full bg-gray-700 rounded-full h-1.5">
-                                    <div 
-                                      className="bg-emerald-600 h-1.5 rounded-full transition-all duration-500"
-                                      style={{ width: `${game.progress}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              </Link>
-                            ))
-                          ) : (
-                            <div className="text-center py-2 text-gray-500">
-                              No live games
-                            </div>
-                          )}
-                        </Disclosure.Panel>
-                      </>
-                    )}
-                  </Disclosure>
-
-                  {/* Remaining navigation items */}
-                  {navigation.slice(2).map((item) => (
-                    <Disclosure.Button
-                      key={item.name}
-                      as={Link}
-                      href={item.href}
+                    <Menu.Items
                       className={classNames(
-                        router.pathname === item.href
-                          ? 'bg-emerald-600 text-white'
-                          : 'text-gray-300 hover:bg-gray-700 hover:text-white',
-                        'block px-3 py-2 rounded-md text-base font-medium'
+                        menuPanelClass,
+                        'left-1/2 -translate-x-1/2 w-56 max-h-96 overflow-y-auto origin-top'
                       )}
                     >
-                      {item.name}
+                      {renderPlayersList()}
+                    </Menu.Items>
+                  </Transition>
+                </Menu>
+
+                <Menu as="div" className="relative">
+                  <Menu.Button className={navLinkClass(isHistoryPage())}>
+                    History
+                    <ChevronDownIcon className="ml-1 h-4 w-4" aria-hidden />
+                  </Menu.Button>
+                  <Transition
+                    as={Fragment}
+                    enter="transition ease-out duration-100"
+                    enterFrom="transform opacity-0 scale-95"
+                    enterTo="transform opacity-100 scale-100"
+                    leave="transition ease-in duration-75"
+                    leaveFrom="transform opacity-100 scale-100"
+                    leaveTo="transform opacity-0 scale-95"
+                  >
+                    <Menu.Items
+                      className={classNames(
+                        menuPanelClass,
+                        'left-1/2 -translate-x-1/2 w-52 origin-top'
+                      )}
+                    >
+                      {historyLinks.map((link) => (
+                        <Menu.Item key={link.href}>
+                          {({ active }) => (
+                            <Link href={link.href} className={menuItemClass(active)}>
+                              {link.name}
+                            </Link>
+                          )}
+                        </Menu.Item>
+                      ))}
+                    </Menu.Items>
+                  </Transition>
+                </Menu>
+              </div>
+
+              <div className="flex justify-end items-center gap-4 self-center">
+                {liveGames.length > 0 && (
+                  <Menu as="div" className="relative">
+                    <Menu.Button
+                      className={classNames(
+                        navLinkClass(false),
+                        'gap-2 rounded-lg px-2 py-1 bg-red-500/10'
+                      )}
+                    >
+                      <span className="animate-pulse bg-red-500 w-2 h-2 rounded-full" />
+                      Live
+                      <ChevronDownIcon className="h-4 w-4" aria-hidden />
+                    </Menu.Button>
+                    <Transition
+                      as={Fragment}
+                      enter="transition ease-out duration-100"
+                      enterFrom="transform opacity-0 scale-95"
+                      enterTo="transform opacity-100 scale-100"
+                      leave="transition ease-in duration-75"
+                      leaveFrom="transform opacity-100 scale-100"
+                      leaveTo="transform opacity-0 scale-95"
+                    >
+                      <Menu.Items
+                        className={classNames(menuPanelClass, 'right-0 w-64 origin-top-right')}
+                      >
+                        {renderLiveGameItems()}
+                      </Menu.Items>
+                    </Transition>
+                  </Menu>
+                )}
+                {userMenu()}
+              </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile menu panel */}
+          <Disclosure.Panel className="md:hidden fixed top-16 left-0 right-0 bottom-0 bg-surface-header border-t border-white/10 overflow-y-auto z-[90]">
+            <div className="px-3 pt-3 pb-6 space-y-1">
+              <Disclosure.Button
+                as={Link}
+                href="/"
+                className={mobileItemClass(router.pathname === '/')}
+                onClick={() => close()}
+              >
+                Rankings
+              </Disclosure.Button>
+
+              <Disclosure>
+                {({ open: encountersOpen }) => (
+                  <>
+                    <Disclosure.Button className={mobileItemClass(isEncountersPage())}>
+                      <span className="flex w-full justify-between items-center">
+                        Encounters
+                        <ChevronDownIcon
+                          className={classNames(
+                            'h-5 w-5 text-white/50 transition-transform',
+                            encountersOpen && 'rotate-180'
+                          )}
+                        />
+                      </span>
                     </Disclosure.Button>
-                  ))}
+                    <Disclosure.Panel className="pl-3 space-y-1 pb-2">
+                      {players
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((player) => (
+                          <Link
+                            key={player.id}
+                            href={`/player/${player.id}/encounters`}
+                            className={mobileItemClass(false)}
+                            onClick={() => close()}
+                          >
+                            {capitalizeFirstLetter(player.name)}
+                          </Link>
+                        ))}
+                    </Disclosure.Panel>
+                  </>
+                )}
+              </Disclosure>
 
-                  {/* Add user section before theme switcher */}
-                  {session && (
-                    <div className="border-t border-gray-700 mt-4 pt-4">
-                      <Disclosure>
-                        {({ open }) => (
-                          <>
-                            <Disclosure.Button
-                              className="flex w-full justify-between items-center px-3 py-2 text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white rounded-md"
-                            >
-                              <div className="flex items-center gap-2">
-                                <UserCircleIcon className="h-6 w-6" />
-                                <span>{session.user.name}</span>
-                              </div>
-                              <ChevronDownIcon
-                                className={`${open ? 'transform rotate-180' : ''} w-5 h-5 text-gray-400`}
+              <Disclosure>
+                {({ open: historyOpen }) => (
+                  <>
+                    <Disclosure.Button className={mobileItemClass(isHistoryPage())}>
+                      <span className="flex w-full justify-between items-center">
+                        History
+                        <ChevronDownIcon
+                          className={classNames(
+                            'h-5 w-5 text-white/50 transition-transform',
+                            historyOpen && 'rotate-180'
+                          )}
+                        />
+                      </span>
+                    </Disclosure.Button>
+                    <Disclosure.Panel className="pl-3 space-y-1 pb-2">
+                      {historyLinks.map((link) => (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          className={mobileItemClass(router.pathname === link.href)}
+                          onClick={() => close()}
+                        >
+                          {link.name}
+                        </Link>
+                      ))}
+                    </Disclosure.Panel>
+                  </>
+                )}
+              </Disclosure>
+
+              <Disclosure>
+                {({ open: liveOpen }) => (
+                  <>
+                    <Disclosure.Button
+                      className={classNames(
+                        mobileItemClass(false),
+                        liveGames.length > 0 && 'bg-red-500/10'
+                      )}
+                    >
+                      <span className="flex w-full justify-between items-center">
+                        <span className="flex items-center gap-2">
+                          {liveGames.length > 0 && (
+                            <span className="animate-pulse bg-red-500 w-2 h-2 rounded-full" />
+                          )}
+                          Live
+                        </span>
+                        <ChevronDownIcon
+                          className={classNames(
+                            'h-5 w-5 text-white/50 transition-transform',
+                            liveOpen && 'rotate-180'
+                          )}
+                        />
+                      </span>
+                    </Disclosure.Button>
+                    <Disclosure.Panel className="pl-3 space-y-2 pb-2">
+                      {liveGamesLoading ? (
+                        <div className="px-3 py-2 flex justify-center">
+                          <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                        </div>
+                      ) : liveGames.length > 0 ? (
+                        liveGames.map((game) => (
+                          <Link
+                            key={game.id}
+                            href={`/game-viewer?gameId=${game.id}`}
+                            className={mobileItemClass(false)}
+                            onClick={() => close()}
+                          >
+                            <div className="flex justify-between items-center mb-1">
+                              <span>Game #{game.id.slice(-4)}</span>
+                              <span className="text-sm text-on-surface-variant">
+                                {game.progress}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-white/10 rounded-full h-1.5">
+                              <div
+                                className="bg-primary h-1.5 rounded-full"
+                                style={{ width: `${game.progress}%` }}
                               />
-                            </Disclosure.Button>
-                            <Disclosure.Panel className="px-4 pt-2 pb-2 space-y-1">
-                              {session.user.accessLevel?.includes('USER') && (
-                                <Link
-                                  href="/user/management"
-                                  className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded-md"
-                                  onClick={() => handleMobileItemClick(close)}
-                                >
-                                  Management
-                                </Link>
-                              )}
-                              {session.user.accessLevel?.includes('ADMIN') && (
-                                <Link
-                                  href="/admin/dashboard"
-                                  className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded-md"
-                                  onClick={() => handleMobileItemClick(close)}
-                                >
-                                  Admin Dashboard
-                                </Link>
-                              )}
-                              <button
-                                onClick={() => {
-                                  signOut();
-                                  handleMobileItemClick(close);
-                                }}
-                                className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white"
-                              >
-                                Sign Out
-                              </button>
-                            </Disclosure.Panel>
-                          </>
-                        )}
-                      </Disclosure>
-                    </div>
-                  )}
+                            </div>
+                          </Link>
+                        ))
+                      ) : (
+                        <p className="px-3 py-2 text-sm text-on-surface-variant">
+                          No live games
+                        </p>
+                      )}
+                    </Disclosure.Panel>
+                  </>
+                )}
+              </Disclosure>
 
-                  {!session && (
+              {!session && (
+                <Link
+                  href="/login"
+                  className={mobileItemClass(false)}
+                  onClick={() => close()}
+                >
+                  Sign In
+                </Link>
+              )}
+
+              {session && (
+                <div className="border-t border-white/10 mt-4 pt-4 space-y-1">
+                  <p className="px-3 py-1 text-xs text-on-surface-variant truncate">
+                    {session.user?.name}
+                  </p>
+                  {session.user.accessLevel?.includes('USER') && (
                     <Link
-                      href="/login"
-                      className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white"
+                      href="/user/management"
+                      className={mobileItemClass(false)}
                       onClick={() => close()}
                     >
-                      Sign In
+                      Management
                     </Link>
                   )}
-
-                  {/* Theme Switcher for Mobile */}
-                  <div className="px-3 py-2 flex items-center justify-between text-gray-300">
-                    <span className="text-base font-medium">Theme</span>
-                    <button
-                      onClick={() => {
-                        toggleTheme();
-                        close();
-                      }}
-                      className="p-2 rounded-full hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition duration-150"
-                      title={`Switch to ${theme === 'emerald' ? 'dark' : 'light'} mode`}
+                  {session.user.accessLevel?.includes('ADMIN') && (
+                    <Link
+                      href="/admin/dashboard"
+                      className={mobileItemClass(false)}
+                      onClick={() => close()}
                     >
-                      {theme === 'emerald' ? (
-                        <svg
-                          className='swap-on fill-current w-6 h-6'
-                          xmlns='http://www.w3.org/2000/svg'
-                          viewBox='0 0 24 24'
-                        >
-                          <path d='M5.64,17l-.71.71a1,1,0,0,0,0,1.41,1,1,0,0,0,1.41,0l.71-.71A1,1,0,0,0,5.64,17ZM5,12a1,1,0,0,0-1-1H3a1,1,0,0,0,0,2H4A1,1,0,0,0,5,12Zm7-7a1,1,0,0,0,1-1V3a1,1,0,0,0-2,0V4A1,1,0,0,0,12,5ZM5.64,7.05a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29,1,1,0,0,0,0-1.41l-.71-.71A1,1,0,0,0,4.93,6.34Zm12,.29a1,1,0,0,0,.7-.29l.71-.71a1,1,0,1,0-1.41-1.41L17,5.64a1,1,0,0,0,0,1.41A1,1,0,0,0,17.66,7.34ZM21,11H20a1,1,0,0,0,0,2h1a1,1,0,0,0,0-2Zm-9,8a1,1,0,0,0-1,1v1a1,1,0,0,0,2,0V20A1,1,0,0,0,12,19ZM18.36,17A1,1,0,0,0,17,18.36l.71.71a1,1,0,0,0,1.41,0,1,1,0,0,0,0-1.41ZM12,6.5A5.5,5.5,0,1,0,17.5,12,5.51,5.51,0,0,0,12,6.5Zm0,9A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z' />
-                        </svg>
-                      ) : (
-                        <svg
-                          className='swap-off fill-current w-6 h-6'
-                          xmlns='http://www.w3.org/2000/svg'
-                          viewBox='0 0 24 24'
-                        >
-                          <path d='M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z' />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Build Identifier for Mobile */}
-                  <div className="px-3 py-2 text-xs text-gray-500">
-                    Build: {BUILD_IDENTIFIER}
-                  </div>
+                      Admin Dashboard
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      signOut();
+                      close();
+                    }}
+                    className={mobileItemClass(false)}
+                  >
+                    Sign Out
+                  </button>
                 </div>
               )}
-            </Disclosure.Panel>
-          </>
-        )}
-      </Disclosure>
-    </>
+
+              <div className="px-3 py-2 text-xs text-on-surface-variant">
+                Build: {BUILD_IDENTIFIER}
+              </div>
+            </div>
+          </Disclosure.Panel>
+        </>
+      )}
+    </Disclosure>
   );
 };
 

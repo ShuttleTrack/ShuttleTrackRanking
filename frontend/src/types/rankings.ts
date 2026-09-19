@@ -17,6 +17,8 @@ export interface PlayerRankingData {
     amount: number;
   };
   isAboveAverage: boolean;
+  lastFive: ('W' | 'L')[];
+  winRate: number;
 }
 
 export interface RankingsResponse {
