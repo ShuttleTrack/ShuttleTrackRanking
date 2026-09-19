@@ -31,7 +31,7 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **Purpose:** Page footer with club wordmark and copyright.
 
-**Content:** Dutch Lankan Shuttle Masters italic wordmark; copyright year; optional links only to routes that exist (e.g. `/`, `/encounter-history`). No placeholder Privacy/Terms/API links.
+**Content:** Dutch Lankan Shuttle Masters italic wordmark (desktop only); copyright year; links to `/`, `/encounter-history`, `/player-ranking-history`. **Mobile:** `py-6`, copyright `text-xs`, links in one `flex-nowrap` row (`text-xs`, `gap-4`). **Desktop:** wordmark + copyright left, links right (`py-12`).
 
 **Used in:** `src/components/layout/Layout.tsx`
 
