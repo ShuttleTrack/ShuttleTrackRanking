@@ -1,0 +1,361 @@
+{
+  "_generatedFrom" : "backend/src/main/java/com/brs/backend/core (EloRankScoreCalculator, ScorePersister, CommonAbsenteeManager) via CharacterizationFixtureGenerator - see MIGRATION_PLAN.md Phase 0",
+  "constants" : {
+    "K" : 20,
+    "WIN_BOOST" : 0.5,
+    "LOSS_SHIELD" : 0.5,
+    "CONSOLATION_CAP" : 2,
+    "CONSOLATION_MAX_SET_POINTS" : 20,
+    "TIER_BOOST_MIN_SCORE_GAP" : 200,
+    "DEMERIT_POINTS_ABSENTEE" : -10,
+    "ABSENTEE_ENCOUNTER_ID" : -1,
+    "_note" : "K's inline comment in EloRankScoreCalculator claims it was lowered 20->15 in Sep 2025, but git history (commit ed5f289) shows only the comment was added then - the literal stayed hardcoded at 20 in that same diff and has never been changed. K has been 20 continuously since Sep 2024, confirmed live (main is the deployed branch). Captured against 20; the comment is stale, not the code."
+  },
+  "eloScenarios" : [ {
+    "name" : "normal_close_win",
+    "description" : "No group/tier info, evenly matched teams, team1 wins a normal set.",
+    "input" : {
+      "team1PlayerRankScores" : [ 1500.0, 1500.0 ],
+      "team2PlayerRankScores" : [ 1500.0, 1500.0 ],
+      "team1SetPoints" : 21,
+      "team2SetPoints" : 15,
+      "groupIndex" : null,
+      "totalGroups" : null,
+      "dayWideScoreGapLargeEnough" : false
+    },
+    "output" : {
+      "team1Score" : 10.0,
+      "team2Score" : -10.0,
+      "scoreBreakdown" : {
+        "team1" : {
+          "baseElo" : 10.0,
+          "tierAdjustment" : 0.0,
+          "consolation" : 0.0,
+          "finalScore" : 10.0
+        },
+        "team2" : {
+          "baseElo" : -10.0,
+          "tierAdjustment" : 0.0,
+          "consolation" : 0.0,
+          "finalScore" : -10.0
+        },
+        "groupIndex" : 0,
+        "totalGroups" : 0,
+        "tierFactor" : 0.0,
+        "scoreGapTriggered" : false
+      }
+    }
+  }, {
+    "name" : "normal_upset_loss",
+    "description" : "No group/tier info, team1 heavily favored (avg 1700 vs 1300) but loses - demonstrates a large uncushioned negative delta.",
+    "input" : {
+      "team1PlayerRankScores" : [ 1700.0, 1700.0 ],
+      "team2PlayerRankScores" : [ 1300.0, 1300.0 ],
+      "team1SetPoints" : 18,
+      "team2SetPoints" : 21,
+      "groupIndex" : null,
+      "totalGroups" : null,
+      "dayWideScoreGapLargeEnough" : true
+    },
+    "output" : {
+      "team1Score" : -17.44,
+      "team2Score" : 17.44,
+      "scoreBreakdown" : {
+        "team1" : {
+          "baseElo" : -17.44,
+          "tierAdjustment" : 0.0,
+          "consolation" : 0.0,
+          "finalScore" : -17.44
+        },
+        "team2" : {
+          "baseElo" : 17.44,
+          "tierAdjustment" : 0.0,
+          "consolation" : 0.0,
+          "finalScore" : 17.44
+        },
+        "groupIndex" : 0,
+        "totalGroups" : 0,
+        "tierFactor" : 0.0,
+        "scoreGapTriggered" : false
+      }
+    }
+  }, {
+    "name" : "tier_win_boost",
+    "description" : "Lower tier group (groupIndex=2 of 2), team1 is the slight favorite and wins as expected - WIN_BOOST amplifies the positive base Elo delta. Day-wide gap established via a second same-day match (players 15-18).",
+    "input" : {
+      "team1PlayerRankScores" : [ 1000.0, 1000.0 ],
+      "team2PlayerRankScores" : [ 1050.0, 1050.0 ],
+      "team1SetPoints" : 21,
+      "team2SetPoints" : 15,
+      "groupIndex" : 2,
+      "totalGroups" : 2,
+      "dayWideScoreGapLargeEnough" : true
+    },
+    "output" : {
+      "team1Score" : 16.79,
+      "team2Score" : -4.1,
+      "scoreBreakdown" : {
+        "team1" : {
+          "baseElo" : 11.19,
+          "tierAdjustment" : 5.6,
+          "consolation" : 0.0,
+          "finalScore" : 16.79
+        },
+        "team2" : {
+          "baseElo" : -11.19,
+          "tierAdjustment" : 5.59,
+          "consolation" : 1.5,
+          "finalScore" : -4.1
+        },
+        "groupIndex" : 2,
+        "totalGroups" : 2,
+        "tierFactor" : 1.0,
+        "scoreGapTriggered" : true
+      }
+    }
+  }, {
+    "name" : "tier_loss_consolation_capped",
+    "description" : "Lower tier group (groupIndex=2 of 2). team1 is a huge favorite (avg 2000 vs 1000) but loses a close set (18-21) - the shielded loss magnitude comfortably exceeds CONSOLATION_CAP=2, so consolation is capped rather than proportional to the shielded loss.",
+    "input" : {
+      "team1PlayerRankScores" : [ 2000.0, 2000.0 ],
+      "team2PlayerRankScores" : [ 1000.0, 1000.0 ],
+      "team1SetPoints" : 18,
+      "team2SetPoints" : 21,
+      "groupIndex" : 2,
+      "totalGroups" : 2,
+      "dayWideScoreGapLargeEnough" : true
+    },
+    "output" : {
+      "team1Score" : -8.12,
+      "team2Score" : 29.76,
+      "scoreBreakdown" : {
+        "team1" : {
+          "baseElo" : -19.84,
+          "tierAdjustment" : 9.92,
+          "consolation" : 1.8,
+          "finalScore" : -8.12
+        },
+        "team2" : {
+          "baseElo" : 19.84,
+          "tierAdjustment" : 9.92,
+          "consolation" : 0.0,
+          "finalScore" : 29.76
+        },
+        "groupIndex" : 2,
+        "totalGroups" : 2,
+        "tierFactor" : 1.0,
+        "scoreGapTriggered" : true
+      }
+    }
+  }, {
+    "name" : "tier_loss_consolation_not_capped",
+    "description" : "Lower tier group (groupIndex=2 of 2). team1 is a huge underdog (avg 1000 vs 1614, expected win prob ~0.05) and loses a blowout (3-21) as expected - the shielded loss magnitude is small (< CONSOLATION_CAP=2) so consolation is proportional, and the low set points (3/20) further suppress it via the ratio.",
+    "input" : {
+      "team1PlayerRankScores" : [ 1000.0, 1000.0 ],
+      "team2PlayerRankScores" : [ 1614.0, 1614.0 ],
+      "team1SetPoints" : 3,
+      "team2SetPoints" : 21,
+      "groupIndex" : 2,
+      "totalGroups" : 2,
+      "dayWideScoreGapLargeEnough" : true
+    },
+    "output" : {
+      "team1Score" : -0.42,
+      "team2Score" : 1.5,
+      "scoreBreakdown" : {
+        "team1" : {
+          "baseElo" : -1.0,
+          "tierAdjustment" : 0.5,
+          "consolation" : 0.08,
+          "finalScore" : -0.42
+        },
+        "team2" : {
+          "baseElo" : 1.0,
+          "tierAdjustment" : 0.5,
+          "consolation" : 0.0,
+          "finalScore" : 1.5
+        },
+        "groupIndex" : 2,
+        "totalGroups" : 2,
+        "tierFactor" : 1.0,
+        "scoreGapTriggered" : true
+      }
+    }
+  }, {
+    "name" : "tier_not_triggered_gap_below_200",
+    "description" : "groupIndex/totalGroups present (2 of 3, would normally imply a tier factor) but the day-wide score gap (80) is below TIER_BOOST_MIN_SCORE_GAP=200, so no tier adjustment or consolation is applied despite team1 winning.",
+    "input" : {
+      "team1PlayerRankScores" : [ 1000.0, 1000.0 ],
+      "team2PlayerRankScores" : [ 1080.0, 1080.0 ],
+      "team1SetPoints" : 21,
+      "team2SetPoints" : 15,
+      "groupIndex" : 2,
+      "totalGroups" : 3,
+      "dayWideScoreGapLargeEnough" : false
+    },
+    "output" : {
+      "team1Score" : 11.9,
+      "team2Score" : -11.9,
+      "scoreBreakdown" : {
+        "team1" : {
+          "baseElo" : 11.9,
+          "tierAdjustment" : 0.0,
+          "consolation" : 0.0,
+          "finalScore" : 11.9
+        },
+        "team2" : {
+          "baseElo" : -11.9,
+          "tierAdjustment" : 0.0,
+          "consolation" : 0.0,
+          "finalScore" : -11.9
+        },
+        "groupIndex" : 2,
+        "totalGroups" : 3,
+        "tierFactor" : 0.0,
+        "scoreGapTriggered" : false
+      }
+    }
+  }, {
+    "name" : "tier_not_triggered_single_group",
+    "description" : "totalGroups=1 (no tiering that day) with a large score gap (400) - proves totalGroups<=1 short-circuits the tier factor regardless of score gap.",
+    "input" : {
+      "team1PlayerRankScores" : [ 1000.0, 1000.0 ],
+      "team2PlayerRankScores" : [ 1400.0, 1400.0 ],
+      "team1SetPoints" : 21,
+      "team2SetPoints" : 10,
+      "groupIndex" : 1,
+      "totalGroups" : 1,
+      "dayWideScoreGapLargeEnough" : true
+    },
+    "output" : {
+      "team1Score" : 17.44,
+      "team2Score" : -17.44,
+      "scoreBreakdown" : {
+        "team1" : {
+          "baseElo" : 17.44,
+          "tierAdjustment" : 0.0,
+          "consolation" : 0.0,
+          "finalScore" : 17.44
+        },
+        "team2" : {
+          "baseElo" : -17.44,
+          "tierAdjustment" : 0.0,
+          "consolation" : 0.0,
+          "finalScore" : -17.44
+        },
+        "groupIndex" : 1,
+        "totalGroups" : 1,
+        "tierFactor" : 0.0,
+        "scoreGapTriggered" : false
+      }
+    }
+  } ],
+  "absenteeScenarios" : [ {
+    "name" : "absentee_0_prior",
+    "description" : "No absences in last 5 games -> 1x multiplier",
+    "input" : {
+      "priorAbsencesWithinLast5Games" : 0
+    },
+    "output" : {
+      "action" : "demeritApplied",
+      "pointsApplied" : -10.0,
+      "encounterIdUsed" : -1
+    }
+  }, {
+    "name" : "absentee_1_prior",
+    "description" : "1 absence in last 5 games -> 2x multiplier",
+    "input" : {
+      "priorAbsencesWithinLast5Games" : 1
+    },
+    "output" : {
+      "action" : "demeritApplied",
+      "pointsApplied" : -20.0,
+      "encounterIdUsed" : -1
+    }
+  }, {
+    "name" : "absentee_2_prior",
+    "description" : "2 absences in last 5 games -> 3x multiplier",
+    "input" : {
+      "priorAbsencesWithinLast5Games" : 2
+    },
+    "output" : {
+      "action" : "demeritApplied",
+      "pointsApplied" : -30.0,
+      "encounterIdUsed" : -1
+    }
+  }, {
+    "name" : "absentee_4_prior",
+    "description" : "4 absences in last 5 games -> still 3x multiplier (boundary below deactivation)",
+    "input" : {
+      "priorAbsencesWithinLast5Games" : 4
+    },
+    "output" : {
+      "action" : "demeritApplied",
+      "pointsApplied" : -30.0,
+      "encounterIdUsed" : -1
+    }
+  }, {
+    "name" : "absentee_5_prior",
+    "description" : "5 absences in last 5 games -> long-term auto-deactivation instead of demerit",
+    "input" : {
+      "priorAbsencesWithinLast5Games" : 5
+    },
+    "output" : {
+      "action" : "deactivated",
+      "encounterIdUsed" : -2
+    }
+  } ],
+  "activationScenarios" : [ {
+    "name" : "activate_with_explicit_score",
+    "description" : "Explicit activateScore provided - takes precedence over any auto-calculation.",
+    "input" : {
+      "rankScoreBeforeActivation" : 900.0,
+      "explicitActivateScore" : 1234.5,
+      "currentSameRankPlayerScore" : null,
+      "currentMinActiveRankScore" : null
+    },
+    "output" : {
+      "statusAfter" : "ENABLED",
+      "rankScoreAfter" : 1234.5,
+      "scoreHistory.oldRankScore" : 900.0,
+      "scoreHistory.newRankScore" : 1234.5,
+      "scoreHistory.encounterId" : -3
+    }
+  }, {
+    "name" : "activate_auto_score_with_rank_match",
+    "description" : "No explicit score; auto-calculated from the last active game's playerNewRank, which matches a currently-active player's playerRank.",
+    "input" : {
+      "rankScoreBeforeActivation" : 800.0,
+      "explicitActivateScore" : null,
+      "lastActiveGamePlayerNewRank" : 3,
+      "currentSameRankPlayerScore" : 1400.0,
+      "currentMinActiveRankScore" : 1100.0,
+      "note" : "A currently-active player (id=82) occupies playerRank=3 -> newScore = that player's rankScore - (DEMERIT_POINTS_ABSENTEE * 3)"
+    },
+    "output" : {
+      "statusAfter" : "ENABLED",
+      "rankScoreAfter" : 1430.0,
+      "scoreHistory.oldRankScore" : 800.0,
+      "scoreHistory.newRankScore" : 1430.0,
+      "scoreHistory.encounterId" : -3
+    }
+  }, {
+    "name" : "activate_auto_score_fallback_to_min",
+    "description" : "No explicit score; auto-calculation's rank-match lookup finds no active player at the last game's playerNewRank, so it falls back to the current minimum active rankScore.",
+    "input" : {
+      "rankScoreBeforeActivation" : 700.0,
+      "explicitActivateScore" : null,
+      "lastActiveGamePlayerNewRank" : 99,
+      "currentSameRankPlayerScore" : null,
+      "currentMinActiveRankScore" : 950.0,
+      "note" : "No currently-active player occupies playerRank=99 -> falls back to min rankScore among active players (950) - (DEMERIT_POINTS_ABSENTEE * 3)"
+    },
+    "output" : {
+      "statusAfter" : "ENABLED",
+      "rankScoreAfter" : 980.0,
+      "scoreHistory.oldRankScore" : 700.0,
+      "scoreHistory.newRankScore" : 980.0,
+      "scoreHistory.encounterId" : -3
+    }
+  } ]
+}

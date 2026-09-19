@@ -39,3 +39,10 @@ frontend/.cursor/rules/
 frontend/.cursor/llmstxt/
 
 frontend/*.tsbuildinfo
+
+# Real production data dump used locally for migration work (MIGRATION_PLAN.md Phase 1) -
+# contains real player emails, must never be committed.
+/db_data/
+
+# Claude Code local session/tooling config, not shared repo config.
+/.claude/

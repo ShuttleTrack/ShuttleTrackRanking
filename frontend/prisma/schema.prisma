@@ -7,11 +7,78 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Finalized from the Phase 1 introspection (MIGRATION_PLAN.md) against the real `brs` schema.
+// Model/field names are PascalCase/camelCase for TS ergonomics; @@map/@map preserve the actual
+// legacy (Java/Hibernate-created) table and column names underneath.
+model Player {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(32)
+  rankScore    Float     @default(1000) @map("rank_score")
+  playerRank   Int?      @map("player_rank")
+  highestRank  Int?      @map("highest_rank")
+  rankSince    DateTime? @map("rank_since") @db.Date
+  colorHex     String    @default("aaaaaa") @map("color_hex") @db.VarChar(6)
+  // Legacy pre-`playerStatus` active flag. Confirmed still live in the DB (Phase 1) but no
+  // longer read/written by the Java app (no `disabled` field on backend Player.java) - dead
+  // column kept here only for introspection fidelity. Don't use; don't drop without checking
+  // nothing else reads it directly.
+  disabled     Boolean   @default(dbgenerated("b'0'")) @db.Bit(1)
+  email        String?   @db.VarChar(255)
+  // Free-form varchar in the DB (Hibernate `@Enumerated(STRING)`), not a real SQL enum, and
+  // nullable - some rows may have no status. Kept as String? rather than a Prisma enum so an
+  // unexpected/legacy value can't make a query throw; port PlayerStatus derivation exactly
+  // (see backend Player.java isActive/isDisabled/isAvailableForGame) rather than trusting this
+  // column alone.
+  playerStatus String?   @map("player_status")
+
+  @@map("PLAYER")
+}
+
+model Encounter {
+  id              Int      @id @default(autoincrement())
+  team1           String   @map("team_1") @db.VarChar(32)
+  team2           String   @map("team_2") @db.VarChar(32)
+  encounterDate   DateTime @map("encounter_date") @db.Date
+  processed       Boolean  @default(false)
+  team1SetPoints  Int      @map("team_1_set_points")
+  team2SetPoints  Int      @map("team_2_set_points")
+  calculatedScore Float?   @map("calculated_score")
+  groupIndex      Int?     @map("group_index")
+  totalGroups     Int?     @map("total_groups")
+  // Raw JSON string in the DB (matches Java's Encounter.scoreBreakdown : String, populated via
+  // ObjectMapper.writeValueAsString), not a native JSON column type on the Java side - Prisma
+  // introspected it as Json since MySQL's column type is `json`. Parse with the same
+  // ScoreBreakdown/TeamScoreBreakdown shape used in EloRankScoreCalculator.
+  scoreBreakdown  Json?    @map("score_breakdown")
+
+  @@unique([team1, team2, encounterDate], map: "team_uniqness")
+  @@map("ENCOUNTER")
+}
+
+model ScoreHistory {
+  id                     Int      @id @default(autoincrement())
+  playerId               Int      @map("player_id")
+  encounterId            Int      @map("encounter_id")
+  oldRankScore           Float    @map("old_rank_score")
+  newRankScore           Float    @map("new_rank_score")
+  mysqlInsertedTimestamp DateTime @default(now()) @map("mysql_inserted_timestamp") @db.Timestamp(0)
+  // Nullable in the live DB (Phase 1 finding) despite backend ScoreHistory.java typing these as
+  // primitive `int` (implying non-null) - trust the DB, not the Java field type, when porting.
+  playerOldRank          Int?     @map("player_old_rank")
+  playerNewRank          Int?     @map("player_new_rank")
+  encounterDate          DateTime @map("encounter_date") @db.Date
+
+  @@map("SCORE_HISTORY")
+}
+
+// Not part of the backend's schema - transient game-day session state (frontend-owned).
+// Introspection (`prisma db pull`) doesn't know about this table; re-added manually per
+// MIGRATION_PLAN.md Phase 1. Run `prisma db push` after editing this model.
 model Game {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  groups    Json     // Store groups as JSON
+  groups    Json // Store groups as JSON
   scores    Json     @default("{}") // Default empty object for scores
   status    String   @default("DRAFT") // DRAFT, IN_PROGRESS, COMPLETED
-} 
+}

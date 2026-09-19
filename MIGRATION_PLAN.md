@@ -1,0 +1,192 @@
+# Migration Plan: Decommission the Java Backend, Take Over in Next.js
+
+Status: **Phase 0 complete. Phase 1+ not started.**
+Owner: BRS maintainers
+This file is the handoff artifact from a planning conversation (Claude Sonnet in claude.ai with the Filesystem connector) to implementation (Claude Code). It captures decisions already made so implementation doesn't need to re-derive them. Read this fully before writing code.
+
+---
+
+## 1. Goal
+
+Move all backend (`backend/`, Java/Spring Boot/Maven) functionality into the Next.js app (`frontend/`), so the Java backend can eventually be deleted. **Do not delete or disable the Java backend until the Next.js implementation is validated working in production.** The approach is additive/parallel, not a big-bang cutover:
+
+1. Build the ported functionality in `frontend/` alongside the existing BE-proxying code.
+2. Cut individual FE code paths over from "call the Java BE" to "call the local ported logic" one at a time, validating each.
+3. Only once everything is cut over and confirmed stable, remove the `backend` service from `docker-compose.yml`, delete its CI/build workflow, and (optionally, later) delete the `backend/` directory itself.
+
+## 2. Why (context, don't re-litigate)
+
+- The two apps already share infrastructure more than it first appears: same MySQL server, NextAuth already round-trips to the Java `/v2/auth` endpoint to determine admin status, and the frontend already has a working Telegram notification path (`pages/api/notify.ts`) independent of the backend's.
+- The Java backend's ranking logic (`EloRankScoreCalculator` et al.) has **no existing automated tests**. This is the single highest-risk part of the port. Characterization tests captured from live/real behavior are the safety net — see Phase 0.
+- The checked-in `backend/resources/mysql=schema.ddl` is **stale** and does not match the live schema (confirmed drift: missing `email`, `player_status` enum on `PLAYER`; missing `group_index`/`total_groups`/`score_breakdown` on `ENCOUNTER`). **Do not use this file as a schema reference.** Use `prisma db pull` against the real `brs` database instead.
+- Schema changes today are applied manually/ad hoc (no Flyway/Liquibase, Hibernate `ddl-auto` is unset which defaults to `none` for non-embedded DBs). This means Prisma can safely be introduced to manage new tables/models in the same `brs` schema without colliding with anything — but also means there's no migration history to lean on; introspect first.
+
+## 3. Decisions already made (do not re-ask these)
+
+| Question | Decision |
+|---|---|
+| Which database does the ported code use? | The **existing `brs` MySQL database** (same server the Java backend already uses), not the frontend's current separate DB. |
+| What happens to the frontend's current separate DB? | Decommissioned after cutover. Its only table (`Game`) is transient/session-scratch data (`DRAFT`→`IN_PROGRESS`→`COMPLETED`, deleted after processing) — **no data migration needed**, just add a `Game` model to `brs` via Prisma and repoint `DATABASE_URL`. This step is low-risk and can happen independently/early. |
+| Schema source of truth? | Live introspection (`prisma db pull` against `brs`), not `mysql=schema.ddl` (stale, to be deleted) and not blind trust in the JPA `@Entity` classes either — verify against the real table. |
+| Non-`/v2` encounter endpoints (`/encounters/{date}/add`, `/encounters/{date}/process`, `/encounters/add-by-file`)? | **Drop.** Relics of an old CSV-upload workflow superseded by the current UI. Do not port. |
+| `/v2/validate` (`processToken`, returns `"Wade Goda"`)? | Looks like a leftover connectivity-test endpoint. **Drop** — not part of any real flow, no FE caller found. |
+| `/score/compress`? | **Drop.** Not currently used. A replacement can be designed later if needed — not in scope for this migration. |
+| Admin auth mechanism? | Replace the `NextAuth` → `fetch('/v2/auth')` round-trip to Java with a **local check** against the `ALLOWED_ADMIN_EMAILS` env var (already provisioned as a frontend secret, currently unused in code) plus a `Player` lookup by email (once `PLAYER` table is queryable locally, to resolve `playerId`/`accessLevel` the same way `/v2/auth` currently does). |
+| Telegram — daily "who's in" poll vs. ad hoc notifications? | **Consolidate into one integration.** One bot token (reuse `TELEGRAM_BOT_TOKEN`, already used by `pages/api/notify.ts`), one send function, one day-keyed chat-ID map (`{ MONDAY: <groupId>, WEDNESDAY: <groupId> }` — Wednesday's ID is presumably the existing `TELEGRAM_CHAT_ID`; Monday's needs pulling from backend's `API_TG_GROUPS_MONDAY_GROUPID` secret). Confirmed: both days currently use the *same* bot token already (backend's separate Monday/Wednesday bot-key config was redundant duplication, not two real bots) — so this is a straightforward map, not per-day bot credentials. |
+| Scheduler mechanism? | Backend uses Spring `@Scheduled(cron = "0 0 17 * * *")`. Deployment is a **long-running Docker container via docker-compose/Portainer**, not serverless — so `node-cron` inside the Next.js process (or a small sidecar service in the same compose file) is a direct equivalent. No serverless cron-timeout constraints to design around. |
+| Infra impact of dropping BE? | Delete the `backend` service from `docker-compose.yml` (`ghcr.io/catchsudheera/brs-backend:...`), delete its GH Actions build workflow. `db`, `frontend`, nginx-proxy-manager, portainer scaffolding are untouched. Ansible is already gone/irrelevant — ignore any references to it in old docs. |
+
+## 4. Final ported API surface
+
+Only these need porting (everything else in the current controllers is dropped per §3):
+
+| Current BE endpoint | Method | Notes |
+|---|---|---|
+| `/players` | GET | `?status=` optional filter |
+| `/players/history` | GET | `?type=RANK\|SCORE\|ALL`, default RANK |
+| `/players/{playerId}/history` | GET | same type param |
+| `/players/{playerId}/encounters` | GET | 404 semantics if not found |
+| `/v2/auth` | GET | → replaced by local logic, not a ported endpoint per se (see §3 auth decision) |
+| `/v2/auth/players` | GET | secure variant incl. email |
+| `/v2/game/players` | GET | ranked list of available (non-disabled) players with a game-day rank |
+| `/v2/players` | POST | add new player |
+| `/v2/players/{id}` | PUT | update name/email |
+| `/v2/players/{id}/activate` | POST | optional explicit re-activation score |
+| `/v2/players/update-ranking` | POST | recompute `playerRank` for all active players |
+| `/v2/encounters/{date}/add` | POST | persist one unprocessed encounter |
+| `/v2/encounters/{date}/process` | POST | run ranking calc for all unprocessed encounters that date + absentee handling + re-rank |
+| `/encounters` | GET | list all |
+| `/encounters-for-players` | GET | cross-player encounter history lookup, `teamAp1`/`teamAp2`/`teamBp1`/`teamBp2` query params |
+
+Frontend proxy files that currently call these and will need to be repointed at local logic instead of `fetch(NEXT_PUBLIC_BACKEND_URL + ...)`:
+`frontend/src/pages/api/game/players.ts`, `games/[id]/submit.ts`, `games/[id]/process.ts`, `players/*`, `players/[id]/*`, `encounters/history.ts`, `rankings/*`. (Audit the full `frontend/src/pages/api/**` tree at implementation time — this list is from the exploration done so far, not guaranteed exhaustive.)
+
+## 5. Core logic to port (the risky part)
+
+Source: `backend/src/main/java/com/brs/backend/core/` and `util/PlayerUtil.java`.
+
+- **`EloRankScoreCalculator`** — the Elo-style score calculation. Key constants: `K=20`, `WIN_BOOST=0.5`, `LOSS_SHIELD=0.5`, `CONSOLATION_CAP=2`, `CONSOLATION_MAX_SET_POINTS=20`, `TIER_BOOST_MIN_SCORE_GAP=200`. Note the comments recording historical tuning (`K` changed 40→20→15 at various points, demerit points changed -10→-22→-10) — confirm which values are *actually currently live* by reading the real deployed constants, not assuming the checked-in source is what's running (check the deployed image tag `v1.2` against the `main`/deploy branch of `backend/`).
+- **`ScorePersister`** — applies calculated deltas to `Player.rankScore`, writes `SCORE_HISTORY` rows, handles activate/deactivate. Several methods re-fetch the entity inside the method (`// Loading again in the current transactional context`) — this pattern exists because of JPA session/transaction semantics; when porting to Prisma, replace with explicit `$transaction` blocks, don't assume you need the same "reload" pattern but do preserve the same read-after-write consistency guarantees.
+- **`CommonAbsenteeManager`** — deducts demerit points from players who didn't play, with escalating multiplier (1x/2x/3x based on consecutive absences) and long-term (5+) auto-deactivation.
+- **`PlayerUtil`** — team ID encoding: player IDs are joined with `:` delimiter into a single string stored in `ENCOUNTER.team_1`/`team_2` columns (e.g. `"3:7"`), sorted ascending. Preserve this exact encoding — `ScoreHistory`/`Encounter` cross-references depend on parsing it back the same way (`getPlayersByIdsString`).
+- **`GameService.getAvailablePlayersForGame`** and **`PlayerService.updatePlayerRanking`** — ranking sort order: `rankScore` descending, `playerRank` ascending as tiebreak (`getRankedPlayers`). Preserve tiebreak order exactly — it affects display rank on score ties.
+
+## 6. Phased implementation plan
+
+### Phase 0 — Characterization tests ✅ DONE (2026-09-19)
+Capture the **live/current** behavior of the Java backend as the oracle, not just a reading of its source:
+- Pull a real (or realistic synthetic) set of `PLAYER` rows + a sequence of `ENCOUNTER` inputs.
+- For each, record the actual output the running BE produces (`calculated_score`, `score_breakdown` JSON, resulting `rank_score`/`player_rank` changes, `SCORE_HISTORY` rows written) — either by hitting the live/staging BE's API directly, or by writing a small Java test harness against the current `EloRankScoreCalculator` if no environment is available to call.
+- Cover: normal win/loss, tier-boost-triggered matches (`group_index`/`total_groups` present, score gap ≥ 200), consolation-triggered losses, absentee deduction at 0/1/2/5+ prior absences, player activation with and without explicit `activateScore`.
+- These become fixture-based tests in `frontend/` (e.g. Vitest) that the new TS port must satisfy bit-for-bit (or within an explicitly agreed floating-point tolerance) before it's trusted.
+
+**What was built** (no live/staging BE or real MySQL access was available, so this used the plan's documented fallback — a Java test harness against the real, currently-checked-in core classes, with repositories mocked via Mockito rather than a database):
+- `backend/src/test/java/com/brs/backend/core/CharacterizationFixtureGenerator.java` — drives the real `EloRankScoreCalculator`, `ScorePersister`, and `CommonAbsenteeManager` through 15 scenarios (7 Elo: normal win/upset loss, tier win-boost, tier loss+consolation both capped and not-capped, tier-not-triggered on both the gap<200 and totalGroups=1 edge cases; 5 absentee: 0/1/2/4/5 prior absences in the last 5 games; 3 activation: explicit score, auto-calc with a rank match, auto-calc falling back to the active-player minimum) and writes the captured inputs/outputs to `frontend/src/lib/ranking/__fixtures__/characterization.json`. Deliberately **not** named `*Test.java` so Surefire's default `mvn test` skips it — it's a generator, not a regression test that should silently re-baseline itself on every CI run. Regenerate with `mvn test -Dtest=CharacterizationFixtureGenerator` from `backend/`.
+- `frontend/src/lib/ranking/characterization.test.ts` — Vitest spec asserting the fixture is well-formed and covers every scenario category this section requires. The TS port doesn't exist yet (Phase 3), so the actual bit-for-bit comparisons are `it.todo(...)` placeholders to fill in once it does.
+- Resolved the §7 open item on the `K` constant, fully: `main` is confirmed to be what's deployed (not the stale `v1.2` compose tag), and `git log -S"lowered to 15"` shows the commit that added that comment (`ed5f289`, Sep 2025) only added the comment — the literal stayed hardcoded `20 * (...)` in that same diff and has never been changed to 15 in any commit. `K` has been `20` continuously since Sep 2024; the "lowered to 15" comment was aspirational and never implemented. Fixtures were captured against `20`, which is correct. No further action needed here — worth deleting the stale comment line during the Phase 3 port (or leaving a note that it was never real) so it doesn't mislead the TS port author.
+
+### Phase 1 — DB consolidation (independent, low-risk, do early) ✅ mostly done (2026-09-19), locally
+- Point `frontend`'s `DATABASE_URL` at the `brs` schema (new Prisma-scoped DB user recommended over reusing `brs_user`).
+- `prisma db pull` against `brs` to introspect `PLAYER`, `ENCOUNTER`, `SCORE_HISTORY` as they actually exist today (ground truth — see §2).
+- Add a `Game` model to `frontend/prisma/schema.prisma`, migrate. No data carryover from the old FE DB needed (transient data).
+- Once confirmed working, decommission the old separate frontend DB.
+- Delete `backend/resources/mysql=schema.ddl` and `mysql-initial-data.sql` once the introspected `schema.prisma` is the checked-in source of truth.
+
+**What was done:** No remote/production DB access was available in this session. The user provided a real data+schema dump (`db_data/{PLAYER,ENCOUNTER,SCORE_HISTORY}.sql` — 22/44/195 rows; **not committed, contains real player emails, should stay untracked/local-only**). That was loaded into a fresh local MySQL 8.3 Docker container (`brs-local-mysql`, host port 3307 — the compose file's default 3306 was already taken locally by an unrelated native `mysqld`; the checked-in `backend/local-run/docker-compose.yml` was **not modified**), and `prisma db pull` ran against that — a genuine introspection of the real schema, not a reconstruction. `Game` was re-added by hand afterward (introspection doesn't know about it) and pushed with `prisma db push` (`brs_user` lacked `CREATE DATABASE` rights for `migrate dev`'s shadow-DB flow in this throwaway container — not evaluated for prod). Verified end-to-end with a real Prisma Client query. Stale `mysql=schema.ddl` / `mysql-initial-data.sql` deleted (uncommitted) now that `schema.prisma` is real and checked-in-ready.
+
+**New findings vs. §2's documented drift:**
+- `PLAYER.disabled` (the old `bit` flag) **still exists in the live table alongside** `player_status` — not just superseded by it as §2 implied. It's not read/written by any `Player.java` field (no `disabled` mapping in the entity), so it's a genuinely dead column at the app level, live in the DB. Don't drop it without confirming nothing else (a report, an old script) still reads it directly — flag for Phase 2/8 cleanup, not touched here.
+- `SCORE_HISTORY.player_old_rank` / `player_new_rank` are **nullable** in the live table, but `ScoreHistory.java` types them as primitive `int` (implying non-null). Prisma introspection captured the DB truth (`Int?`) — worth preserving that nullability in the TS port rather than trusting the Java field type.
+
+**Still open (needs real prod access, not done here):**
+- Point actual production `DATABASE_URL` at `brs` and decommission the old separate frontend DB — infra/deploy step, out of scope for a local session.
+- Create the dedicated Prisma-scoped DB user (vs. reusing `brs_user`) — not done; this session used `brs_user` against the local-only container.
+- The local Docker container is throwaway/session-local dev infra, not a permanent fixture — no compose file was added/changed for it.
+- **Migration history gap:** `frontend/prisma/migrations/20250202125811_init/` is the old *separate frontend DB*'s `Game`-creation migration — it belongs to that database, not `brs`, and `prisma db push` (used here) doesn't write to a target DB's `_prisma_migrations` table at all. Real `brs` has never been introspected into a tracked migration history (it predates Prisma, per §2 — no Flyway/Liquibase either). Before using `prisma migrate deploy` against real `brs`, someone needs to either baseline it (`prisma migrate resolve --applied`) or accept `db push` as the ongoing strategy for this schema. Not resolved here.
+
+### Phase 2 — Prisma models + read paths ✅ done (2026-09-19)
+- Finalize `Player`, `Encounter`, `ScoreHistory` Prisma models from the Phase 1 introspection.
+- Port the simple read endpoints first (`/players`, `/players/history`, `/encounters`, etc.) as new Next.js API routes, **not yet wired to replace the existing BE-proxying routes** — build them alongside, verify manually/via tests.
+
+**What was done:**
+- `frontend/prisma/schema.prisma` finalized: `PLAYER`/`ENCOUNTER`/`SCORE_HISTORY` renamed to `Player`/`Encounter`/`ScoreHistory` (PascalCase) with camelCase fields, `@@map`/`@map` preserving the real underlying table/column names. Comments on `disabled` (dead column), `playerStatus` (nullable free-form varchar, not a real enum) and `scoreBreakdown` (raw JSON string on the Java side) carry forward the Phase 1 findings so Phase 3+ doesn't have to rediscover them.
+- Read logic ported into `frontend/src/lib/ranking/{playerStatus,period,players,encounters}.ts`, read from `backend/src/main/java/com/brs/backend/{controllers,services}/{Player,Encounter,ScoreHistory}*.java` line-by-line. Split into pure, DB-independent functions (unit tested) plus thin Prisma-backed fetchers.
+- New parallel API routes under `frontend/src/pages/api/local/**` (`players`, `players/history`, `players/[id]/history`, `players/[id]/encounters`, `encounters`, `encounters-for-players`) — the existing BE-proxying routes are untouched.
+- 33 new Vitest unit tests for the pure logic (`playerStatus.test.ts`, `period.test.ts`, `players.test.ts`, `encounters.test.ts`), plus a manual smoke test of all 6 new routes against the real local data (from Phase 1's `brs-local-mysql` container) via a temporary `next dev` run — all matched expectations, including the 404 and 400 validation paths. `tsc --noEmit` and `npm run lint` both clean.
+
+**Fidelity decisions worth knowing about (bugs preserved on purpose, since a byte-for-byte port is the goal until Phase 7's cutover):**
+- **`timeInHighestRank` reproduces a real, verified display bug.** `PlayerService` computes it via `Period.between(today, rankSince).getDays()`, but `Period#getDays()` returns only the *day component* of a years/months/days breakdown, not total elapsed days. Confirmed live against real data in this session: player "navanji" (`rank_since` 2026-08-17, 33 real elapsed days as of 2026-09-19) shows `"2 day(s)"` from both the real backend logic and this port (`GET /api/local/players`, verified by curl). Ported exactly in `period.ts` with the algorithm spelled out; not fixed. Worth deciding whether to fix this during/after cutover — it's a one-line change once someone decides they want `today - rankSince` instead.
+- **`playerTeam`/`opponentTeam` can contain `null` entries** if a referenced player id has no matching row (e.g. a deleted player still named in an old encounter's `team_1`/`team_2` string) — mirrors `EncounterService.getPlayerInfo` returning `null` into the list rather than filtering it out.
+- **`getCrossPlayerEncounterHistory` throws on a null team member** (`p.playerId` with no optional-chaining) to mirror the original's unguarded `w.getPlayerId()` NPE for the same edge case.
+- **`playerSide` defaults to team2** for a playerId that's in neither team (a data-integrity edge case), matching `getPlayerTeam`'s fallback rather than throwing.
+- `getAllPlayersHistory` and `getPlayerHistory` re-fetch each player's score history independently (not batched) - matches the original's per-player service calls; fine for the current data volumes but a candidate for batching if this becomes a real endpoint under load.
+
+**Not done / deferred:** `/v2/auth/players` (secure, email-including variant) has its builder (`getSecurePlayers`/`toSecurePlayerInfo`) ready in `players.ts` but no route wired yet — it's tangled up with the Phase 5 auth decision, so left for then. `/v2/game/players` (ranked game-day list) is a Phase 4 endpoint, not Phase 2.
+
+### Phase 3 — Port core ranking logic ✅ done (2026-09-19)
+- Implement `EloRankScoreCalculator`, `ScorePersister`, `CommonAbsenteeManager`, `PlayerUtil` equivalents in TypeScript (see §5).
+- Run against the Phase 0 characterization tests until passing.
+
+**What was done:**
+- Pure math ported to `frontend/src/lib/ranking/{eloCalculator,absenteeManager,activation,playerUtil,round}.ts`, deliberately separated from DB access so it's directly testable. `round.ts` replicates Java's `BigDecimal.valueOf(value).setScale(2, HALF_UP)` by rounding from the value's `.toString()` (both Java's `Double.toString` and JS's `Number.toString` are specified to produce the shortest round-trippable decimal string) rather than raw float math, which avoids misrounding cases like `2.675`.
+- `characterization.test.ts`'s three `it.todo`s are now real bit-for-bit assertions against every Phase 0 fixture. **All 18 passed on the first run** (7 Elo scenarios incl. rounding/tier/consolation edge cases, 5 absentee multiplier scenarios, 3 activation scenarios) - strong signal the port is faithful.
+- Extended the Java fixture generator to include a few numeric inputs (`dayWideScoreGapLargeEnough`, `currentSameRankPlayerScore`, `currentMinActiveRankScore`) that were previously only implied by prose notes, so the TS test reads them directly from the fixture instead of duplicating magic numbers - regenerated, still 18/18.
+- DB-orchestrating wrappers (`scorePersister.ts`: `calculateAndPersistElo`, `applyAbsenteeDeductions`, `activatePlayer`, `deactivatePlayer`, `updatePlayerRanking`) built on top of the pure functions - not wired into any API route yet (Phase 4). Smoke-tested against the real local DB (Phase 1's `brs-local-mysql` container) using throwaway player/encounter ids (90001-90004, encounter date 2099-01-01) so the real 22/44/195 rows were never touched (verified before/after); the test file was deleted after verifying since it needs a live DB and isn't safe to leave in the permanent CI-run suite.
+- `tsc --noEmit`, `npm run lint`, and the full Vitest suite (74 tests) all clean.
+
+**Fidelity notes (deviations from a literal line-for-line port, and why):**
+- `isScoreGapLargeEnoughForDate` doesn't replicate the Java singleton's per-process per-date cache - recomputed on every call. Performance-only difference, not a correctness one.
+- `updatePlayerRanking` treats a null `highestRank` as "this is a new personal best" instead of replicating Java's NPE on unboxing a null `Integer` there. Real data always has `highestRank` populated, and Phase 0 didn't characterize this function, so there's no captured "correct" crash behavior to match - defensive default chosen instead of a deliberately-preserved bug.
+- `ScorePersister.updateScoreHistory` never setting `playerNewRank` (Java `int` field defaults to 0) **was** replicated exactly, including the consequence that absentee/deactivate/activate synthetic rows can keep `playerNewRank = 0` indefinitely unless a same-day real encounter happens to get processed afterward and touches that date via `updatePlayerEncounterNewRanking`.
+
+### Phase 4 — Port remaining write endpoints ✅ done (2026-09-19)
+- `/v2/players` (add/update/activate/update-ranking), `/v2/encounters/{date}/add`, `/v2/encounters/{date}/process`, `/v2/game/players`.
+- Still parallel — these are new routes, existing FE proxy code still points at Java BE.
+
+**What was done:**
+- New domain functions: `addPlayer`/`updatePlayer`/`getAvailablePlayersForGame`/`toRawPlayerJson` in `players.ts`; `updatePlayerEncounterNewRanking` added to `scorePersister.ts` and `updatePlayerRanking` changed to return the updated players (needed by the new ranking-backfill step); `addEncounter`/`processEncountersForDate` in the new `processEncounters.ts` (the `/v2/encounters/{date}/process` orchestration: run Elo for every unprocessed encounter that date, absentee-deduct everyone who didn't play any of them, re-rank, backfill `ScoreHistory.playerNewRank`).
+- New routes under `frontend/src/pages/api/local/v2/**` (`players` POST, `players/[id]` PUT, `players/[id]/activate` POST, `players/update-ranking` POST, `encounters/[date]/add` POST, `encounters/[date]/process` POST, `game/players` GET) - a new `/v2` subtree alongside Phase 2's routes, mirroring the backend's real path split rather than the frontend's own GET+POST-on-one-path convenience proxying.
+- Preserved response-shape quirks found while porting: `addPlayer`'s declared return type is `PlayerInfo` but the real object returned is `SecurePlayerInfo` (Jackson serializes the runtime type, so `email` really is in the response); `updatePlayer` returns plain `PlayerInfo` with `timeInHighestRank` hardcoded to `"0 day(s)"` rather than computed; `/v2/players/update-ranking` returns the raw JPA `Player` entity, which Jackson's `isXxx()` bean-property detection expands into extra `active`/`disabled`/`availableForGame` boolean fields beyond the raw columns (`toRawPlayerJson` reproduces this).
+- `tsc --noEmit`, `npm run lint`, and the full Vitest suite (78 tests) all clean.
+
+**Real-data incident during verification (caught and fully recovered - documented for transparency):** while smoke-testing `processEncountersForDate` against the real local DB with throwaway players (90005-90008) and a throwaway encounter, the absentee-deduction step correctly (and expectedly, in hindsight) treated every one of the 22 *real* players as an absentee, since they hadn't played that throwaway encounter - genuinely reducing their real `rankScore` and inserting spurious absentee `ScoreHistory` rows. This is the port faithfully reproducing real backend behavior, not a bug in the port - but it's a sharp edge worth knowing about: **`/v2/encounters/{date}/process` is not safe to smoke-test against a database containing real active players unless every one of them either plays in the batch or the absentee side effect is intended.** Recovered by dropping and reloading `PLAYER`/`ENCOUNTER`/`SCORE_HISTORY` from the original `db_data/*.sql` dumps and verifying an MD5 match against the source files (not just row counts) - confirms real data is byte-identical to Phase 1's original load. This also revealed that Phase 3's earlier smoke test had left real players' `playerRank` (not `rankScore`) shifted by the throwaway players it had left active at the time; that's fully resolved too by this same reload. Lesson for future sessions: verify against the **original source dump**, not a snapshot taken mid-session, since an earlier test's leftover state can silently become the new "expected" baseline.
+- If this needs verifying again later: either use exclusively-throwaway player ids for every player that exists at all in the DB at the time (impractical against a copy of real data), or accept the side effect and reload from `db_data/*.sql` afterward, or test against a truly empty schema instead of a real-data copy.
+
+### Phase 5 — Auth consolidation ✅ code done, ⚠️ NOT SAFE TO DEPLOY YET (2026-09-19)
+- Replace `validateUserAccess()`'s call to `NEXT_PUBLIC_BACKEND_URL + '/v2/auth'` in `frontend/src/services/authService.ts` (used from `pages/api/auth/[...nextauth].ts`) with local logic: check email against `ALLOWED_ADMIN_EMAILS`, look up matching `Player` row by email for `playerId`.
+- Verify both admin and non-admin-but-valid-player login paths still behave the same as today (the current BE logic has a subtle branch: a verified-but-non-admin email is only granted `USER` access specifically on the `/v2/auth` route, and rejected elsewhere — check `GoogleSSOAuthExtractor.extract` before assuming a simpler allow/deny is equivalent).
+
+**⚠️ Before this is deployed anywhere: production's `DATABASE_URL` must already point at the real `brs` schema.** Unlike every other phase so far, this one was wired directly into the live login path per an explicit user decision (not left parallel/unwired) - `[...nextauth].ts`'s `signIn` and `session` callbacks now call `validateUserAccessLocal`, which queries `Player` via **this frontend's own Prisma client**. Phase 1 explicitly left "point production `DATABASE_URL` at `brs`" undone (only the local dev container was wired up). If this ships to production before that happens, **every login breaks** - Prisma has nothing to query. This is the single most important thing to check before deploying past this point.
+
+**What was done:**
+- `frontend/src/lib/auth/{adminEmails,accessDecision,googleIdTokenVerifier,validateUserAccess}.ts` - ported from `AuthEmailProvider` + `GoogleSSOAuthExtractor.extract`'s `/v2/auth`-specific branch + `PlayerService.getPlayerAuth`. Split into pure pieces (admin-email parsing, access-level decision) and two DB/network-touching pieces (Google ID token re-verification via the official `google-auth-library` - a new dependency, needed because this independently re-verifies tokens including ones obtained via Google's refresh endpoint that NextAuth's own provider-level verification doesn't cover; and the Player lookup).
+- `frontend/src/services/authService.ts` rewritten in place - same exported function name, signature, and return shape as before, so `[...nextauth].ts` and `lib/auth.ts` needed **zero changes**. This was deliberate: the smallest possible diff for the highest-stakes swap in the migration.
+- Also wired up `/v2/auth/players` (`pages/api/local/v2/auth/players.ts`), which Phase 2 had deferred here since it needed this phase's auth decision settled - the underlying `getSecurePlayers` was already built.
+- 13 new unit tests covering the full access matrix (unverified email, invalid token, admin+found, user+found, admin+not-found, user+not-found, email-casing/lookup fidelity) - all passing. Also ran `npm run build` (production build, not just `tsc --noEmit`) specifically to catch any bundling issues with the new `google-auth-library` dependency in Next.js's serverless function output - clean, including `/api/auth/[...nextauth]`. A temporary real-network sanity check (garbage/malformed token input against the actual `google-auth-library` call, not mocked) confirmed graceful `null` returns rather than throwing - deleted after verifying, same pattern as Phase 3/4's manual smoke tests.
+- **Still unverified: a real end-to-end Google OAuth login.** Nothing in this session could exercise that (no real Google Client Secret / browser OAuth consent flow available here) - the branch logic is verified against the Java source and unit-tested, but an actual login with a real Google account, for both an admin and a non-admin-but-registered-player email, hasn't happened. Do that before trusting this in production, in addition to fixing the `DATABASE_URL` prerequisite above.
+
+### Phase 6 — Telegram scheduler
+- Add day-keyed chat ID config (Monday, Wednesday) using the existing `TELEGRAM_BOT_TOKEN`.
+- Add a `sendPoll`-equivalent call (Telegram Bot API `sendPoll` method via plain `fetch`, matching the existing pattern in `pages/api/notify.ts`, not a Node Telegram client library).
+- Add a cron trigger (`node-cron` in-process, or a sidecar compose service) replicating `@Scheduled(cron = "0 0 17 * * *")` / `EncounterScheduler.scheduleEncounter()`'s day-of-week lookup logic.
+
+### Phase 7 — Cutover (one path at a time)
+For each FE proxy route currently calling the Java BE (`pages/api/game/players.ts`, `games/[id]/submit.ts`, `games/[id]/process.ts`, `players/*`, etc.):
+1. Swap its implementation from `fetch(NEXT_PUBLIC_BACKEND_URL + ...)` to calling the local ported logic directly.
+2. Deploy, validate in production (or a staging environment if one exists) against real usage for at least one full game-day cycle before moving to the next route.
+3. Keep each swap in its own commit/small PR so any regression is easy to isolate and revert.
+
+**Deployment image versioning (raised mid-migration, deferred to here):** the deployed frontend's version isn't tracked anywhere in application code (`frontend/package.json`'s `"0.1.0"` is unrelated/stale) - it's a hardcoded Docker tag, `ghcr.io/catchsudheera/brs-frontend:v2.0`, appearing in two places: the build/push step of `.github/workflows/[dutchlankanshuttlemasters]publish-frontend-image-ghcr.yaml` (the active workflow - `docker build --tag` / `docker push`, both hardcoded) and `deployment/ansible-playbook/roles/container-stack-brs/templates/docker-compose.yml.j2` (what production actually pulls/runs). A second, seemingly-stale workflow (`[apl-aragorn-duckdns]publish-frontend-image-ghcr.yaml`) hardcodes `v1.2` instead - inconsistent, not investigated further here. When this migration is ready to actually deploy: bump the tag in the active workflow to `v3.0` (build+push a new image under that tag, leaving `v2.0` untouched in GHCR as an instant rollback target), verify it, **then** flip the compose template's image reference from `v2.0` to `v3.0` - in that order, so the template never points at a tag that doesn't exist yet. Not done now: nothing has actually changed production behavior yet (Phases 2-3's code isn't wired into any deploy path), so there's no "new version" to tag - bumping the workflow file today would just be inert busywork disconnected from an actual release, and risks the meaning of "v3.0" getting muddied by unrelated hotfix builds in the meantime. Revisit at the start of this phase, or sooner if a hotfix needs deploying and the team wants the rollback safety net earlier.
+
+### Phase 8 — Decommission
+Only after all routes are cut over and stable:
+- Remove `backend` service from `docker-compose.yml`.
+- Remove/disable the backend's GH Actions build-and-push-to-GHCR workflow.
+- Remove `8080` port mapping, backend-only env vars (`SPRING_DATASOURCE_*`, `API_KEY`, `API_TG_*`, `API_ADMIN*`, `GOOGLE_CLIENT_ID` if only used by BE) from the compose file and GH secrets, once confirmed nothing else reads them.
+- Optionally, later: delete `backend/` directory from the repo (separate decision, not required for functional decommissioning).
+
+## 7. Open items to resolve during implementation (not blocking, but don't forget)
+
+- Confirm live values of tuned constants (`K`, demerit points, etc.) match what's in the checked-in Java source, since comments indicate they've changed multiple times over the project's history — the deployed image (`v1.2` per current compose) might lag `main`.
+- Full audit of `frontend/src/pages/api/**` against the endpoint table in §4 to make sure no other proxy call sites were missed in this planning pass.
+- Confirm whether `sqlite`/`sqlite3` in `frontend/package.json` are actually used anywhere or vestigial — unrelated to this migration but noticed during exploration.
