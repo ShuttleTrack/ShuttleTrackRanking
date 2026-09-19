@@ -1,19 +1,15 @@
 name: dutchlankanshuttlemasters FRONTEND Build (v3.0 migration)
 
-# MIGRATION_PLAN.md: parallel build/push for the Next.js backend-migration work, kept fully
-# separate from the existing v2.0 workflow so the two can never collide or overwrite each other:
-#   - different image tag (v3.0, not v2.0 - see MIGRATION_PLAN.md Phase 7's versioning note)
-#   - always builds from the migration branch below, regardless of which ref this is
-#     workflow_dispatch-triggered against (belt-and-suspenders - `ref:` is pinned explicitly)
-#   - every secret below is `secrets.X_V3 || secrets.X` - falls back to the real secret when no
-#     _V3 override exists, so only the ones that actually need a different value for this test
-#     need a new secret created; everything else is automatically reused as-is. See
-#     MIGRATION_PLAN.md for which ones typically need overriding (DATABASE_URL_V3 most
-#     importantly) and which can usually be left to fall back. Once this is stable and cut over
-#     for real, the plan is to drop these overrides and retire the old workflow/tag.
+# This is now the primary/only frontend publish workflow (the old v2.0 one was deleted once
+# the Next.js backend migration - see MIGRATION_PLAN.md - was fully cut over, verified in
+# production, and merged to main). Builds/pushes ghcr.io/catchsudheera/brs-frontend:v3.0.
+#
+# Every secret below is `secrets.X_V3 || secrets.X` - falls back to the real (pre-migration)
+# secret when no _V3 override exists. Left in place deliberately for now rather than renaming
+# back to the plain names - a later cleanup, not done as part of this merge.
 #
 # This workflow only builds and pushes the image to GHCR - it does not deploy/restart anything.
-# Actually running the resulting v3.0 image (Portainer, docker run, a temporary compose stack,
+# Actually running the resulting image (Portainer, docker run, a temporary compose stack,
 # whatever) is a separate, manual step outside this repo.
 
 on: workflow_dispatch
@@ -26,10 +22,10 @@ jobs:
       run:
         working-directory: './frontend'
     steps:
-      - name: 'Checkout migration branch'
+      - name: 'Checkout main branch'
         uses: actions/checkout@main
         with:
-          ref: feature/backend-migration-v3
+          ref: main
 
       - name: 'Login to ghcr'
         uses: docker/login-action@v1
