@@ -1,0 +1,57 @@
+name: dutchlankanshuttlemasters FRONTEND Build (v3.0 migration)
+
+# MIGRATION_PLAN.md: parallel build/push for the Next.js backend-migration work, kept fully
+# separate from the existing v2.0 workflow so the two can never collide or overwrite each other:
+#   - different image tag (v3.0, not v2.0 - see MIGRATION_PLAN.md Phase 7's versioning note)
+#   - always builds from the migration branch below, regardless of which ref this is
+#     workflow_dispatch-triggered against (belt-and-suspenders - `ref:` is pinned explicitly)
+#   - every secret below is `secrets.X_V3 || secrets.X` - falls back to the real secret when no
+#     _V3 override exists, so only the ones that actually need a different value for this test
+#     need a new secret created; everything else is automatically reused as-is. See
+#     MIGRATION_PLAN.md for which ones typically need overriding (DATABASE_URL_V3 most
+#     importantly) and which can usually be left to fall back. Once this is stable and cut over
+#     for real, the plan is to drop these overrides and retire the old workflow/tag.
+#
+# This workflow only builds and pushes the image to GHCR - it does not deploy/restart anything.
+# Actually running the resulting v3.0 image (Portainer, docker run, a temporary compose stack,
+# whatever) is a separate, manual step outside this repo.
+
+on: workflow_dispatch
+
+jobs:
+  push-frontend-image:
+    runs-on: ubuntu-latest
+    environment: production-dutchlankanshuttlemasters
+    defaults:
+      run:
+        working-directory: './frontend'
+    steps:
+      - name: 'Checkout migration branch'
+        uses: actions/checkout@main
+        with:
+          ref: feature/backend-migration-v3
+
+      - name: 'Login to ghcr'
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GHCR_PUSH_TOKEN}}
+
+      - name: 'Build and push'
+        run: |
+          echo "NEXT_PUBLIC_BACKEND_URL=${{ secrets.NEXT_PUBLIC_BACKEND_URL_V3 || secrets.NEXT_PUBLIC_BACKEND_URL }}" >> .env.production
+          echo "NEXT_PUBLIC_AUTH_ENABLED=${{ secrets.NEXT_PUBLIC_AUTH_ENABLED_V3 || secrets.NEXT_PUBLIC_AUTH_ENABLED }}" >> .env.production
+          echo "NEXTAUTH_URL=${{ secrets.NEXTAUTH_URL_V3 || secrets.NEXTAUTH_URL }}" >> .env.production
+          echo "ALLOWED_ADMIN_EMAILS=${{ secrets.ALLOWED_ADMIN_EMAILS_V3 || secrets.ALLOWED_ADMIN_EMAILS }}" >> .env.production
+          echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_V3 || secrets.GOOGLE_CLIENT_ID }}" >> .env.production
+          echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_V3 || secrets.GOOGLE_CLIENT_SECRET }}" >> .env.production
+          echo "NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET_V3 || secrets.NEXTAUTH_SECRET }}" >> .env.production
+          echo "NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL_V3 || secrets.NEXT_PUBLIC_APP_URL }}" >> .env.production
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN_V3 || secrets.TELEGRAM_BOT_TOKEN }}" >> .env.production
+          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID_V3 || secrets.TELEGRAM_CHAT_ID }}" >> .env.production
+          echo "SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN_V3 || secrets.SENTRY_AUTH_TOKEN }}" >> .env.production
+          echo "NEXT_PUBLIC_BUILD_IDENTIFIER=v3.0-migration-$(TZ=Europe/Amsterdam date '+%Y-%m-%d %H:%M:%S')" >> .env.production
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL_V3 || secrets.DATABASE_URL }}" >> .env
+          docker build . --tag ghcr.io/catchsudheera/brs-frontend:v3.0
+          docker push ghcr.io/catchsudheera/brs-frontend:v3.0
