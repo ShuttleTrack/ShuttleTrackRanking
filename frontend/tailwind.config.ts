@@ -15,6 +15,35 @@ const config: Config = {
       '2xl': '1536px',
     },
     extend: {
+      colors: {
+        background: '#1A1A1A',
+        surface: '#1A1A1A',
+        'surface-dim': '#1A1A1A',
+        'surface-container': '#282828',
+        'surface-container-low': '#282828',
+        'surface-container-high': '#333333',
+        'surface-container-highest': '#333333',
+        'surface-header': '#000000',
+        'on-background': '#F5F5F5',
+        'on-surface': '#F5F5F5',
+        'on-surface-variant': '#C0C0C0',
+        primary: '#EE8A33',
+        'primary-container': '#F7B375',
+        secondary: '#8a7f74',
+        outline: '#7a736c',
+        'outline-variant': '#444444',
+        error: '#ba1a1a',
+      },
+      fontFamily: {
+        headline: ['var(--font-headline)', 'Manrope', 'sans-serif'],
+        body: ['var(--font-body)', 'Inter', 'sans-serif'],
+        label: ['var(--font-label)', 'Space Grotesk', 'sans-serif'],
+      },
+      borderRadius: {
+        DEFAULT: '0.125rem',
+        lg: '0.25rem',
+        xl: '0.5rem',
+      },
       keyframes: {
         slideDown: {
           '0%': { transform: 'translateY(-100%)' },
@@ -28,7 +57,26 @@ const config: Config = {
   },
   plugins: [require('daisyui')],
   daisyui: {
-    themes: ['emerald', 'dark', 'black'],
+    themes: [
+      {
+        shuttletrack: {
+          primary: '#EE8A33',
+          'primary-content': '#ffffff',
+          secondary: '#8a7f74',
+          accent: '#F7B375',
+          neutral: '#333333',
+          'base-100': '#1A1A1A',
+          'base-200': '#282828',
+          'base-300': '#333333',
+          'base-content': '#F5F5F5',
+          info: '#F7B375',
+          success: '#006c52',
+          warning: '#c9a900',
+          error: '#ba1a1a',
+        },
+      },
+      'dark',
+    ],
   },
 };
 export default config;

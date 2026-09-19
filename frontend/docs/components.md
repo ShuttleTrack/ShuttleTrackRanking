@@ -1,0 +1,132 @@
+# ShuttleTrack UI components (public leaderboard pass)
+
+Reference for building and extending the dark leaderboard UI. Full tokens: [design.md](./design.md).
+
+## Implemented in this pass
+
+### SiteHeader
+
+**File:** `src/components/NavigationComponent.tsx`
+
+**Purpose:** Fixed top navigation — logo-only brand, primary routes, auth, optional live games.
+
+**Desktop layout (md+):** three-column grid — logo (`h-16`) seated in a solid black `h-20` band (left), centered **Rankings** / **Encounters** / **History**, right zone **Live** + Sign In or avatar.
+
+**Mobile:** hamburger left, centered logo (`h-12`) in a `h-16` band, auth (+ live dot) on the right; full-screen panel matching the black bar.
+
+**Behavior:**
+
+- Encounters → scrollable player list → `/player/{id}/encounters`
+- History → Ranking History, Encounter History
+- Live → game viewer links with progress (hidden on desktop when no live games)
+- Session: Management, Admin Dashboard, Sign out
+
+**Visual:** orange `border-b-2 border-primary` underline on active top-level links; dark dropdown surfaces (`surface-container`); no emerald pills or light menus.
+
+---
+
+### SiteFooter
+
+**File:** `src/components/layout/SiteFooter.tsx`
+
+**Purpose:** Page footer with club wordmark and copyright.
+
+**Content:** Dutch Lankan Shuttle Masters italic wordmark; copyright year; optional links only to routes that exist (e.g. `/`, `/encounter-history`). No placeholder Privacy/Terms/API links.
+
+**Used in:** `src/components/layout/Layout.tsx`
+
+---
+
+### PageHeader
+
+**File:** `src/components/leaderboard/PageHeader.tsx`
+
+**Props:** `title`, `subtitle` (optional)
+
+**Default copy:** "Club Leaderboard" as a **`font-headline`** display title (`text-3xl`–`text-4xl font-extrabold`), `px-8 sm:px-16` aligns the left edge with the `RANK` column. A thin orange accent rule (`h-0.5 w-10 bg-primary`) sits below the heading. No subtitle on the homepage.
+
+---
+
+### Leaderboard
+
+**File:** `src/components/leaderboard/Leaderboard.tsx`
+
+**Props:** `players: PlayerRankingData[]` (active ranks only)
+
+**Renders:** Desktop column header row + list of `LeaderboardRow`.
+
+---
+
+### LeaderboardRow
+
+**File:** `src/components/leaderboard/LeaderboardRow.tsx`
+
+**Props:** One enriched `PlayerRankingData` including `lastFive`, `winRate`, `rankChange`.
+
+**Variants:** `podiumGold` | `podiumSilver` | `podiumBronze` | `podiumDark` | `default` from `playerRank`.
+
+**Mobile:** Compact two-row layout — Row 1: `RankBadge` | name + subtitle (`text-base`, truncated) | `TrendIndicator` in a single `flex items-center` line; Row 2: Last 5 / Win rate / Points in a `flex justify-between` strip with a thin `border-t`. Podium rows use dark muted `labelClass` on metric captions (not `on-surface-variant`). Card vertical padding is `py-2.5` on mobile, `py-4` on desktop.
+
+---
+
+### RankBadge
+
+**File:** `src/components/leaderboard/RankBadge.tsx`
+
+**Props:** `rank: number`, `variant` (affects text color)
+
+**Shows:** Zero-padded rank (`01`, `02`, …); crown icon rank 1; medal icon ranks 2–4.
+
+---
+
+### FormBars
+
+**File:** `src/components/leaderboard/FormBars.tsx`
+
+**Props:** `results: ('W' | 'L')[]` (length ≤ 5), `tone` (matches row variant for bar colors)
+
+Five `w-2 h-4 rounded-sm` bars; win = full opacity, loss = ~20% opacity.
+
+---
+
+### TrendIndicator
+
+**File:** `src/components/leaderboard/TrendIndicator.tsx`
+
+**Props:** `rankChange: { direction: 'up' | 'down' | 'none'; amount: number }`, `tone`
+
+Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
+
+---
+
+### Rankings page shell
+
+**File:** `src/components/RankingsComponent.client.tsx`
+
+**Purpose:** Fetch via `useRankings`, loading/error states, compose `PageHeader` + `Leaderboard`.
+
+---
+
+## Mapping from legacy UI
+
+| Legacy | New |
+|--------|-----|
+| DaisyUI table in `RankingsComponent` | `Leaderboard` + rows |
+| Stats cards (Players / Top / Average) | Removed |
+| `renderRankChange` triangles | `TrendIndicator` |
+| Score column | Points (`rankScore`) |
+| Highest rank column | Player subtitle |
+
+---
+
+## Not in this pass
+
+Keep existing DaisyUI patterns until a dedicated admin restyle:
+
+- Admin dashboard, game planner, game day, score keeper
+- Modals, password gates, `ActionCard`, score keeper inputs
+- History charts (`RankingsHistoryComponent`, Recharts)
+- Login page styling
+- `LoadingSpinner` on admin routes (may still use DaisyUI spinner internally)
+
+When restyling those pages later, reuse tokens from `design.md` and prefer new primitives over new one-off styles.

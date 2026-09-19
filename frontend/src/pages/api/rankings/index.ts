@@ -1,30 +1,17 @@
 import { getPlayers } from '@/services/playerService';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import type { PlayerRankingData, RankingsResponse } from '@/types/rankings';
+import {
+  buildFormStatsByPlayerId,
+  type RawEncounter,
+} from '@/utils/playerForm';
 
-interface RankingStats {
-  totalPlayers: number;
-  topScore: number;
-  averageScore: number;
-}
-
-interface PlayerRankingData {
-  id: number;
-  name: string;
-  playerRank: number;
-  previousRank: number;
-  rankScore: number;
-  highestRank: number;
-  timeInHighestRank: string;
-  rankChange: {
-    direction: 'up' | 'down' | 'none';
-    amount: number;
-  };
-  isAboveAverage: boolean;
-}
-
-interface RankingsResponse {
-  stats: RankingStats;
-  players: PlayerRankingData[];
+async function fetchEncounters(): Promise<RawEncounter[]> {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/encounters`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch encounters');
+  }
+  return response.json();
 }
 
 export default async function handler(
@@ -36,17 +23,22 @@ export default async function handler(
   }
 
   try {
-    const players = await getPlayers();
-    
-    // Calculate stats
-    const totalPlayers = players.length;
-    const topScore = Math.max(...players.map(p => p.rankScore));
-    const averageScore = players.reduce((acc, p) => acc + p.rankScore, 0) / totalPlayers;
+    const [players, encounters] = await Promise.all([getPlayers(), fetchEncounters()]);
 
-    // Process player data
+    const totalPlayers = players.length;
+    const topScore = Math.max(...players.map((p) => p.rankScore));
+    const averageScore =
+      players.reduce((acc, p) => acc + p.rankScore, 0) / totalPlayers;
+
+    const formByPlayer = buildFormStatsByPlayerId(
+      players.map((p) => p.id),
+      encounters
+    );
+
     const enrichedPlayers = players
-      .map(player => {
+      .map((player) => {
         const rankChange = player.previousRank - player.playerRank;
+        const form = formByPlayer.get(player.id);
         return {
           id: player.id,
           name: player.name,
@@ -56,10 +48,13 @@ export default async function handler(
           highestRank: player.highestRank,
           timeInHighestRank: player.timeInHighestRank.replace('(', '').replace(')', ''),
           rankChange: {
-            direction: rankChange > 0 ? 'up' : rankChange < 0 ? 'down' : 'none',
-            amount: Math.abs(rankChange)
+            direction:
+              rankChange > 0 ? 'up' : rankChange < 0 ? 'down' : 'none',
+            amount: Math.abs(rankChange),
           },
-          isAboveAverage: player.rankScore > averageScore
+          isAboveAverage: player.rankScore > averageScore,
+          lastFive: form?.lastFive ?? [],
+          winRate: form?.winRate ?? 0,
         };
       })
       .sort((a, b) => a.playerRank - b.playerRank);
@@ -68,9 +63,9 @@ export default async function handler(
       stats: {
         totalPlayers,
         topScore,
-        averageScore
+        averageScore,
       },
-      players: enrichedPlayers as PlayerRankingData[]
+      players: enrichedPlayers as PlayerRankingData[],
     };
 
     res.status(200).json(response);
@@ -78,4 +73,4 @@ export default async function handler(
     console.error('Rankings API Error:', error);
     res.status(500).json({ message: 'Failed to fetch rankings' });
   }
-} 
+}
