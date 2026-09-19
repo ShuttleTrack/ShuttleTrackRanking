@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getPlayers } from '@/services/playerService';
+import { getPlayers } from '@/lib/ranking/players';
 import { requireAuth } from '@/lib/auth';
 
 export default async function handler(
