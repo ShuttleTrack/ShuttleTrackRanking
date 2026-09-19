@@ -65,7 +65,7 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **Variants:** `podiumGold` | `podiumSilver` | `podiumBronze` | `podiumDark` | `default` from `playerRank`.
 
-**Mobile:** Compact two-row layout — Row 1: `RankBadge` | name + subtitle (`text-base`, truncated) | `TrendIndicator` in a single `flex items-center` line; Row 2: Last 5 / Win rate / Points in a `flex justify-between` strip with a thin `border-t`. Card vertical padding is `py-2.5` on mobile, `py-4` on desktop.
+**Mobile:** Compact two-row layout — Row 1: `RankBadge` | name + subtitle (`text-base`, truncated) | `TrendIndicator` in a single `flex items-center` line; Row 2: Last 5 / Win rate / Points in a `flex justify-between` strip with a thin `border-t`. Podium rows use dark muted `labelClass` on metric captions (not `on-surface-variant`). Card vertical padding is `py-2.5` on mobile, `py-4` on desktop.
 
 ---
 

@@ -76,6 +76,14 @@ const metricClass: Record<RowVariant, string> = {
   default: 'text-on-surface',
 };
 
+const labelClass: Record<RowVariant, string> = {
+  gold: 'text-yellow-900/70',
+  silver: 'text-slate-700/70',
+  bronze: 'text-orange-900/70',
+  dark: 'text-on-surface-variant opacity-60',
+  default: 'text-on-surface-variant opacity-60',
+};
+
 interface LeaderboardRowProps {
   player: PlayerRankingData;
 }
@@ -156,13 +164,15 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
         {/* Row 2: last 5 | win rate | points */}
         <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
           <div>
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60 mb-1">
+            <p
+              className={`text-[10px] uppercase tracking-widest mb-1 ${labelClass[variant]}`}
+            >
               Last 5
             </p>
             <FormBars results={player.lastFive} variant={variant} />
           </div>
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60">
+            <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
               Win rate
             </p>
             <span className={`font-headline font-bold text-sm ${metricClass[variant]}`}>
@@ -170,7 +180,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
             </span>
           </div>
           <div className="text-right">
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60">
+            <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
               Points
             </p>
             <span className={`font-headline font-bold text-sm ${nameClass[variant]}`}>
