@@ -15,7 +15,7 @@ const Leaderboard = ({ players }: LeaderboardProps) => (
       <div className="col-span-2 text-right">Points</div>
       <div className="col-span-1 text-right">Trend</div>
     </div>
-    <div className="space-y-2 md:space-y-3">
+    <div className="space-y-1.5 md:space-y-3">
       {players.map((player) => (
         <LeaderboardRow key={player.id} player={player} />
       ))}

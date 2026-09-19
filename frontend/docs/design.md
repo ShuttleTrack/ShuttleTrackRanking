@@ -83,7 +83,7 @@ Use Tailwind theme keys (see `tailwind.config.ts`), not raw hex in components wh
 - **Points** = real `rankScore` (typically one decimal). Do not inflate to mock-style large integers.
 - **Win rate** = percentage from encounter history (`XX.X%` or consistent decimal style).
 - **Subtitle** under player name = highest rank + time in highest rank (we have no country field).
-- **Last 5** = five vertical ticks; filled = win, muted = loss.
+- **Last 5** = five vertical ticks on every row: win `rgb(238 138 51)`, loss `rgb(185 28 28)`, empty `rgb(255 255 255 / 0.45)`; each bar has a `1px` dark ring (`rgb(0 0 0 / 0.45)`) for contrast on podium gradients.
 
 ## Do
 

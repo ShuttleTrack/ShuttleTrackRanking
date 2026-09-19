@@ -100,7 +100,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
 
   return (
     <div
-      className={`relative overflow-hidden group rounded-xl px-4 sm:px-8 py-2.5 md:py-4 ${rowClass} ${hoverBorder}`}
+      className={`relative overflow-hidden group rounded-xl px-3 sm:px-8 py-2 md:py-4 ${rowClass} ${hoverBorder}`}
       style={style}
     >
       {(variant === 'gold' || variant === 'dark') && (
@@ -142,9 +142,9 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
       </div>
 
       {/* Mobile compact two-row layout */}
-      <div className="md:hidden relative z-10 space-y-2">
+      <div className="md:hidden relative z-10 space-y-1">
         {/* Row 1: rank | name+subtitle | trend */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <div className="flex-shrink-0">
             <RankBadge rank={player.playerRank} variant={variant} />
           </div>
@@ -162,16 +162,16 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
           </div>
         </div>
         {/* Row 2: last 5 | win rate | points */}
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
-          <div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col gap-0.5">
             <p
-              className={`text-[10px] uppercase tracking-widest mb-1 ${labelClass[variant]}`}
+              className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}
             >
               Last 5
             </p>
-            <FormBars results={player.lastFive} variant={variant} />
+            <FormBars results={player.lastFive} variant={variant} align="start" />
           </div>
-          <div className="text-right">
+          <div className="flex flex-col gap-0.5 text-right">
             <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
               Win rate
             </p>
@@ -179,7 +179,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
               {player.winRate.toFixed(1)}%
             </span>
           </div>
-          <div className="text-right">
+          <div className="flex flex-col gap-0.5 text-right">
             <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
               Points
             </p>
