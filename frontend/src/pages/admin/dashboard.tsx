@@ -2,17 +2,59 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { useGames } from '@/hooks/useGames';
 import { DashboardHeader } from '@/components/dashboard/Header';
-import { PlusIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, UserGroupIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import type { Game } from '@prisma/client';
 import type { MatchScore } from '@/types/game';
+
+type TelegramTestGroup = 'wednesday' | 'friday';
+
+interface TelegramTestState {
+  loading: boolean;
+  message?: string;
+  isError?: boolean;
+}
+
+const TELEGRAM_TEST_GROUPS: { group: TelegramTestGroup; label: string }[] = [
+  { group: 'wednesday', label: 'Test Wednesday group' },
+  { group: 'friday', label: 'Test Friday group' },
+];
 
 const DashboardPage = () => {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { games = [], isLoading: gamesLoading } = useGames();
+  const [telegramTestState, setTelegramTestState] = useState<Record<TelegramTestGroup, TelegramTestState>>({
+    wednesday: { loading: false },
+    friday: { loading: false },
+  });
+
+  const handleTelegramTest = async (group: TelegramTestGroup) => {
+    setTelegramTestState((prev) => ({ ...prev, [group]: { loading: true } }));
+    try {
+      const response = await fetch('/api/admin/telegram-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group }),
+      });
+      const data = await response.json();
+      setTelegramTestState((prev) => ({
+        ...prev,
+        [group]: { loading: false, message: data.message, isError: !response.ok },
+      }));
+    } catch (error) {
+      setTelegramTestState((prev) => ({
+        ...prev,
+        [group]: {
+          loading: false,
+          message: error instanceof Error ? error.message : 'Failed to send test message',
+          isError: true,
+        },
+      }));
+    }
+  };
 
   // Add authentication check
   useEffect(() => {
@@ -108,6 +150,41 @@ const DashboardPage = () => {
                   <UserGroupIcon className="h-5 w-5 mr-2" />
                   Manage Players
                 </Link>
+              </div>
+            </div>
+
+            <div className="bg-base-100 rounded-lg shadow-lg p-6 border border-base-200">
+              <h2 className="text-xl font-semibold mb-4">Telegram Scheduler Test</h2>
+              <p className="text-sm text-base-content/60 mb-4">
+                Sends a one-off test message to each configured group, so the bot token/chat id
+                pairs can be checked without waiting for the daily 17:00 poll.
+              </p>
+              <div className="space-y-3">
+                {TELEGRAM_TEST_GROUPS.map(({ group, label }) => {
+                  const state = telegramTestState[group];
+                  return (
+                    <div key={group}>
+                      <button
+                        type="button"
+                        className="btn btn-outline w-full justify-start"
+                        disabled={state.loading}
+                        onClick={() => handleTelegramTest(group)}
+                      >
+                        {state.loading ? (
+                          <span className="loading loading-spinner loading-sm mr-2"></span>
+                        ) : (
+                          <PaperAirplaneIcon className="h-5 w-5 mr-2" />
+                        )}
+                        {label}
+                      </button>
+                      {state.message && (
+                        <p className={`text-sm mt-1 ${state.isError ? 'text-error' : 'text-success'}`}>
+                          {state.message}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
