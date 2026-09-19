@@ -7,11 +7,10 @@ const PlayerEncountersPage = () => {
   const { id } = router.query;
 
   return (
-    <div className="container mx-auto p-4 min-h-screen">
+    <div className="min-h-screen">
       <PlayerEncountersCompactComponent playerId={id} />
     </div>
   );
-  //return <PlayerEncountersComponent playerId={id} />;
 };
 
 export default PlayerEncountersPage;

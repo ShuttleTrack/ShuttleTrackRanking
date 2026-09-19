@@ -1,18 +1,48 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import axios from 'axios';
-import { EncountersResponse, Encounter } from '@/types/encounter';
-import { capitalizeFirstLetter, groupBy, sumBy } from '@/utils/string';
-import { usePlayers } from '@/hooks/usePlayers';
-import { Player } from '@/types/player';
-import PlayerEncounterComponent from './PlayerEncounterComponent';
-import ScoreBreakdownPills from './ScoreBreakdownPills';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Disclosure } from '@headlessui/react';
 import { ChevronUpIcon } from '@heroicons/react/24/solid';
-import Link from 'next/link';
+import type { Encounter } from '@/types/encounter';
+import { capitalizeFirstLetter } from '@/utils/string';
+import { usePlayers } from '@/hooks/usePlayers';
+import type { Player } from '@/types/player';
 import { usePlayerEncounters } from '@/hooks/usePlayerEncounters';
+import RankBadge from '@/components/leaderboard/RankBadge';
+import TrendIndicator from '@/components/leaderboard/TrendIndicator';
+import FormBars from '@/components/leaderboard/FormBars';
+import LastGameDayNet from '@/components/leaderboard/LastGameDayNet';
+import StatCard from '@/components/encounters/StatCard';
+import EncounterCard from '@/components/encounters/EncounterCard';
+import EncounterDesktopHeader from '@/components/encounters/EncounterDesktopHeader';
+import type { FormResult } from '@/utils/playerForm';
 
 interface PlayerEncountersComponentProps {
   playerId: string | string[] | undefined;
+}
+
+function rankChangeFromPlayer(player: Player) {
+  const delta = player.previousRank - player.playerRank;
+  return {
+    direction: delta > 0 ? 'up' as const : delta < 0 ? 'down' as const : 'none' as const,
+    amount: Math.abs(delta),
+  };
+}
+
+function lastFiveFromEncounters(encountersByDate: Record<string, Encounter[]>): FormResult[] {
+  const all = Object.values(encountersByDate).flat();
+  const sorted = [...all].sort((a, b) => {
+    const d = a.encounterDate.localeCompare(b.encounterDate);
+    if (d !== 0) return d;
+    return a.encounterId - b.encounterId;
+  });
+  return sorted.slice(-5).map((e) =>
+    e.playerTeamPoints > e.opponentTeamPoints ? 'W' : 'L',
+  );
+}
+
+function formatGroupDate(dateKey: string): string {
+  const parsed = new Date(`${dateKey}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateKey;
+  return parsed.toLocaleDateString();
 }
 
 const PlayerEncountersCompactComponent: React.FC<PlayerEncountersComponentProps> = ({ playerId }) => {
@@ -27,218 +57,137 @@ const PlayerEncountersCompactComponent: React.FC<PlayerEncountersComponentProps>
     }
   }, [players, playerId, playersLoading]);
 
-  if (encountersLoading || playersLoading) return (
-    <div className="flex justify-center items-center min-h-[200px]">
-      <div className="loading loading-spinner loading-lg"></div>
-    </div>
-  );
+  const lastFive = useMemo(() => {
+    if (!encounters) return [];
+    return lastFiveFromEncounters(encounters.encountersByDate);
+  }, [encounters]);
 
-  if (error) return (
-    <div className="alert alert-error">
-      <span>Error: {error.message}</span>
-    </div>
-  );
+  if (encountersLoading || playersLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[40vh]">
+        <div
+          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
+          role="status"
+          aria-label="Loading player history"
+        />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 py-12">
+        <div className="rounded-xl border border-red-500/30 bg-red-950/20 px-6 py-4 text-red-300">
+          Error fetching encounters: {error.message}
+        </div>
+      </div>
+    );
+  }
 
   if (!encounters) return null;
 
   const { stats, encountersByDate, scoreSumByDate } = encounters;
+  const displayName = player ? capitalizeFirstLetter(player.name) : 'Player';
+  const title = `${displayName}'s History`;
+  const winRateDisplay = `${stats.winRate.toFixed(1)}%`;
 
-  const totalEncounters = Object.values(encountersByDate).flat().length;
-  const allEncounters = Object.values(encountersByDate).flat() as Encounter[];
-  const wins = allEncounters.filter((e: Encounter) => e.playerTeamPoints > e.opponentTeamPoints).length;
-  const losses = totalEncounters - wins;
-  const winRate = totalEncounters > 0 ? (wins / totalEncounters * 100).toFixed(1) : '0';
-
-  const renderTableRow = (encounter: Encounter) => {
-    const isWin = encounter.playerTeamPoints > encounter.opponentTeamPoints;
-    return (
-      <tr
-        key={encounter.encounterId}
-        className="hover:bg-base-200 transition-colors duration-150"
-      >
-        <td className="whitespace-nowrap">
-          {new Date(encounter.encounterDate).toLocaleDateString()}
-        </td>
-        <td className={isWin ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}>
-          <div className="flex items-center">
-            <span className={`mr-2 flex items-center justify-center w-5 h-5 rounded-full ${
-              isWin 
-                ? 'bg-emerald-600 text-white' 
-                : 'bg-red-600 text-white'
-            }`}>
-              {isWin ? '✓' : '×'}
-            </span>
-            {encounter.playerTeam
-              .map((player) => capitalizeFirstLetter(player.playerName))
-              .join(', ')}
-          </div>
-        </td>
-        <td className="text-center whitespace-nowrap">
-          {encounter.playerTeamPoints} - {encounter.opponentTeamPoints}
-        </td>
-        <td className={!isWin ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}>
-          <div className="flex items-center">
-            <span className={`mr-2 flex items-center justify-center w-5 h-5 rounded-full ${
-              !isWin 
-                ? 'bg-emerald-600 text-white' 
-                : 'bg-red-600 text-white'
-            }`}>
-              {!isWin ? '✓' : '×'}
-            </span>
-            {encounter.opponentTeam
-              .map((player) => capitalizeFirstLetter(player.playerName))
-              .join(', ')}
-          </div>
-        </td>
-        <td className="text-center">
-          <span className={isWin ? 'text-success' : 'text-error'}>
-            {isWin ? 'Won' : 'Lost'}
-          </span>
-        </td>
-        <td
-          className={`font-bold ${encounter.encounterScore > 0 ? 'text-green-600' : 'text-red-600'}`}
-        >
-          {encounter.encounterScore > 0 ? '+' : '-'}
-          {Math.abs(encounter.encounterScore)}
-          <ScoreBreakdownPills
-            breakdown={encounter.scoreBreakdown}
-            groupIndex={encounter.groupIndex}
-            totalGroups={encounter.totalGroups}
-          />
-        </td>
-      </tr>
-    );
-  };
-
-  const renderSum=(sum: number) => {
-    const formattedSum = (Math.round(sum * 100) / 100).toFixed(2);
-    return (
-      <span className={`font-bold ${Math.sign(sum) == 1 ? 'text-green-600' : 'text-red-600'}`}>
-        Net Score : 
-        {Math.sign(sum) == 1 ? '+' : ''}
-        {formattedSum}
-        </span>
-    );
-  };
-
-  const renderRankChange = (currentRank: number, previousRank: number) => {
-    const change = previousRank - currentRank;
-    if (change > 0) {
-      return <span className='text-green-500 ml-2'>(▲ {Math.abs(change)})</span>;
-    } else if (change < 0) {
-      return <span className='text-red-500 ml-2'>(▼ {Math.abs(change)})</span>;
-    } else {
-      return <span className='text-gray-500 ml-2'>(=)</span>;
-    }
-  };
+  const showRankStrip = player && player.playerRank > 0;
 
   return (
-    <div className='container mx-auto p-4'>
-      {/* Breadcrumbs */}
-      <div className="text-sm breadcrumbs mb-6">
-        <ul>
-          <li>
-            <Link href="/" className="text-gray-600 hover:text-emerald-600">
-              Rankings
-            </Link>
-          </li>
-          <li>
-            <span className="text-emerald-600">
-              {player ? `${capitalizeFirstLetter(player.name)}'s` : 'Player\'s'} History
-            </span>
-          </li>
-        </ul>
-      </div>
-
-      {/* Title Section */}
-      <div className="mb-6 sm:mb-8 text-center">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          {player && (
-            <div className="flex items-center bg-base-200 px-4 py-2 rounded-lg shadow-sm">
-              <span className="text-gray-600 mr-1">Rank</span>
-              <span className="text-2xl font-bold text-emerald-600">#{player.playerRank}</span>
-              {renderRankChange(player.playerRank, player.previousRank)}
+    <div className="pb-8">
+      <section className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8 mb-4 sm:mb-6">
+        <div className="md:flex md:flex-wrap md:items-start md:justify-between md:gap-x-4 md:gap-y-3">
+          <div className="min-w-0 md:flex-1">
+            <div className="flex items-center justify-between gap-3 md:block">
+              <h1 className="min-w-0 flex-1 font-headline text-3xl sm:text-4xl font-extrabold tracking-tight text-on-surface">
+                {title}
+              </h1>
+              {showRankStrip ? (
+                <div className="flex-shrink-0 md:hidden">
+                  <TrendIndicator rankChange={rankChangeFromPlayer(player)} variant="default" />
+                </div>
+              ) : null}
             </div>
-          )}
+            <div className="mt-3 h-0.5 w-10 rounded-full bg-primary" aria-hidden />
+            {showRankStrip ? (
+              <div className="mt-4 flex items-center justify-between md:hidden">
+                <RankBadge rank={player.playerRank} variant="default" />
+                {lastFive.length > 0 ? (
+                  <div className="flex flex-col gap-1 items-end">
+                    <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60">
+                      Last 5
+                    </p>
+                    <FormBars results={lastFive} variant="default" align="start" />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          {showRankStrip ? (
+            <div className="hidden md:flex flex-wrap items-center gap-4 sm:gap-6 justify-end flex-shrink-0">
+              <RankBadge rank={player.playerRank} variant="default" />
+              <TrendIndicator rankChange={rankChangeFromPlayer(player)} variant="default" />
+              {lastFive.length > 0 ? (
+                <div className="flex flex-col gap-1 items-end">
+                  <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60">
+                    Last 5
+                  </p>
+                  <FormBars results={lastFive} variant="default" align="start" />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
-          {player ? `${capitalizeFirstLetter(player.name)}'s` : 'Player\'s'} History
-        </h1>
-        <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
-          Match history and performance statistics
-        </p>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 mb-6 sm:mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
+          <StatCard label="Games" value={stats.totalGames} />
+          <StatCard label="Wins" value={stats.wins} tone="win" />
+          <StatCard label="Losses" value={stats.losses} tone="loss" />
+          <StatCard label="Win Rate" value={winRateDisplay} />
+        </div>
       </div>
 
-      {/* Stats Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-6 sm:mb-8">
-        <div className="stat bg-base-200 rounded-lg shadow-md p-2 sm:p-4">
-          <div className="stat-title text-xs sm:text-sm">Games</div>
-          <div className="stat-value text-lg sm:text-3xl">{totalEncounters}</div>
-        </div>
-        <div className="stat bg-base-200 rounded-lg shadow-md p-2 sm:p-4">
-          <div className="stat-title text-xs sm:text-sm">Wins</div>
-          <div className="stat-value text-lg sm:text-3xl text-success">{wins}</div>
-        </div>
-        <div className="stat bg-base-200 rounded-lg shadow-md p-2 sm:p-4">
-          <div className="stat-title text-xs sm:text-sm">Losses</div>
-          <div className="stat-value text-lg sm:text-3xl text-error">{losses}</div>
-        </div>
-        <div className="stat bg-base-200 rounded-lg shadow-md p-2 sm:p-4">
-          <div className="stat-title text-xs sm:text-sm">Win Rate</div>
-          <div className="stat-value text-lg sm:text-3xl">{winRate}%</div>
-        </div>
-      </div>
-
-      {/* Encounters by Date */}
-      <div className="space-y-2">
-        {Object.entries(encountersByDate).map(([date, encounters], idx) => (
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 space-y-2">
+        {Object.entries(encountersByDate).map(([date, dayEncounters], idx) => (
           <Disclosure
             key={date}
-            as='div'
-            className='rounded-lg overflow-hidden'
+            as="div"
+            className="rounded-xl overflow-hidden border border-gray-600"
             defaultOpen={idx === 0}
           >
             {({ open }) => (
               <>
-                <Disclosure.Button className='flex justify-between w-full px-4 py-3 text-sm font-medium text-left bg-base-200 hover:bg-base-300 transition-colors duration-150 focus:outline-none focus-visible:ring focus-visible:ring-emerald-500 focus-visible:ring-opacity-75'>
-                  <span className='font-semibold'>{date}</span>
-                  <div className="flex items-center space-x-4">
-                    {open && renderSum(scoreSumByDate[date])}
+                <Disclosure.Button
+                  className="flex justify-between items-center w-full px-4 py-3 text-left bg-surface-container/90 hover:bg-surface-container-high/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  <span className="font-headline font-semibold text-on-surface">
+                    {formatGroupDate(date)}
+                  </span>
+                  <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60 sm:hidden">
+                        Net
+                      </span>
+                      <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60 hidden sm:inline">
+                        Net score
+                      </span>
+                      <LastGameDayNet value={scoreSumByDate[date] ?? 0} variant="default" size="lg" />
+                    </div>
                     <ChevronUpIcon
-                      className={`${
-                        open ? 'transform rotate-180' : ''
-                      } w-5 h-5 text-gray-500 transition-transform duration-150`}
+                      className={`h-5 w-5 text-on-surface-variant transition-transform duration-150 ${
+                        open ? 'rotate-180' : ''
+                      }`}
+                      aria-hidden
                     />
                   </div>
                 </Disclosure.Button>
-                <Disclosure.Panel className='bg-base-100 shadow-inner'>
-                  <div className='overflow-x-auto'>
-                    {/* Desktop Table View */}
-                    <table className='table w-full hidden md:table'>
-                      <thead className='bg-base-200'>
-                        <tr>
-                          <th className='font-semibold'>Date</th>
-                          <th className='font-semibold text-center'>Team 1</th>
-                          <th className='font-semibold text-center'>Score</th>
-                          <th className='font-semibold text-center'>Team 2</th>
-                          <th className='font-semibold text-center'>Result</th>
-                          <th className='font-semibold'>Points</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {encounters.map((encounter) => renderTableRow(encounter))}
-                      </tbody>
-                    </table>
-                    {/* Mobile View */}
-                    <div className='md:hidden'>
-                      {encounters.map((encounter) => (
-                        <PlayerEncounterComponent
-                          key={encounter.encounterId}
-                          encounter={encounter}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                <Disclosure.Panel className="px-2 sm:px-3 pb-3 pt-2 bg-background/50 space-y-1.5">
+                  <EncounterDesktopHeader />
+                  {dayEncounters.map((encounter) => (
+                    <EncounterCard key={encounter.encounterId} encounter={encounter} />
+                  ))}
                 </Disclosure.Panel>
               </>
             )}

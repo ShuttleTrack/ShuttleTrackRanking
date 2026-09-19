@@ -93,7 +93,7 @@ Five vertical bars (`h-3` mobile / `h-4` desktop). **All rows:** orange win, red
 
 **File:** `src/components/leaderboard/LastGameDayNet.tsx`
 
-**Props:** `value: number | null`, `variant`, optional `size` (`sm` | `md`)
+**Props:** `value: number | null`, `variant`, optional `size` (`sm` | `md` | `lg` — `lg` for encounter date headers)
 
 Signed one-decimal net (`+12.3` / `-4.5`); `—` when null. Colors align with trend semantics on podium vs dark rows.
 
@@ -117,6 +117,22 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ---
 
+### Player encounter history
+
+**Page:** `src/pages/player/[id]/encounters.tsx` → `PlayerEncounterCompactComponent.client.tsx`
+
+**Purpose:** Per-player match history grouped by game day.
+
+**Composes:** Title row (same styling as `PageHeader`); **mobile** trend beside the title, then `RankBadge` left and Last 5 right; **desktop** title left with rank + trend + Last 5 strip on the right. `StatCard` grid, Headless UI `Disclosure` per date with prominent `LastGameDayNet` (`size="lg"`) and a small **Net** / **Net score** caption above or beside the value.
+
+**Match rows:** `EncounterCard` — **mobile** two rows (scoreboard, then `W`/`L` chip | muted `elo` chip inline with headline points); **desktop** five-column grid (`encounterGrid.ts`: wider Score track, centered Score, `W`/`L` in Result only, Points = chips + total inline) + `EncounterDesktopHeader`. Win chip `bg-primary`; loss `bg-red-600`; card left border unchanged.
+
+**Shared:** `ScoreBreakdownPills` (dark chips on `surface-container-high`; muted `elo` caption under headline points on encounter cards; tier/consol chips when non-zero).
+
+**Loading/error:** Same primary ring spinner and red banner as `RankingsComponent`.
+
+---
+
 ## Mapping from legacy UI
 
 | Legacy | New |
@@ -126,16 +142,19 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 | `renderRankChange` triangles | `TrendIndicator` |
 | Score column | Points (`rankScore`) |
 | Highest rank column | Player subtitle |
+| DaisyUI table/stats on player encounters | `StatCard` + `EncounterCard` |
+| `PlayerEncounterComponent` mobile table | `EncounterCard` mobile scoreboard layout |
 
 ---
 
 ## Not in this pass
 
-Keep existing DaisyUI patterns until a dedicated admin restyle:
+Keep existing DaisyUI patterns until a dedicated restyle:
 
+- **Find Encounters** (`EncounterHistoryComponent`, `/encounter-history`) — form and results table still legacy; pills only share dark `ScoreBreakdownPills`
 - Admin dashboard, game planner, game day, score keeper
 - Modals, password gates, `ActionCard`, score keeper inputs
-- History charts (`RankingsHistoryComponent`, Recharts)
+- History charts (`RankingsHistoryComponent`, Recharts), ranking history page chrome
 - Login page styling
 - `LoadingSpinner` on admin routes (may still use DaisyUI spinner internally)
 

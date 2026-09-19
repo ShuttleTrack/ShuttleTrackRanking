@@ -48,7 +48,7 @@ const TrendIndicator = ({ rankChange, variant }: TrendIndicatorProps) => {
       ) : (
         <MinusIcon className="h-4 w-4" aria-hidden />
       )}
-      <span>
+      <span className="font-numeric tabular-nums">
         {rankChange.direction === 'up' && `+${rankChange.amount}`}
         {rankChange.direction === 'down' && `-${rankChange.amount}`}
         {rankChange.direction === 'none' && '0'}

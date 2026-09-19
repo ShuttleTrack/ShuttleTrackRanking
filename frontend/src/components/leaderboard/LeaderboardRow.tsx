@@ -129,12 +129,12 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
           <FormBars results={player.lastFive} variant={variant} />
         </div>
         <div className="text-center">
-          <span className={`font-headline font-bold text-lg ${metricClass[variant]}`}>
+          <span className={`font-numeric tabular-nums text-lg ${metricClass[variant]}`}>
             {player.winRate.toFixed(1)}%
           </span>
         </div>
         <div className="text-center">
-          <p className={`font-headline font-bold text-lg ${nameClass[variant]}`}>
+          <p className={`font-numeric tabular-nums text-lg ${nameClass[variant]}`}>
             {player.rankScore.toFixed(1)}
           </p>
         </div>
@@ -180,7 +180,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
             <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
               Win rate
             </p>
-            <span className={`font-headline font-bold text-sm ${metricClass[variant]}`}>
+            <span className={`font-numeric tabular-nums text-sm ${metricClass[variant]}`}>
               {player.winRate.toFixed(1)}%
             </span>
           </div>
@@ -194,7 +194,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
             <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
               Points
             </p>
-            <span className={`font-headline font-bold text-sm ${nameClass[variant]}`}>
+            <span className={`font-numeric tabular-nums text-sm ${nameClass[variant]}`}>
               {player.rankScore.toFixed(1)}
             </span>
           </div>

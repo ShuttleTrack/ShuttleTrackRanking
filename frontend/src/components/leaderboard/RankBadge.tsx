@@ -20,7 +20,7 @@ const RankBadge = ({ rank, variant }: RankBadgeProps) => {
 
   return (
     <div className="flex items-center gap-1 md:gap-2">
-      <span className={`font-headline font-extrabold text-xl md:text-2xl ${rankTextClass[variant]}`}>
+      <span className={`font-numeric tabular-nums text-xl md:text-2xl ${rankTextClass[variant]}`}>
         {padded}
       </span>
       {rank === 1 ? (
