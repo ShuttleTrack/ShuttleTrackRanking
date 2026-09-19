@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth } from '@/lib/auth';
+import { updatePlayer } from '@/lib/ranking/players';
 
 export default async function handler(
   req: NextApiRequest,
@@ -20,26 +21,12 @@ export default async function handler(
   }
 
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/v2/players/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.accessToken}`,
-      },
-      body: JSON.stringify({ id, name, email }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update player');
-    }
-
-    const player = await response.json();
+    const player = await updatePlayer({ id: Number(id), name, email });
     res.status(200).json(player);
   } catch (error) {
     console.error('Update Player API Error:', error);
-    res.status(500).json({ 
-      message: error instanceof Error ? error.message : 'Failed to update player' 
+    res.status(500).json({
+      message: error instanceof Error ? error.message : 'Failed to update player'
     });
   }
-} 
+}
