@@ -4,6 +4,8 @@ Dark, performance-oriented leaderboard aesthetic derived from the Stitch player-
 
 **Header:** Solid black band (`#000000` / `surface-header`), no gradient, no blur. Logo seated inside the bar — **desktop** `h-16` centered in a `h-20` band; **mobile** `h-12` centered in a `h-16` band. Active nav link uses an orange `border-b-2 border-primary` underline. **Footer:** full club name as italic wordmark.
 
+**Page background:** `dutch-lankan-shuttle-masters-logo-gray.png` (transparent gray PNG — near-black pixels knocked out, foreground luminance boosted via `min(255, int(lum * 1.35 + 40))` for light-gray-on-dark legibility) rendered `fixed`, centered, `w-[min(78vw,44rem)]`, `opacity-[0.13]`, `z-0`, `pointer-events-none`. Decorative only — all content is `z-10` above it.
+
 ## Color tokens
 
 Use Tailwind theme keys (see `tailwind.config.ts`), not raw hex in components when a token exists.
@@ -33,8 +35,8 @@ Use Tailwind theme keys (see `tailwind.config.ts`), not raw hex in components wh
 - **Rank 1 (gold):** `135deg` from `#bf953f` → light gold → `#aa771c`
 - **Rank 2 (silver):** `#c0c0c0` → `#e8e8e8` → `#c0c0c0`
 - **Rank 3 (bronze):** `#a97142` → `#e3a857` → `#a97142`
-- **Rank 4 (metallic dark):** `#2a3038` → `#1f242a` → `#16191d` + optional `.form-strip` overlay at 10% opacity
-- **Rank 5+:** `bg-surface-container` (`#282828`)
+- **Rank 4 (metallic dark):** `#2a3038` → `#1f242a` → `#16191d` at **90% opacity** + optional `.form-strip` overlay at 10% opacity
+- **Rank 5+:** `bg-surface-container/90` (`#282828` at 90% opacity) so the page watermark shows through slightly; podium rows 1–3 stay fully opaque
 
 ### Utilities
 

@@ -1,0 +1,22 @@
+---
+description: Public UI design system for ShuttleTrack frontend restyle
+globs: frontend/**/*.{tsx,css}
+alwaysApply: false
+---
+
+# Frontend UI (leaderboard system)
+
+When editing public-facing layout or leaderboard UI, follow:
+
+- [frontend/docs/design.md](frontend/docs/design.md) — colors, type, layout, podium rules
+- [frontend/docs/components.md](frontend/docs/components.md) — component names and scope
+
+## Rules
+
+- Use Tailwind tokens (`background`, `on-surface`, `primary`, `font-headline`, etc.), not ad-hoc hex unless defining a one-off gradient from design.md.
+- Do not use DaisyUI `table`, `stat`, or light-theme `alert-*` on the homepage leaderboard (`RankingsComponent` and `leaderboard/*`).
+- Keep branding: Dutch Lankan Shuttle Masters + existing logo — not COURTCLAN.
+- Points column shows real `rankScore`; do not fake mock-scale numbers.
+- Reuse `LeaderboardRow`, `FormBars`, `TrendIndicator` instead of duplicating row markup.
+
+Admin pages may still use DaisyUI until restyled; new public chrome (nav/footer) should match the dark system.

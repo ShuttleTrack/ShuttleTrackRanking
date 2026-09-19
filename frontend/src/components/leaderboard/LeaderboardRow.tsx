@@ -42,13 +42,13 @@ const rowStyles: Record<
   dark: {
     style: {
       background:
-        'linear-gradient(135deg, rgb(42, 48, 56) 0%, rgb(31, 36, 42) 50%, rgb(22, 25, 29) 100%)',
+        'linear-gradient(135deg, rgba(42, 48, 56, 0.9) 0%, rgba(31, 36, 42, 0.9) 50%, rgba(22, 25, 29, 0.9) 100%)',
     },
     className: 'border border-white/10 shadow-xl',
   },
   default: {
     className:
-      'bg-surface-container border border-gray-600 hover:border-primary/40 transition-all duration-300',
+      'bg-surface-container/90 border border-gray-600 hover:border-primary/40 transition-all duration-300',
   },
 };
 
@@ -92,7 +92,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
 
   return (
     <div
-      className={`relative overflow-hidden group rounded-xl px-4 sm:px-8 py-4 ${rowClass} ${hoverBorder}`}
+      className={`relative overflow-hidden group rounded-xl px-4 sm:px-8 py-2.5 md:py-4 ${rowClass} ${hoverBorder}`}
       style={style}
     >
       {(variant === 'gold' || variant === 'dark') && (
@@ -133,22 +133,28 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
         </div>
       </div>
 
-      {/* Mobile stack */}
-      <div className="md:hidden relative z-10 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <RankBadge rank={player.playerRank} variant={variant} />
-          <TrendIndicator rankChange={player.rankChange} variant={variant} />
+      {/* Mobile compact two-row layout */}
+      <div className="md:hidden relative z-10 space-y-2">
+        {/* Row 1: rank | name+subtitle | trend */}
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0">
+            <RankBadge rank={player.playerRank} variant={variant} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <Link
+              href={`/player/${player.id}/encounters`}
+              className={`font-headline font-bold text-base hover:underline truncate block ${nameClass[variant]}`}
+            >
+              {capitalizeFirstLetter(player.name)}
+            </Link>
+            <p className={`text-xs font-medium mt-0.5 truncate ${subtitleClass[variant]}`}>{subtitle}</p>
+          </div>
+          <div className="flex-shrink-0">
+            <TrendIndicator rankChange={player.rankChange} variant={variant} />
+          </div>
         </div>
-        <div>
-          <Link
-            href={`/player/${player.id}/encounters`}
-            className={`font-headline font-bold text-lg hover:underline ${nameClass[variant]}`}
-          >
-            {capitalizeFirstLetter(player.name)}
-          </Link>
-          <p className={`text-xs font-medium mt-1 ${subtitleClass[variant]}`}>{subtitle}</p>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-1 border-t border-white/10">
+        {/* Row 2: last 5 | win rate | points */}
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
           <div>
             <p className="text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60 mb-1">
               Last 5
@@ -159,7 +165,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
             <p className="text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60">
               Win rate
             </p>
-            <span className={`font-headline font-bold ${metricClass[variant]}`}>
+            <span className={`font-headline font-bold text-sm ${metricClass[variant]}`}>
               {player.winRate.toFixed(1)}%
             </span>
           </div>
@@ -167,7 +173,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
             <p className="text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60">
               Points
             </p>
-            <span className={`font-headline font-bold ${nameClass[variant]}`}>
+            <span className={`font-headline font-bold text-sm ${nameClass[variant]}`}>
               {player.rankScore.toFixed(1)}
             </span>
           </div>
