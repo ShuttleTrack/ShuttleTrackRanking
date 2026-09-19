@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { addEncounter } from '@/lib/ranking/processEncounters';
+import { requireAuth } from '@/lib/auth';
 
 function parseDateParam(value: unknown): Date | null {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -8,11 +9,15 @@ function parseDateParam(value: unknown): Date | null {
 }
 
 // Local port of POST /v2/encounters/{date}/add. Java returns the raw string "ok" (200), not
-// JSON - matched here with a plain-text response.
+// JSON - matched here with a plain-text response. Guarded to match the existing
+// pages/api/games/[id]/submit.ts caller, which already requires admin auth.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
+
+  const session = await requireAuth(req, res);
+  if (!session) return;
 
   const date = parseDateParam(req.query.date);
   if (!date) {

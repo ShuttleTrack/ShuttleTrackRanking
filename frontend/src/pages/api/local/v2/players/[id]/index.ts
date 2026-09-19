@@ -1,11 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { updatePlayer } from '@/lib/ranking/players';
+import { requireAuth } from '@/lib/auth';
 
-// Local port of PUT /v2/players/{id}.
+// Local port of PUT /v2/players/{id}. Guarded to match the existing admin-gated
+// pages/api/players/[id].ts proxy.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PUT') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
+
+  const session = await requireAuth(req, res);
+  if (!session) return;
 
   const id = Number(req.query.id);
   if (!Number.isInteger(id)) {
