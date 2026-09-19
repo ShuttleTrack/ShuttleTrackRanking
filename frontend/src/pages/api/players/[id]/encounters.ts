@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { groupBy, sumBy } from '@/utils/string';
-import type { Encounter } from '@/types/encounter';
+import { getPlayerEncounterHistory, type PlayerEncounterHistoryRecord } from '@/lib/ranking/encounters';
 
 interface EncountersStats {
   totalGames: number;
@@ -11,7 +11,7 @@ interface EncountersStats {
 
 interface EnhancedEncountersResponse {
   stats: EncountersStats;
-  encountersByDate: Record<string, Encounter[]>;
+  encountersByDate: Record<string, PlayerEncounterHistoryRecord[]>;
   scoreSumByDate: Record<string, number>;
 }
 
@@ -23,36 +23,35 @@ export default async function handler(
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { id } = req.query;
+  const playerId = Number(req.query.id);
 
   try {
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_URL}/players/${id}/encounters`
-    );
-    
-    if (!response.ok) {
+    const data = await getPlayerEncounterHistory(playerId);
+    // Matches the pre-cutover behavior exactly: the old proxy never distinguished a 404 from
+    // any other failure (`if (!response.ok) throw ...`), always resulting in a 500. Preserved
+    // rather than "fixed" here - Phase 7 cutover keeps current observable behavior as-is.
+    if (!data) {
       throw new Error('Failed to fetch encounters');
     }
 
-    const data = await response.json();
     const encounters = data.encounterHistory;
 
     // Calculate stats
     const totalGames = encounters.length;
-    const wins = encounters.filter((e: Encounter) => e.playerTeamPoints > e.opponentTeamPoints).length;
+    const wins = encounters.filter((e) => e.playerTeamPoints > e.opponentTeamPoints).length;
     const losses = totalGames - wins;
     const winRate = totalGames > 0 ? (wins / totalGames * 100) : 0;
 
     // Group encounters by date
     const encountersByDate = groupBy(
       encounters,
-      (encounter: Encounter) => encounter.encounterDate
+      (encounter: PlayerEncounterHistoryRecord) => encounter.encounterDate
     );
 
     // Calculate score sums by date
     const scoreSumByDate = sumBy(
       encounters,
-      (encounter: Encounter) => encounter.encounterDate
+      (encounter: PlayerEncounterHistoryRecord) => encounter.encounterDate
     );
 
     const enhancedResponse: EnhancedEncountersResponse = {
@@ -71,4 +70,4 @@ export default async function handler(
     console.error('Encounters API Error:', error);
     res.status(500).json({ message: 'Failed to fetch encounters' });
   }
-} 
+}
