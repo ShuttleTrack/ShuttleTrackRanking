@@ -14,13 +14,13 @@ export interface DaySchedule {
 }
 
 // Matches the real currently-configured values (application.yaml): Monday's poll asks about the
-// upcoming Wednesday match, Wednesday's poll asks about the upcoming Friday match. Wednesday's
-// chat id reuses the existing TELEGRAM_CHAT_ID (already used elsewhere in the frontend);
-// Monday's needs a new env var (TELEGRAM_CHAT_ID_MONDAY) since the frontend never had backend's
-// API_TG_GROUPS_MONDAY_GROUPID - see .env.example.
+// upcoming Wednesday match, Wednesday's poll asks about the upcoming Friday match. The existing
+// TELEGRAM_CHAT_ID is Monday's group (confirmed - it's already the group notify.ts sends to
+// today); Wednesday's needs a new env var (TELEGRAM_CHAT_ID_WEDNESDAY) since the frontend never
+// had backend's second group id - see .env.example.
 export const TELEGRAM_SCHEDULE: Partial<Record<DayName, DaySchedule>> = {
-  MONDAY: { matchDay: 'WEDNESDAY', chatIdEnvVar: 'TELEGRAM_CHAT_ID_MONDAY' },
-  WEDNESDAY: { matchDay: 'FRIDAY', chatIdEnvVar: 'TELEGRAM_CHAT_ID' },
+  MONDAY: { matchDay: 'WEDNESDAY', chatIdEnvVar: 'TELEGRAM_CHAT_ID' },
+  WEDNESDAY: { matchDay: 'FRIDAY', chatIdEnvVar: 'TELEGRAM_CHAT_ID_WEDNESDAY' },
 };
 
 export function resolveChatId(schedule: DaySchedule): string | undefined {
