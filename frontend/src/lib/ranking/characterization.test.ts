@@ -8,9 +8,11 @@ import { computeActivationScore } from './activation';
  * MIGRATION_PLAN.md Phase 0 + Phase 3.
  *
  * `__fixtures__/characterization.json` is captured oracle output from the *real* Java
- * EloRankScoreCalculator / ScorePersister / CommonAbsenteeManager (see
- * backend/src/test/java/com/brs/backend/core/CharacterizationFixtureGenerator.java — run
- * `mvn test -Dtest=CharacterizationFixtureGenerator` from `backend/` to regenerate it).
+ * EloRankScoreCalculator / ScorePersister / CommonAbsenteeManager - captured via a
+ * CharacterizationFixtureGenerator.java test harness that lived in `backend/` before the Java
+ * backend was fully migrated and deleted (Phase 8 - see MIGRATION_PLAN.md). This fixture is
+ * now frozen history: there's no live Java source left to regenerate it from, so treat it as
+ * the permanent oracle for the ranking math, not something to refresh.
  *
  * The bit-for-bit checks below run the Phase 3 TS port (eloCalculator / absenteeManager /
  * activation) against every one of these captured scenarios.

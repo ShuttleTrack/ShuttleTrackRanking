@@ -14,46 +14,28 @@ A web application for managing badminton player rankings and matches.
 
 ## Tech Stack
 
-### Backend
-- Java 17
-- Spring Boot
-- MySQL
-- JWT Authentication
+- Next.js (Pages Router) + TypeScript
+- Tailwind CSS + DaisyUI
+- Prisma + MySQL
+- NextAuth (Google SSO)
+- GitHub Actions (CI)
 
-### Frontend  
-- Next.js
-- TypeScript
-- Tailwind CSS
-- DaisyUI
-
-### Infrastructure
-- Docker
-- Ansible
-- GitHub Actions
-- NGINX (SWAG)
+See `CLAUDE.md` for a fuller architecture overview, and `MIGRATION_PLAN.md` for the history of how this consolidated from an earlier two-app (Java + Next.js) setup into a single Next.js app.
 
 ## Development
 
 ### Prerequisites
-- Java 17
 - Node.js 20+
 - MySQL 8+
-- Docker & Docker Compose
+- Docker & Docker Compose (optional, for a local MySQL instance)
 
 ### Local Setup
 1. Clone the repository
-2. Configure environment variables in `.env.local`
-3. Start MySQL database
-4. Run backend: `./gradlew bootRun`
-5. Run frontend: `npm run dev`
-
-## Deployment
-
-The application can be deployed using:
-1. Docker Compose
-2. Ansible Playbook
-
-See deployment documentation for details.
+2. `cd frontend && cp .env.example .env`, fill in the values
+3. Start MySQL (however you prefer - Docker, a local install, etc.)
+4. `npm install`
+5. `npx prisma generate`
+6. `npm run dev`
 
 ## License
 
@@ -61,6 +43,6 @@ MIT License
 
 ## Contributors
 
-- [Amila Banuka](https://github.com/amilabanuka) - Backend Developer
-- [Nishan Karunarathna](https://github.com/digitizelab) - Frontend Developer
-- [Sudheera Palihakkara](https://github.com/catchsudheera) - DevOps & Infrastructure
+- [Amila Banuka](https://github.com/amilabanuka)
+- [Nishan Karunarathna](https://github.com/digitizelab)
+- [Sudheera Palihakkara](https://github.com/catchsudheera)
