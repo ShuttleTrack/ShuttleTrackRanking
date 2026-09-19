@@ -61,11 +61,11 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **File:** `src/components/leaderboard/LeaderboardRow.tsx`
 
-**Props:** One enriched `PlayerRankingData` including `lastFive`, `winRate`, `rankChange`.
+**Props:** One enriched `PlayerRankingData` including `lastFive`, `winRate`, `lastGameDayNet`, `rankChange`.
 
 **Variants:** `podiumGold` | `podiumSilver` | `podiumBronze` | `podiumDark` | `default` from `playerRank`.
 
-**Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name + subtitle | `TrendIndicator`; Row 2: Last 5 / Win rate / Points with `flex-col gap-0.5` captions (no divider). Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
+**Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name + subtitle | `TrendIndicator`; Row 2: Last 5 / Win rate / Last day / Points with `flex-col gap-0.5` captions (no divider). `LastGameDayNet` sits under the Last day caption between Win rate and Points. Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
 
 ---
 
@@ -86,6 +86,16 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 **Props:** `results: ('W' | 'L')[]` (length ≤ 5), `variant` (passed for API consistency; colors are row-agnostic), optional `align` (`start` on mobile Last 5 column).
 
 Five vertical bars (`h-3` mobile / `h-4` desktop). **All rows:** orange win, red loss (`rgb(185 28 28)`), ghost empty; `1px` dark outline on each bar for podium readability.
+
+---
+
+### LastGameDayNet
+
+**File:** `src/components/leaderboard/LastGameDayNet.tsx`
+
+**Props:** `value: number | null`, `variant`, optional `size` (`sm` | `md`)
+
+Signed one-decimal net (`+12.3` / `-4.5`); `—` when null. Colors align with trend semantics on podium vs dark rows.
 
 ---
 

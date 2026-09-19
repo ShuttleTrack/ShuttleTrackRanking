@@ -5,13 +5,15 @@ import {
   buildFormStatsByPlayerId,
   type RawEncounter,
 } from '@/utils/playerForm';
+import { buildLastGameDayNetByPlayerId } from '@/utils/playerLastGameDay';
 
 async function fetchEncounters(): Promise<RawEncounter[]> {
   const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/encounters`);
   if (!response.ok) {
     throw new Error('Failed to fetch encounters');
   }
-  return response.json();
+  const data = await response.json();
+  return data as RawEncounter[];
 }
 
 export default async function handler(
@@ -31,6 +33,11 @@ export default async function handler(
       players.reduce((acc, p) => acc + p.rankScore, 0) / totalPlayers;
 
     const formByPlayer = buildFormStatsByPlayerId(
+      players.map((p) => p.id),
+      encounters
+    );
+
+    const lastDayNetByPlayer = buildLastGameDayNetByPlayerId(
       players.map((p) => p.id),
       encounters
     );
@@ -55,6 +62,7 @@ export default async function handler(
           isAboveAverage: player.rankScore > averageScore,
           lastFive: form?.lastFive ?? [],
           winRate: form?.winRate ?? 0,
+          lastGameDayNet: lastDayNetByPlayer.get(player.id) ?? null,
         };
       })
       .sort((a, b) => a.playerRank - b.playerRank);
