@@ -29,6 +29,13 @@ export default async function handler(
         enabled: squad.enabled,
         maxPlayers: squad.maxPlayers,
         playerCount,
+        isRecurring: squad.isRecurring,
+        scheduleDayOfWeek: squad.scheduleDayOfWeek,
+        scheduleStartTime: squad.scheduleStartTime,
+        scheduleEndTime: squad.scheduleEndTime,
+        scheduleStartDate: squad.scheduleStartDate,
+        scheduleEndDate: squad.scheduleEndDate,
+        scheduleSkipDates: squad.scheduleSkipDates,
       });
     } catch (error) {
       console.error('Get Squad API Error:', error);
