@@ -12,6 +12,8 @@ import { notificationService } from '@/services/notificationService';
 import { getMatchCombinations, type MatchCombination } from '@/utils/match';
 import { isValidMatchScore } from '@/utils/scoreValidation';
 import { Cog6ToothIcon } from '@heroicons/react/24/outline';
+import MatchResultLegend from '@/components/matches/MatchResultLegend';
+import MatchScoreRow from '@/components/matches/MatchScoreRow';
 
 interface MatchScore {
   team1Score: number;
@@ -553,90 +555,21 @@ const ScoreKeeperPage = () => {
 
             <div>
               <h2 className="font-headline text-lg font-semibold text-on-surface mb-3">Matches</h2>
+              <MatchResultLegend className="mb-4" />
               <div className="space-y-3">
                 {getMatchCombinations(groups[activeGroup].map((p) => p.name)).map((match, idx) => {
                   const matchScore = scores[activeGroup]?.[idx];
-                  const hasScore = !!matchScore;
-                  const isPlayed =
-                    hasScore && (matchScore.team1Score > 0 || matchScore.team2Score > 0);
-                  const team1Won = isPlayed && matchScore.team1Score > matchScore.team2Score;
-                  const team2Won = isPlayed && matchScore.team2Score > matchScore.team1Score;
-
-                  const teamBoxClass = (won: boolean, played: boolean) => {
-                    if (!played) return 'bg-surface-container-high';
-                    return won ? 'bg-primary/20' : 'bg-red-950/40 border border-red-500/20';
-                  };
-
                   return (
-                    <div
+                    <MatchScoreRow
                       key={idx}
-                      role={isGameStarted ? 'button' : undefined}
-                      tabIndex={isGameStarted ? 0 : undefined}
-                      className={`rounded-xl border border-gray-600 bg-surface-container p-3 transition-colors ${
-                        isGameStarted ? 'cursor-pointer hover:border-primary/40' : ''
-                      }`}
-                      onClick={() => handleMatchClick(activeGroup, idx, match)}
-                      onKeyDown={(e) => {
-                        if (isGameStarted && (e.key === 'Enter' || e.key === ' ')) {
-                          e.preventDefault();
-                          handleMatchClick(activeGroup, idx, match);
-                        }
-                      }}
-                    >
-                      <div className="grid grid-cols-11 gap-2 items-center">
-                        <div className="col-span-4">
-                          <div
-                            className={`flex items-center justify-center gap-2 p-2 rounded-lg ${teamBoxClass(team1Won, isPlayed)}`}
-                          >
-                            {isPlayed && (
-                              <span
-                                className={`flex shrink-0 self-center items-center justify-center min-w-[1.25rem] h-5 px-1 rounded text-xs font-bold ${
-                                  team1Won ? 'bg-primary text-black' : 'bg-red-600 text-white'
-                                }`}
-                              >
-                                {team1Won ? 'W' : 'L'}
-                              </span>
-                            )}
-                            <div className="flex flex-col items-center min-w-0">
-                              <div className="text-xs font-headline font-medium text-on-surface">
-                                {capitalizeFirstLetter(match.team1[0])}
-                              </div>
-                              <div className="text-xs font-headline font-medium text-on-surface">
-                                {capitalizeFirstLetter(match.team1[1])}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="col-span-3 text-center">
-                          <div className="font-numeric font-bold text-lg text-on-surface tabular-nums">
-                            {hasScore ? `${matchScore.team1Score} - ${matchScore.team2Score}` : '0 - 0'}
-                          </div>
-                        </div>
-                        <div className="col-span-4">
-                          <div
-                            className={`flex items-center justify-center gap-2 p-2 rounded-lg ${teamBoxClass(team2Won, isPlayed)}`}
-                          >
-                            {isPlayed && (
-                              <span
-                                className={`flex shrink-0 self-center items-center justify-center min-w-[1.25rem] h-5 px-1 rounded text-xs font-bold ${
-                                  team2Won ? 'bg-primary text-black' : 'bg-red-600 text-white'
-                                }`}
-                              >
-                                {team2Won ? 'W' : 'L'}
-                              </span>
-                            )}
-                            <div className="flex flex-col items-center min-w-0">
-                              <div className="text-xs font-headline font-medium text-on-surface">
-                                {capitalizeFirstLetter(match.team2[0])}
-                              </div>
-                              <div className="text-xs font-headline font-medium text-on-surface">
-                                {capitalizeFirstLetter(match.team2[1])}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      team1={match.team1}
+                      team2={match.team2}
+                      team1Score={matchScore?.team1Score ?? 0}
+                      team2Score={matchScore?.team2Score ?? 0}
+                      showResultChips={false}
+                      interactive={isGameStarted}
+                      onActivate={() => handleMatchClick(activeGroup, idx, match)}
+                    />
                   );
                 })}
               </div>

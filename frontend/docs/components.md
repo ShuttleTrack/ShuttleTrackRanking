@@ -181,6 +181,38 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ---
 
+### Score Keeper
+
+**Files:** `src/pages/admin/score-keeper.tsx`, `src/components/score-keeper/ProcessScoresModal.tsx`
+
+**Purpose:** Record round-robin match scores per group; start game, submit, process rankings, or cancel.
+
+**Layout:** `max-w-7xl mx-auto px-4 sm:px-8`, `pb-8`. Title + orange rule (no subtitle). Header gear (`bg-primary`, shadow) opens Game Management; ring when active; group pills hidden on management. Group pills (`bg-primary` active) on score views. Solid player chips and match cards; win/loss via tinted team cells (same **Last 5** colors as viewer).
+
+**Management:** progress + Start / Submit / Cancel on solid surface cards.
+
+**Dialogs:** Fixed overlay + `surface-container-high` panel; dark inputs; outline + primary (destructive red for cancel). `ProcessScoresModal` matches same pattern.
+
+**Loading:** Primary ring spinner (session, players, game).
+
+**Match rows:** Shared `MatchScoreRow` + `MatchResultLegend` (`src/components/matches/`). Tinted team cells, `showResultChips={false}`, `text-sm` names; legend above the match list on each group view. Score keeper passes `interactive` + `onActivate` when the game is in progress (full `p-3` rows, not `compact`).
+
+---
+
+### Game Viewer
+
+**Files:** `src/pages/game-viewer.tsx`, `src/components/matches/MatchScoreRow.tsx`
+
+**Purpose:** Public read-only live view of an in-progress game (`/game-viewer?gameId=…`). Updates via SSE (`/api/games/{id}/live`); no score entry.
+
+**Layout:** Same shell as admin pages (`max-w-7xl`). **Mobile-compact:** tighter top margins, smaller title (`text-2xl` → `sm:text-4xl`), reduced progress/legend/group gaps and padding; `sm+` matches admin spacing (`pb-8`, etc.). Centered spectator header: **Game #{id}** with inline red **LIVE** chip plus orange rule (no emoji or “live updates” chip). Progress card on `surface-container` with `font-numeric` count and orange bar (4 players → 3 matches per group, 5 → 5).
+
+**Groups:** Solid bordered cards; group title uses `font-label` `text-sm` uppercase bold (slightly larger than the match progress label), with a primary dot. Matches use `MatchScoreRow` with `showResultChips={false}`, `compact`, and `text-sm` names—win/loss uses `matchResultColors.ts` tints; shared `MatchResultLegend` between the progress card and group list. No `interactive` (display-only).
+
+**Loading / not found:** Primary ring spinner; dark copy + outline **Go Home** (no DaisyUI `btn`).
+
+---
+
 ## Mapping from legacy UI
 
 | Legacy | New |
@@ -200,8 +232,9 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 Keep existing DaisyUI patterns until a dedicated restyle:
 
 - **Find Encounters** (`EncounterHistoryComponent`, `/encounter-history`) — form and results table still legacy; pills only share dark `ScoreBreakdownPills`
-- Score keeper, manage players
-- Modals, password gates, `ActionCard`, score keeper inputs
+- Manage players
+- Modals and password gates on other admin routes (score keeper dialogs restyled; logic unchanged)
+- `ActionCard`
 - History charts (`RankingsHistoryComponent`, Recharts), ranking history page chrome
 - Login page styling
 - `LoadingSpinner` on admin routes (may still use DaisyUI spinner internally)
