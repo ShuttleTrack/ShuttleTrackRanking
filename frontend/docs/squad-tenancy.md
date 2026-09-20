@@ -24,8 +24,8 @@ supersedes those now that the feature is built and in production.
 
 - **`Squad`** (`prisma/schema.prisma`) - the tenant. `id`, `name`, `slug` (unique, used in URLs),
   `enabled`, `maxPlayers` (nullable = unlimited), `isPublic` (default `true`, no behavioral
-  difference yet), plus the recurrence-schedule fields below. Frontend-owned, like `Game` - not
-  part of the original Java backend's schema.
+  difference yet), plus `schedule` (a single JSON blob for the recurrence schedule - see below).
+  Frontend-owned, like `Game` - not part of the original Java backend's schema.
 - **`SquadAdmin`** - join table (`squadId`, `email`) granting admin rights scoped to one squad.
   Keyed by email (lowercased), not a numeric user id - matches how this app already resolves
   identity (Google-verified email), no separate `User` table.
@@ -148,14 +148,24 @@ toggle on `/s/[squad]/admin/settings`.
 
 ## Squad schedule
 
-`isRecurring` + one recurrence rule per squad (day of week, start/end time, effective start/end
-date, skip-dates list for holidays) - see the schema fields above. **Informational only right
-now**: nothing reads these fields to auto-create a game day or drive the Telegram poll. Validated
-by `lib/squadSchedule.ts`'s `validateScheduleInput` (unit tested); turning `isRecurring` off
-clears every other schedule field so a squad can't be left with stale recurrence data
-contradicting its own flag. Editable by a squad's **own admins** (`requireSquadAdmin`, not
-superadmin-only like enabled/maxPlayers - this is day-to-day squad management), via
+One recurrence rule per squad (day of week, start/end time, effective start/end date, skip-dates
+list for holidays), stored as a **single JSON blob** on `Squad.schedule` (`SquadScheduleData` in
+`lib/squadSchedule.ts`) rather than separate columns - nothing ever queries/filters by any
+individual field (day, a time, a date), so separate columns bought nothing but column count.
+`null` = never configured; an object with `isRecurring: false` = explicitly one-off. **Still
+informational only**: nothing reads it to auto-create a game day or drive the Telegram poll.
+Validated by `validateScheduleInput` (unit tested); turning `isRecurring` off clears every other
+field inside the JSON, so a squad can't be left with stale recurrence data contradicting its own
+flag. Editable by a squad's **own admins** (`requireSquadAdmin`, not superadmin-only like
+enabled/maxPlayers - this is day-to-day squad management), via
 `PATCH /api/squads/[squadId]/schedule` and the form on `/s/[squad]/admin/settings`.
+
+`GET /api/squads/[squadId]` unpacks `schedule` back into the flat `isRecurring`/
+`scheduleDayOfWeek`/`scheduleStartTime`/etc. field names on the wire - the collapse to one JSON
+column is a storage-layer change only; `useSquadSettings()` and the settings page didn't need to
+change. `scripts/migrate-schedule-to-json.mjs` is the one-off, idempotent script that packed the
+original separate columns into `schedule` in every environment before they were dropped
+(rehearsed against the local dev DB with real seeded data before running anywhere else).
 
 ## Production migration (history)
 

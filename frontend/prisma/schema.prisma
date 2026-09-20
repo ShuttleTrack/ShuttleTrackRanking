@@ -128,25 +128,17 @@ model Squad {
   // admins, not superadmin-only - see requireSquadAdmin on the visibility PATCH endpoint.
   isPublic Boolean @default(true) @map("is_public")
 
-  // Recurrence schedule - informational only for now (nothing reads these to auto-create game
-  // days or drive the Telegram poll yet; that's a deliberate later follow-up once this shape has
+  // Recurrence schedule - informational only for now (nothing reads it to auto-create game days
+  // or drive the Telegram poll yet; that's a deliberate later follow-up once this shape has
   // settled). Editable by the squad's own admins, unlike enabled/maxPlayers above - see
   // requireSquadAdmin on the schedule PATCH endpoint. One schedule per squad, matching how
   // squads map today (one squad per weekday group) rather than a many-schedules-per-squad model.
-  isRecurring        Boolean   @default(false) @map("is_recurring")
-  scheduleDayOfWeek  DayOfWeek? @map("schedule_day_of_week")
-  // Stored as "HH:mm" (24h) rather than a SQL TIME/DateTime column - purely informational
-  // display for now, so plain validated text avoids Prisma's awkward TIME-as-DateTime mapping.
-  scheduleStartTime  String?   @map("schedule_start_time") @db.VarChar(5)
-  scheduleEndTime    String?   @map("schedule_end_time") @db.VarChar(5)
-  // Validity window of the recurrence rule itself (when this weekly pattern starts/stops
-  // applying), not a single occurrence's date. Null end = ongoing/open-ended.
-  scheduleStartDate  DateTime? @map("schedule_start_date") @db.Date
-  scheduleEndDate    DateTime? @map("schedule_end_date") @db.Date
-  // Dates to skip even though they'd otherwise match the recurrence (holidays etc.) - a JSON
-  // array of "YYYY-MM-DD" strings, consistent with how Game.groups/scores already use JSON in
-  // this schema rather than a separate one-row-per-date table nothing else needs to join on yet.
-  scheduleSkipDates  Json?     @map("schedule_skip_dates")
+  //
+  // A single JSON blob (shape: SquadScheduleData in lib/squadSchedule.ts) rather than separate
+  // columns per field - nothing ever queries/filters by day-of-week, start time, or any other
+  // individual piece, so separate columns bought nothing but column count. Null = never
+  // configured (treated as one-off/no recurrence, same as isRecurring: false inside the JSON).
+  schedule Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -155,16 +147,6 @@ model Squad {
   players    Player[]
   encounters Encounter[]
   games      Game[]
-}
-
-enum DayOfWeek {
-  MONDAY
-  TUESDAY
-  WEDNESDAY
-  THURSDAY
-  FRIDAY
-  SATURDAY
-  SUNDAY
 }
 
 // Per-squad admin membership (squad + email), replacing the old flat ALLOWED_ADMIN_EMAILS env

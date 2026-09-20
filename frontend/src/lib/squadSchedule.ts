@@ -1,8 +1,10 @@
-import type { DayOfWeek } from '@prisma/client';
+// Informational-only recurrence schedule for a squad (SQUAD_TENANCY_PLAN.md follow-up), stored
+// as a single JSON blob on Squad.schedule rather than separate columns - nothing ever
+// queries/filters by day-of-week, start time, or any other individual piece, so separate columns
+// bought nothing but column count. Validation lives here so both the API route and (if ever
+// needed) a script/test can share it.
 
-// Informational-only recurrence schedule for a squad (SQUAD_TENANCY_PLAN.md follow-up) - see
-// the Squad model in schema.prisma for what each field means. Validation lives here so both the
-// API route and (if ever needed) a script/test can share it.
+export type DayOfWeek = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
 
 const TIME_FORMAT = /^([01]\d|2[0-3]):([0-5]\d)$/; // "HH:mm", 24h
 const DATE_FORMAT = /^\d{4}-\d{2}-\d{2}$/; // "YYYY-MM-DD"
@@ -17,16 +19,17 @@ export interface ScheduleInput {
   skipDates?: string[];
 }
 
-export interface ValidatedSchedule {
+// Exactly what's stored in Squad.schedule (and returned by GET /api/squads/[squadId], unpacked
+// into the flatter scheduleXxx field names the frontend already used before this collapsed to
+// one JSON column - see that route).
+export interface SquadScheduleData {
   isRecurring: boolean;
-  scheduleDayOfWeek: DayOfWeek | null;
-  scheduleStartTime: string | null;
-  scheduleEndTime: string | null;
-  scheduleStartDate: Date | null;
-  scheduleEndDate: Date | null;
-  // Never a Prisma-level null (Json? columns need the special Prisma.JsonNull sentinel for
-  // that, which isn't worth the awkwardness here) - an empty array means "no skip dates".
-  scheduleSkipDates: string[];
+  dayOfWeek: DayOfWeek | null;
+  startTime: string | null;
+  endTime: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  skipDates: string[];
 }
 
 const DAYS_OF_WEEK: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
@@ -34,17 +37,17 @@ const DAYS_OF_WEEK: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY',
 // Returns the cleaned data to persist, or a validation error message. Switching isRecurring off
 // clears every other schedule field, so a squad can't be left with stale recurrence data that
 // doesn't match its own flag.
-export function validateScheduleInput(input: ScheduleInput): { data: ValidatedSchedule } | { error: string } {
+export function validateScheduleInput(input: ScheduleInput): { data: SquadScheduleData } | { error: string } {
   if (!input.isRecurring) {
     return {
       data: {
         isRecurring: false,
-        scheduleDayOfWeek: null,
-        scheduleStartTime: null,
-        scheduleEndTime: null,
-        scheduleStartDate: null,
-        scheduleEndDate: null,
-        scheduleSkipDates: [],
+        dayOfWeek: null,
+        startTime: null,
+        endTime: null,
+        startDate: null,
+        endDate: null,
+        skipDates: [],
       },
     };
   }
@@ -81,12 +84,12 @@ export function validateScheduleInput(input: ScheduleInput): { data: ValidatedSc
   return {
     data: {
       isRecurring: true,
-      scheduleDayOfWeek: input.dayOfWeek,
-      scheduleStartTime: input.startTime,
-      scheduleEndTime: input.endTime,
-      scheduleStartDate: new Date(`${input.startDate}T00:00:00Z`),
-      scheduleEndDate: input.endDate ? new Date(`${input.endDate}T00:00:00Z`) : null,
-      scheduleSkipDates: skipDates,
+      dayOfWeek: input.dayOfWeek,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      startDate: input.startDate,
+      endDate: input.endDate ?? null,
+      skipDates,
     },
   };
 }

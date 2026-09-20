@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { GetServerSideProps } from 'next';
-import type { DayOfWeek } from '@prisma/client';
+import type { DayOfWeek } from '@/lib/squadSchedule';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
 import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
