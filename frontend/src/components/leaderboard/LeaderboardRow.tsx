@@ -8,6 +8,7 @@ import RankBadge, { type RowVariant } from './RankBadge';
 import LastGameDayNet from './LastGameDayNet';
 import TrendIndicator from './TrendIndicator';
 import PeakTenure from './PeakTenure';
+import { useSquad } from '@/contexts/SquadContext';
 
 function variantForRank(rank: number): RowVariant {
   if (rank === 1) return 'gold';
@@ -84,6 +85,7 @@ interface LeaderboardRowProps {
 }
 
 const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
+  const { slug } = useSquad();
   const variant = variantForRank(player.playerRank);
   const { style, className: rowClass } = rowStyles[variant];
   const hoverBorder =
@@ -91,7 +93,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
       ? 'hover:border-red-500/20'
       : '';
 
-  const encountersHref = `/player/${player.id}/encounters`;
+  const encountersHref = `/s/${slug}/player/${player.id}/encounters`;
   const peakTenure = (
     <PeakTenure
       variant={variant}

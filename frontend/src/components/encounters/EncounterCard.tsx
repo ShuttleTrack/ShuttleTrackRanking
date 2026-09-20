@@ -3,6 +3,7 @@ import type { Encounter, EncounterPlayer } from '@/types/encounter';
 import { capitalizeFirstLetter } from '@/utils/string';
 import ScoreBreakdownPills from '@/components/ScoreBreakdownPills';
 import { ENCOUNTER_DESKTOP_GRID } from './encounterGrid';
+import { useSquad } from '@/contexts/SquadContext';
 
 interface EncounterCardProps {
   encounter: Encounter;
@@ -17,6 +18,7 @@ function TeamNames({
   muted?: boolean;
   compact?: boolean;
 }) {
+  const { slug } = useSquad();
   const sizeClass = compact ? 'text-xs' : 'text-sm sm:text-base';
   return (
     <span className={`${sizeClass} ${muted ? 'text-on-surface-variant' : 'text-on-surface'}`}>
@@ -24,7 +26,7 @@ function TeamNames({
         <span key={player.playerId}>
           {index > 0 ? ', ' : ''}
           <Link
-            href={`/player/${player.playerId}/encounters`}
+            href={`/s/${slug}/player/${player.playerId}/encounters`}
             className="font-headline font-semibold hover:underline hover:text-primary"
           >
             {capitalizeFirstLetter(player.playerName)}
