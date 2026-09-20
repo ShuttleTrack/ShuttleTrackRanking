@@ -14,12 +14,12 @@ describe('validateScheduleInput', () => {
     expect(result).toEqual({
       data: {
         isRecurring: false,
-        scheduleDayOfWeek: null,
-        scheduleStartTime: null,
-        scheduleEndTime: null,
-        scheduleStartDate: null,
-        scheduleEndDate: null,
-        scheduleSkipDates: [],
+        dayOfWeek: null,
+        startTime: null,
+        endTime: null,
+        startDate: null,
+        endDate: null,
+        skipDates: [],
       },
     });
   });
@@ -36,10 +36,11 @@ describe('validateScheduleInput', () => {
     expect('data' in result).toBe(true);
     if ('data' in result) {
       expect(result.data.isRecurring).toBe(true);
-      expect(result.data.scheduleDayOfWeek).toBe('WEDNESDAY');
-      expect(result.data.scheduleStartTime).toBe('18:00');
-      expect(result.data.scheduleEndDate).toBeNull();
-      expect(result.data.scheduleSkipDates).toEqual(['2026-12-25']);
+      expect(result.data.dayOfWeek).toBe('WEDNESDAY');
+      expect(result.data.startTime).toBe('18:00');
+      expect(result.data.startDate).toBe('2026-01-01');
+      expect(result.data.endDate).toBeNull();
+      expect(result.data.skipDates).toEqual(['2026-12-25']);
     }
   });
 

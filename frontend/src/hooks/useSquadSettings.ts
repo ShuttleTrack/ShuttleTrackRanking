@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import type { DayOfWeek } from '@prisma/client';
+import type { DayOfWeek } from '@/lib/squadSchedule';
 import { useSquad } from '@/contexts/SquadContext';
 
 export interface SquadSettings {

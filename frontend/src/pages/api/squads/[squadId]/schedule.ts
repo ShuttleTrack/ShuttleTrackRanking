@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
@@ -26,7 +27,10 @@ export default async function handler(
   }
 
   try {
-    const squad = await prisma.squad.update({ where: { id: squadId }, data: result.data });
+    const squad = await prisma.squad.update({
+      where: { id: squadId },
+      data: { schedule: result.data as unknown as Prisma.InputJsonValue },
+    });
     res.status(200).json(squad);
   } catch (error) {
     console.error('Update Squad Schedule API Error:', error);

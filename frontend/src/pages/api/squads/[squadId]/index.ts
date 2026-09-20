@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { requireSquadAdmin, requireSuperAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
+import type { SquadScheduleData } from '@/lib/squadSchedule';
 
 // GET: squad settings (enabled, maxPlayers, current roster size) - visible to that squad's own
 // admins, not just a superadmin, since they need to see the cap even though only a superadmin
@@ -22,6 +23,11 @@ export default async function handler(
         prisma.squad.findUniqueOrThrow({ where: { id: squadId } }),
         prisma.player.count({ where: { squadId } }),
       ]);
+      // Squad.schedule collapses every recurrence field into one JSON blob (see
+      // lib/squadSchedule.ts) - unpacked back into the flat scheduleXxx field names here so the
+      // wire format, and everything downstream of it (useSquadSettings, the settings page),
+      // didn't need to change when the storage shape did.
+      const schedule = squad.schedule as SquadScheduleData | null;
       res.status(200).json({
         id: squad.id,
         name: squad.name,
@@ -30,13 +36,13 @@ export default async function handler(
         maxPlayers: squad.maxPlayers,
         playerCount,
         isPublic: squad.isPublic,
-        isRecurring: squad.isRecurring,
-        scheduleDayOfWeek: squad.scheduleDayOfWeek,
-        scheduleStartTime: squad.scheduleStartTime,
-        scheduleEndTime: squad.scheduleEndTime,
-        scheduleStartDate: squad.scheduleStartDate,
-        scheduleEndDate: squad.scheduleEndDate,
-        scheduleSkipDates: squad.scheduleSkipDates,
+        isRecurring: schedule?.isRecurring ?? false,
+        scheduleDayOfWeek: schedule?.dayOfWeek ?? null,
+        scheduleStartTime: schedule?.startTime ?? null,
+        scheduleEndTime: schedule?.endTime ?? null,
+        scheduleStartDate: schedule?.startDate ?? null,
+        scheduleEndDate: schedule?.endDate ?? null,
+        scheduleSkipDates: schedule?.skipDates ?? [],
       });
     } catch (error) {
       console.error('Get Squad API Error:', error);
