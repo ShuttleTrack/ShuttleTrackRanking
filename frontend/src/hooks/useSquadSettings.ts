@@ -1,4 +1,5 @@
 import useSWR from 'swr';
+import type { DayOfWeek } from '@prisma/client';
 import { useSquad } from '@/contexts/SquadContext';
 
 export interface SquadSettings {
@@ -8,15 +9,23 @@ export interface SquadSettings {
   enabled: boolean;
   maxPlayers: number | null;
   playerCount: number;
+  isRecurring: boolean;
+  scheduleDayOfWeek: DayOfWeek | null;
+  scheduleStartTime: string | null;
+  scheduleEndTime: string | null;
+  scheduleStartDate: string | null;
+  scheduleEndDate: string | null;
+  scheduleSkipDates: string[] | null;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-// Read-only for a squad admin (any squad admin can see enabled/maxPlayers, only a platform
-// superadmin can change them - see pages/api/squads/[squadId]/index.ts and platform/squads.tsx).
+// enabled/maxPlayers are read-only for a squad admin (only a platform superadmin can change
+// them - see pages/api/squads/[squadId]/index.ts and platform/squads.tsx). The schedule fields
+// ARE editable by a squad's own admins - see pages/api/squads/[squadId]/schedule.ts.
 export function useSquadSettings() {
   const { id: squadId } = useSquad();
-  const { data, error, isLoading } = useSWR<SquadSettings>(`/api/squads/${squadId}`, fetcher);
+  const { data, error, isLoading, mutate } = useSWR<SquadSettings>(`/api/squads/${squadId}`, fetcher);
 
-  return { settings: data, isLoading, error };
+  return { settings: data, isLoading, error, mutate };
 }
