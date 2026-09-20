@@ -91,6 +91,28 @@ flag:
   (signed-in-at-all gate only - the real per-squad-admin/per-player boundary is the
   `resolveSquad*` calls above and each API route's `requireSquadAdmin`/`requireSuperAdmin`).
 
+**Gotcha - squad-scoped links in shared components**: any component that builds a link/redirect
+into `/s/[squad]/...` needs the squad's slug from `SquadContext`, and there are two ways to get
+it depending on where the component can render:
+- **`useSquad()`** (throws outside a provider) - safe for anything only ever rendered from inside
+  a squad-scoped page tree (e.g. `LeaderboardRow`, `EncounterCard`, `NavPlayerSearch` - the latter
+  is only mounted from places already guarded by squad presence, see below).
+- **`useOptionalSquad()`** (returns `null` outside a provider) - required for anything rendered
+  *unconditionally* from the global nav (`Layout` → `NavigationComponent`), since that also
+  renders on non-squad pages (`/`, `/login`, `/platform/squads`): `AccountMenu`, `ScoreboardNav`,
+  `MobileScoreboardMenu`, `useLiveGames`/`usePlayers`, `LiveGamesControl`/`LiveGamesControlDesktop`.
+  Each must either return early / render nothing when `squad` is `null`, or (as
+  `MobileScoreboardMenu` does for its Encounters search tile) gate the squad-dependent section
+  behind `{squad && (...)}` before mounting a child that itself assumes `useSquad()`.
+
+The initial squad-tenancy PRs missed several of these (`LeaderboardRow`, `EncounterCard`,
+`NavPlayerSearch`, the live-game nav links still pointed at old flat paths like
+`/player/{id}/encounters` and 404'd) - fixed in
+[#194](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/194), which also closed a related
+crash risk (an unguarded `useSquad()` call reachable from a non-squad page). If you add a new nav
+or leaderboard/encounter component with a squad-scoped link, use this pattern and don't repeat
+that miss.
+
 ## Ranking / data-access layer
 
 Untouched (already squad-agnostic pure functions, operate on whatever they're handed):
@@ -179,3 +201,7 @@ didn't need staging - just `prisma db push`.
    schedule, squad-admin-editable.
 4. [#192](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/192) - squad-picker
    auto-redirect for exactly-one-squad users.
+5. [#193](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/193) - this doc, and stale-path
+   fixes in `CLAUDE.md`.
+6. [#194](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/194) - fixed several
+   `/s/[squad]/...` links that #189 missed (see the routing gotcha above).
