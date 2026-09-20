@@ -227,3 +227,5 @@ didn't need staging - just `prisma db push`.
    `/s/[squad]/...` links that #189 missed (see the routing gotcha above).
 7. [#195](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/195) - squad `isPublic`
    (public/private), squad-admin-editable.
+8. [#196](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/196) - collapsed the
+   recurrence-schedule columns into `Squad.schedule` (one JSON column).
