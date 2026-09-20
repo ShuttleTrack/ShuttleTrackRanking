@@ -25,7 +25,7 @@ const TELEGRAM_TEST_GROUPS: { group: TelegramTestGroup; label: string }[] = [
 const cardClass =
   'rounded-xl bg-surface-container/90 border border-gray-600 p-4 sm:p-6';
 
-const sectionTitleClass = 'font-headline text-lg sm:text-xl font-semibold text-on-surface mb-4';
+const sectionTitleClass = 'font-headline text-base sm:text-lg font-semibold text-on-surface mb-4';
 
 const outlineButtonClass =
   'flex w-full min-h-[44px] items-center justify-start gap-2 rounded-xl border border-white/10 bg-surface-container-high/50 px-4 py-3 font-medium text-on-surface transition-colors hover:border-primary/40 hover:bg-surface-container-high disabled:opacity-50';

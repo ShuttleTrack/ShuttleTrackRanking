@@ -67,7 +67,17 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **Behavior:** The whole row is a link to `/player/{id}/encounters`.
 
-**Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name + subtitle | `TrendIndicator`; Row 2: Last 5 / Win rate / Last day / Points with `flex-col gap-0.5` captions (no divider). `LastGameDayNet` sits under the Last day caption between Win rate and Points. Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
+**Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name and `PeakTenure` chip inline | `TrendIndicator`; Row 2: Last 5 / Win rate / Last day / Points with `flex-col gap-0.5` captions (no divider). `LastGameDayNet` sits under the Last day caption between Win rate and Points. Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
+
+---
+
+### PeakTenure
+
+**File:** `src/components/leaderboard/PeakTenure.tsx`
+
+**Props:** `playerRank`, `highestRank`, `timeInHighestRank`, `variant` (row podium styling).
+
+**Shows:** Context-sensitive pill beside the player name on `LeaderboardRow` (same row; name truncates when tight). At peak: tenure only (`18d at peak`, `New peak`, `At peak`). Off peak: `Peak #N · Nd`. Exported `peakTenureCopy()` / `parsePeakTenureDays()` for tests.
 
 ---
 

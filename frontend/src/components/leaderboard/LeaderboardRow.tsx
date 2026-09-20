@@ -7,6 +7,7 @@ import { LEADERBOARD_DESKTOP_GRID } from './leaderboardGrid';
 import RankBadge, { type RowVariant } from './RankBadge';
 import LastGameDayNet from './LastGameDayNet';
 import TrendIndicator from './TrendIndicator';
+import PeakTenure from './PeakTenure';
 
 function variantForRank(rank: number): RowVariant {
   if (rank === 1) return 'gold';
@@ -62,14 +63,6 @@ const nameClass: Record<RowVariant, string> = {
   default: 'text-on-surface',
 };
 
-const subtitleClass: Record<RowVariant, string> = {
-  gold: 'text-yellow-900',
-  silver: 'text-slate-700',
-  bronze: 'text-orange-900',
-  dark: 'text-secondary/70',
-  default: 'text-on-surface-variant',
-};
-
 const metricClass: Record<RowVariant, string> = {
   gold: 'text-yellow-950',
   silver: 'text-slate-900',
@@ -98,9 +91,15 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
       ? 'hover:border-red-500/20'
       : '';
 
-  const subtitle = `Best rank #${player.highestRank}${player.timeInHighestRank ? ` · ${player.timeInHighestRank}` : ''}`;
-
   const encountersHref = `/player/${player.id}/encounters`;
+  const peakTenure = (
+    <PeakTenure
+      variant={variant}
+      playerRank={player.playerRank}
+      highestRank={player.highestRank}
+      timeInHighestRank={player.timeInHighestRank}
+    />
+  );
 
   return (
     <Link
@@ -117,15 +116,13 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
         <div>
           <RankBadge rank={player.playerRank} variant={variant} />
         </div>
-        <div>
+        <div className="flex min-w-0 items-center gap-2">
           <span
-            className={`font-headline font-bold group-hover:underline ${nameClass[variant]}`}
+            className={`min-w-0 truncate font-headline font-bold leading-tight group-hover:underline ${nameClass[variant]}`}
           >
             {capitalizeFirstLetter(player.name)}
           </span>
-          <p className={`text-xs font-medium tracking-wide mt-0.5 ${subtitleClass[variant]}`}>
-            {subtitle}
-          </p>
+          {peakTenure}
         </div>
         <div className="flex justify-center">
           <FormBars results={player.lastFive} variant={variant} />
@@ -150,18 +147,18 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
 
       {/* Mobile compact two-row layout */}
       <div className="md:hidden relative z-10 space-y-1">
-        {/* Row 1: rank | name+subtitle | trend */}
+        {/* Row 1: rank | name+chip | trend */}
         <div className="flex items-center gap-2">
           <div className="flex-shrink-0">
             <RankBadge rank={player.playerRank} variant={variant} />
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
             <span
-              className={`font-headline font-bold text-base group-hover:underline truncate block ${nameClass[variant]}`}
+              className={`min-w-0 flex-1 truncate font-headline text-base font-bold leading-none group-hover:underline ${nameClass[variant]}`}
             >
               {capitalizeFirstLetter(player.name)}
             </span>
-            <p className={`text-xs font-medium mt-0.5 truncate ${subtitleClass[variant]}`}>{subtitle}</p>
+            {peakTenure}
           </div>
           <div className="flex-shrink-0">
             <TrendIndicator rankChange={player.rankChange} variant={variant} />

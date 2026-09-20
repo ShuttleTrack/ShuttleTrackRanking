@@ -119,7 +119,7 @@ const GameViewer = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-4 sm:mt-8 pb-6 sm:pb-8">
       <header className="mb-4 sm:mb-8 flex flex-col items-center text-center">
         <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-          <h1 className="font-headline text-2xl sm:text-4xl font-extrabold text-on-surface">
+          <h1 className="font-headline text-2xl sm:text-3xl font-extrabold text-on-surface">
             Game #{gameId.slice(-4)}
           </h1>
           <span
