@@ -1,26 +1,29 @@
 import React from 'react';
 import Link from 'next/link';
-import { useSession, signIn } from 'next-auth/react';
-import useSWR from 'swr';
-import type { Squad } from '@prisma/client';
-import { PageLoader } from '@/components/common/GameLoader';
+import { signIn } from 'next-auth/react';
+import { getServerSession } from 'next-auth/next';
+import type { GetServerSideProps } from 'next';
+import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import prisma from '@/lib/prisma';
+import { getSquadsForEmail } from '@/lib/auth/squadAccess';
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+interface SquadOption {
+  id: number;
+  name: string;
+  slug: string;
+}
 
-// Not squad-scoped - lists the squads the signed-in email administers or plays in (or every
-// squad, for a platform superadmin), so there's no SquadContext/SquadProvider here.
-const SquadPickerPage = () => {
-  const { data: session, status } = useSession();
-  const { data: squads, isLoading } = useSWR<Squad[]>(
-    status === 'authenticated' ? '/api/squads' : null,
-    fetcher
-  );
+interface SquadPickerPageProps {
+  // Absent entirely for a signed-out visitor - the page shows a sign-in prompt instead. Present
+  // (possibly empty) once signed in; getServerSideProps below already redirects straight to
+  // /s/{slug} when there's exactly one, so by the time this renders with squads.length > 1 (or
+  // 0), there was a genuine choice - or lack of one - to show.
+  squads?: SquadOption[];
+  isSuperAdmin?: boolean;
+}
 
-  if (status === 'loading') {
-    return <PageLoader variant="tall" label="Loading" />;
-  }
-
-  if (status === 'unauthenticated') {
+const SquadPickerPage = ({ squads, isSuperAdmin }: SquadPickerPageProps) => {
+  if (!squads) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center px-4">
         <div className="text-center space-y-4">
@@ -37,10 +40,6 @@ const SquadPickerPage = () => {
     );
   }
 
-  if (isLoading) {
-    return <PageLoader variant="tall" label="Loading your squads" />;
-  }
-
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-8 py-12">
       <h1 className="font-headline text-2xl sm:text-3xl font-extrabold tracking-tight text-on-surface mb-2">
@@ -50,9 +49,9 @@ const SquadPickerPage = () => {
         Pick a squad to view its ranking board.
       </p>
 
-      {!squads || squads.length === 0 ? (
+      {squads.length === 0 ? (
         <div className="rounded-xl border border-gray-600 bg-surface-container p-6 text-on-surface-variant">
-          {session?.user?.isSuperAdmin
+          {isSuperAdmin
             ? 'No squads have been created yet.'
             : "You're not a member of any squad yet - ask a squad admin to add you."}
         </div>
@@ -71,7 +70,7 @@ const SquadPickerPage = () => {
         </ul>
       )}
 
-      {session?.user?.isSuperAdmin && (
+      {isSuperAdmin && (
         <div className="mt-8">
           <Link
             href="/platform/squads"
@@ -86,3 +85,28 @@ const SquadPickerPage = () => {
 };
 
 export default SquadPickerPage;
+
+// Resolved server-side (rather than the client fetching /api/squads after mount) specifically so
+// the exactly-one-squad case can redirect before anything renders - no flash of a picker with a
+// single, pointless option.
+export const getServerSideProps: GetServerSideProps<SquadPickerPageProps> = async (context) => {
+  const session = await getServerSession(context.req, context.res, authOptions);
+  if (!session?.user?.email) {
+    return { props: {} };
+  }
+
+  const squadRows = session.user.isSuperAdmin
+    ? await prisma.squad.findMany({ orderBy: { name: 'asc' } })
+    : await getSquadsForEmail(session.user.email);
+
+  if (squadRows.length === 1) {
+    return { redirect: { destination: `/s/${squadRows[0].slug}`, permanent: false } };
+  }
+
+  return {
+    props: {
+      squads: squadRows.map((s) => ({ id: s.id, name: s.name, slug: s.slug })),
+      isSuperAdmin: Boolean(session.user.isSuperAdmin),
+    },
+  };
+};
