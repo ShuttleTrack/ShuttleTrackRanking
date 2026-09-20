@@ -10,6 +10,14 @@ interface ProcessScoresModalProps {
   message?: string;
 }
 
+const outlineBtn =
+  'inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/10 bg-surface-container-high/50 px-6 py-3 font-medium text-on-surface transition-colors hover:border-primary/40';
+const primaryBtn =
+  'inline-flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90';
+const modalBoxClass =
+  'relative rounded-xl bg-surface-container-high border border-gray-600 p-6 w-full max-w-lg shadow-xl';
+const modalActionsClass = 'flex flex-wrap justify-end gap-3 mt-6';
+
 export const ProcessScoresModal = ({
   isOpen,
   isProcessing,
@@ -17,78 +25,62 @@ export const ProcessScoresModal = ({
   success,
   onProcess,
   onRetry,
-  onClose
+  onClose,
 }: ProcessScoresModalProps) => {
   if (!isOpen) return null;
 
   return (
-    <dialog className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold text-lg mb-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className={modalBoxClass} role="dialog" aria-modal="true">
+        <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">
           {error ? 'Processing Error' : success ? 'Processing Complete' : 'Results Submitted'}
         </h3>
-        
+
         {error ? (
           <>
-            <div className="alert alert-error mb-4">
-              <p>{error}</p>
+            <div className="rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 mb-4">
+              <p className="text-red-400 text-sm">{error}</p>
             </div>
-            <div className="modal-action">
-              <button 
-                className="btn btn-outline"
-                onClick={onClose}
-                type="button"
-              >
+            <div className={modalActionsClass}>
+              <button type="button" className={outlineBtn} onClick={onClose}>
                 Close
               </button>
-              <button 
-                className="btn btn-primary"
-                onClick={onRetry}
-                type="button"
-              >
+              <button type="button" className={primaryBtn} onClick={onRetry}>
                 Retry
               </button>
             </div>
           </>
         ) : success ? (
           <>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-on-surface-variant mb-4">
               All scores have been processed successfully.
             </p>
-            <div className="modal-action">
-              <button 
-                className="btn btn-primary"
-                onClick={onClose}
-                type="button"
-              >
+            <div className={modalActionsClass}>
+              <button type="button" className={primaryBtn} onClick={onClose}>
                 Close
               </button>
             </div>
           </>
         ) : (
           <>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-on-surface-variant mb-4">
               All results have been submitted. Would you like to process the scores now?
             </p>
             {isProcessing ? (
-              <div className="flex items-center justify-center gap-2">
-                <div className="loading loading-spinner"></div>
-                <span>Processing scores...</span>
+              <div className="flex items-center justify-center gap-3 py-4">
+                <div
+                  className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin"
+                  role="status"
+                  aria-label="Processing scores"
+                />
+                <span className="text-on-surface-variant">Processing scores...</span>
               </div>
             ) : (
-              <div className="modal-action">
-                <button 
-                  className="btn btn-outline"
-                  onClick={onClose}
-                  type="button"
-                >
+              <div className={modalActionsClass}>
+                <button type="button" className={outlineBtn} onClick={onClose}>
                   Close
                 </button>
-                <button 
-                  className="btn btn-primary"
-                  onClick={onProcess}
-                  type="button"
-                >
+                <button type="button" className={primaryBtn} onClick={onProcess}>
                   Process Scores
                 </button>
               </div>
@@ -96,9 +88,6 @@ export const ProcessScoresModal = ({
           </>
         )}
       </div>
-      <form method="dialog" className="modal-backdrop">
-        <button type="button" onClick={onClose}>close</button>
-      </form>
-    </dialog>
+    </div>
   );
-}; 
+};

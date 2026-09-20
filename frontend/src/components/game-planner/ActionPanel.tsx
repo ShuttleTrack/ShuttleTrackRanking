@@ -8,6 +8,9 @@ interface ActionPanelProps {
   isMobile?: boolean;
 }
 
+const primaryButtonClass =
+  'flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
+
 export const ActionPanel = ({
   selectedCount,
   maxPlayers,
@@ -15,33 +18,35 @@ export const ActionPanel = ({
   validationMessage,
   isValid,
   onCreateGame,
-  isMobile = false
+  isMobile = false,
 }: ActionPanelProps) => {
+  const ctaLabel = isEditing ? 'Update Game Day' : 'Create Game Day';
+
   if (isMobile) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 bg-base-100 shadow-lg p-4 md:hidden border-t border-base-200">
-        <div className="container mx-auto">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-medium">
-              Selected: {selectedCount}/{maxPlayers}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/5 bg-background p-4 md:hidden"
+      >
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="text-sm font-headline font-medium text-on-surface">
+              Selected:{' '}
+              <span className="font-numeric tabular-nums">
+                {selectedCount}/{maxPlayers}
+              </span>
             </div>
             {selectedCount > 0 && !isValid && (
-              <div className="text-sm text-red-500">
-                {validationMessage}
-              </div>
+              <div className="text-sm text-red-400 text-right">{validationMessage}</div>
             )}
           </div>
           <button
-            className={`btn w-full ${
-              !isValid
-                ? 'btn-disabled bg-gray-300 cursor-not-allowed' 
-                : 'btn-primary'
-            }`}
+            type="button"
+            className={`${primaryButtonClass} w-full`}
             disabled={!isValid}
             title={validationMessage}
             onClick={onCreateGame}
           >
-            {isEditing ? 'Update Game Day' : 'Create Game Day'}
+            {ctaLabel}
           </button>
         </div>
       </div>
@@ -49,29 +54,27 @@ export const ActionPanel = ({
   }
 
   return (
-    <div className="hidden md:block mt-4">
-      <div className="flex justify-between items-center">
-        <div className="text-lg font-semibold">
-          Selected Players: {selectedCount}/{maxPlayers}
+    <div className="hidden md:block mt-6">
+      <div className="flex justify-between items-center gap-4">
+        <div className="font-headline text-lg font-semibold text-on-surface">
+          Selected Players:{' '}
+          <span className="font-numeric tabular-nums">
+            {selectedCount}/{maxPlayers}
+          </span>
         </div>
         <button
-          className={`btn ${
-            !isValid
-              ? 'btn-disabled bg-gray-300 cursor-not-allowed' 
-              : 'btn-primary'
-          }`}
+          type="button"
+          className={`${primaryButtonClass} w-auto`}
           disabled={!isValid}
           title={validationMessage}
           onClick={onCreateGame}
         >
-          {isEditing ? 'Update Game Day' : 'Create Game Day'}
+          {ctaLabel}
         </button>
       </div>
       {selectedCount > 0 && !isValid && (
-        <p className="text-sm text-red-500 mt-2">
-          {validationMessage}
-        </p>
+        <p className="text-sm text-red-400 mt-2">{validationMessage}</p>
       )}
     </div>
   );
-}; 
+};

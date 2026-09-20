@@ -110,10 +110,16 @@ const GamePlannerPage = () => {
     }
   }, [status, router]);
 
-  if (status === 'loading') {
+  const isGameLoadPending = Boolean(gameId) && gameLoading;
+
+  if (status === 'loading' || playersLoading || isGameLoadPending) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="loading loading-spinner loading-lg"></div>
+      <div className="flex justify-center items-center min-h-[40vh]">
+        <div
+          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
+          role="status"
+          aria-label="Loading game planner"
+        />
       </div>
     );
   }
@@ -187,31 +193,30 @@ const GamePlannerPage = () => {
   const isValid = !validationMessage;
 
   return (
-    <div className="container mx-auto p-4 pb-32 md:pb-4">
-      <div className="mb-6 sm:mb-8 text-center">
-        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
+    <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8 pb-32 md:pb-8">
+      <section className="mb-6 sm:mb-8">
+        <h1 className="font-headline text-3xl sm:text-4xl font-extrabold tracking-tight text-on-surface">
           {isEditing ? 'Edit Game Day' : 'Game Planner'}
         </h1>
-        <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-gray-400">
-          {isEditing 
-            ? 'Modify player selection for the game day'
-            : 'Select players for the game day (maximum 20)'}
-        </p>
-      </div>
+        <div className="mt-3 h-0.5 w-10 rounded-full bg-primary" aria-hidden />
+        {!isEditing && (
+          <p className="text-on-surface-variant font-medium text-sm sm:text-base mt-2">
+            Select players for the game day (maximum 20)
+          </p>
+        )}
+      </section>
 
-      <div className="bg-base-100 rounded-lg shadow-lg p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {players
-            .sort((a, b) => a.playerRank - b.playerRank)
-            .map(player => (
-              <PlayerCard
-                key={player.id}
-                player={player}
-                isSelected={selectedPlayers.includes(player.id)}
-                onToggle={handlePlayerToggle}
-              />
-            ))}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        {players
+          .sort((a, b) => a.playerRank - b.playerRank)
+          .map((player) => (
+            <PlayerCard
+              key={player.id}
+              player={player}
+              isSelected={selectedPlayers.includes(player.id)}
+              onToggle={handlePlayerToggle}
+            />
+          ))}
       </div>
 
       <ActionPanel

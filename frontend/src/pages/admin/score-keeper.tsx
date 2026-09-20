@@ -11,6 +11,7 @@ import type { Player } from '@/types/player';
 import { notificationService } from '@/services/notificationService';
 import { getMatchCombinations, type MatchCombination } from '@/utils/match';
 import { isValidMatchScore } from '@/utils/scoreValidation';
+import { Cog6ToothIcon } from '@heroicons/react/24/outline';
 
 interface MatchScore {
   team1Score: number;
@@ -39,6 +40,22 @@ interface SubmitErrorResponse {
 }
 
 const MAX_POINTS = 30;
+
+const outlineBtn =
+  'inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/10 bg-surface-container-high/50 px-6 py-3 font-medium text-on-surface transition-colors hover:border-primary/40';
+const primaryBtn =
+  'inline-flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
+const dangerOutlineBtn =
+  'inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-red-500/40 px-6 py-3 font-medium text-red-400 transition-colors hover:bg-red-950/30';
+const dangerFilledBtn =
+  'inline-flex min-h-[44px] items-center justify-center rounded-xl bg-red-600 px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90';
+const warningBtn =
+  'inline-flex min-h-[44px] items-center justify-center rounded-xl border border-amber-500/50 bg-amber-500/10 px-6 py-3 font-medium text-amber-300 transition-colors hover:bg-amber-500/20';
+const inputFieldClass =
+  'w-full rounded-xl border border-gray-600 bg-surface-container px-4 py-3 text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40';
+const modalBoxClass =
+  'relative rounded-xl bg-surface-container-high border border-gray-600 p-6 w-full max-w-lg shadow-xl';
+const modalActionsClass = 'flex flex-wrap justify-end gap-3 mt-6';
 
 const isValidScore = (score: number): boolean => {
   return Number.isInteger(score) && score >= 0 && score <= MAX_POINTS;
@@ -291,20 +308,25 @@ const ScoreKeeperPage = () => {
     }
   };
 
-  if (status === 'loading' || gameLoading) {
+  if (status === 'loading' || gameLoading || playersLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="loading loading-spinner loading-lg"></div>
+      <div className="flex justify-center items-center min-h-[40vh]">
+        <div
+          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
+          role="status"
+          aria-label="Loading score keeper"
+        />
       </div>
     );
   }
 
   if (!game) {
     return (
-      <div className="container mx-auto p-4 text-center">
-        <h1 className="text-2xl font-bold text-error">Game not found</h1>
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8 pb-8 text-center">
+        <h1 className="font-headline text-2xl font-extrabold text-on-surface">Game not found</h1>
         <button
-          className="btn btn-primary mt-4"
+          type="button"
+          className={`${primaryBtn} mt-6`}
           onClick={() => router.push('/admin/game-planner')}
         >
           Back to Game Planner
@@ -400,109 +422,109 @@ const ScoreKeeperPage = () => {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="mb-6 text-center">
-        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
-          Score Keeper
-        </h1>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          Record match results for each group
-        </p>
-      </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8 pb-8">
+      <section className="mb-6 sm:mb-8 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-headline text-3xl sm:text-4xl font-extrabold tracking-tight text-on-surface">
+            Score Keeper
+          </h1>
+          <div className="mt-3 h-0.5 w-10 rounded-full bg-primary" aria-hidden />
+        </div>
+        <button
+          type="button"
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-black shadow-lg transition-all hover:opacity-90 ${
+            activeGroup === 'management' ? 'ring-2 ring-primary-container ring-offset-2 ring-offset-background' : ''
+          }`}
+          onClick={() => {
+            if (activeGroup === 'management') {
+              const firstGroup = Object.keys(groups).find((key) => key !== 'management');
+              if (firstGroup) setActiveGroup(firstGroup);
+            } else {
+              setActiveGroup('management');
+            }
+          }}
+          title="Game Management"
+          aria-label="Game Management"
+        >
+          <Cog6ToothIcon className="h-6 w-6" strokeWidth={2} aria-hidden />
+        </button>
+      </section>
 
-      {/* Tab Navigation - Scrollable on mobile */}
-      <div className="overflow-x-auto mb-6">
-        <div className="tabs tabs-boxed inline-flex min-w-full justify-center">
-          {Object.keys(groups)
-            .filter(key => key !== 'management')
-            .map((groupName) => (
-              <button
-                key={groupName}
-                className={`tab tab-lg ${activeGroup === groupName ? 'tab-active' : ''}`}
-                onClick={() => setActiveGroup(groupName)}
-              >
-                {groupName}
-              </button>
-            ))}
+      {activeGroup !== 'management' && (
+      <div className="overflow-x-auto mb-6 -mx-1 px-1">
+        <div className="flex justify-center min-w-min mx-auto">
+          <div className="inline-flex rounded-xl bg-surface-container p-1 gap-1">
+            {Object.keys(groups)
+              .filter((key) => key !== 'management')
+              .map((groupName) => (
+                <button
+                  key={groupName}
+                  type="button"
+                  className={`min-h-[44px] px-4 sm:px-6 rounded-lg font-headline text-sm font-semibold whitespace-nowrap transition-colors ${
+                    activeGroup === groupName
+                      ? 'bg-primary text-black'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                  onClick={() => setActiveGroup(groupName)}
+                >
+                  {groupName}
+                </button>
+              ))}
+          </div>
         </div>
       </div>
-
-      {/* Floating Management Button */}
-      <button
-        className="fixed bottom-6 right-6 btn btn-circle btn-primary shadow-lg"
-        onClick={() => setActiveGroup('management')}
-        title="Game Management"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      </button>
+      )}
 
       {/* Active Group Content */}
       {activeGroup === 'management' ? (
-        <div className="bg-base-100 rounded-lg shadow-lg p-4 sm:p-6">
-          <h2 className="text-lg font-semibold mb-4">Game Management</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Game Progress Section */}
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div className="space-y-4">
-              <h3 className="text-md font-medium">Game Progress</h3>
+              <h3 className="font-headline text-sm font-medium text-on-surface-variant">Game Progress</h3>
               {!isGameStarted ? (
-                <div className="text-center p-6 bg-base-200 rounded-lg">
-                  <p className="text-gray-600">Click Start Games to begin recording scores</p>
-                  <button
-                    className="btn btn-primary mt-4"
-                    onClick={handleStart}
-                  >
+                <div className="text-center p-6 rounded-xl bg-surface-container border border-gray-600">
+                  <p className="text-on-surface-variant">Click Start Games to begin recording scores</p>
+                  <button type="button" className={`${primaryBtn} mt-4`} onClick={handleStart}>
                     Start Games
                   </button>
                 </div>
               ) : (
-                <>
-                  {(() => {
-                    const { totalGames, completedGames } = getGameStats(groups, scores);
-                    const progressPercent = Math.round((completedGames / totalGames) * 100);
+                (() => {
+                  const { totalGames, completedGames } = getGameStats(groups, scores);
+                  const progressPercent = Math.round((completedGames / totalGames) * 100);
 
-                    return (
-                      <div className="p-6 bg-base-200 rounded-lg">
-                        <div className="text-center mb-4">
-                          <div className="text-2xl font-bold text-primary">
-                            {completedGames} / {totalGames}
-                          </div>
-                          <div className="text-sm text-gray-600">Games Completed</div>
+                  return (
+                    <div className="p-6 rounded-xl bg-surface-container border border-gray-600">
+                      <div className="text-center mb-4">
+                        <div className="font-numeric text-2xl font-bold text-primary tabular-nums">
+                          {completedGames} / {totalGames}
                         </div>
-                        <div className="w-full bg-base-300 rounded-full h-2.5">
-                          <div
-                            className="bg-primary h-2.5 rounded-full transition-all duration-500"
-                            style={{ width: `${progressPercent}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-center mt-2 text-sm text-gray-600">
-                          {progressPercent}% Complete
-                        </div>
+                        <div className="text-sm text-on-surface-variant">Games Completed</div>
                       </div>
-                    );
-                  })()}
-                </>
+                      <div className="w-full bg-surface-container-highest rounded-full h-2.5">
+                        <div
+                          className="bg-primary h-2.5 rounded-full transition-all duration-500"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                      <div className="text-center mt-2 text-sm text-on-surface-variant font-numeric tabular-nums">
+                        {progressPercent}% Complete
+                      </div>
+                    </div>
+                  );
+                })()
               )}
             </div>
 
-            {/* Actions Section */}
             <div className="space-y-4">
-              <h3 className="text-md font-medium">Actions</h3>
-              <div className="p-6 bg-base-200 rounded-lg space-y-4">
+              <h3 className="font-headline text-sm font-medium text-on-surface-variant">Actions</h3>
+              <div className="p-6 rounded-xl bg-surface-container border border-gray-600 space-y-3">
                 {isGameStarted && (
                   <>
-                    <button
-                      className="btn btn-primary w-full"
-                      onClick={handleSubmitResults}
-                    >
+                    <button type="button" className={`${primaryBtn} w-full`} onClick={handleSubmitResults}>
                       Submit Results
                     </button>
-                    <button
-                      className="btn btn-error btn-outline w-full"
-                      onClick={handleCancelGame}
-                    >
+                    <button type="button" className={dangerOutlineBtn} onClick={handleCancelGame}>
                       Cancel Game
                     </button>
                   </>
@@ -511,125 +533,139 @@ const ScoreKeeperPage = () => {
             </div>
           </div>
         </div>
-      ) : activeGroup && (
-        <div className="bg-base-100 rounded-lg shadow-lg p-4 sm:p-6">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold mb-2">Players</h2>
-            <div className="flex flex-wrap gap-2">
-              {groups[activeGroup].map((player) => (
-                <div
-                  key={player.id}
-                  className="px-3 py-1 bg-base-200 rounded-lg text-sm font-medium"
-                >
-                  {capitalizeFirstLetter(player.name)}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-lg font-semibold mb-3">Matches</h2>
-            <div className="space-y-3">
-              {getMatchCombinations(groups[activeGroup].map(p => p.name)).map((match, idx) => {
-                const matchScore = scores[activeGroup]?.[idx];
-                const hasScore = !!matchScore;
-                const isPlayed = hasScore && (matchScore.team1Score > 0 || matchScore.team2Score > 0);
-                const team1Won = isPlayed && matchScore.team1Score > matchScore.team2Score;
-                const team2Won = isPlayed && matchScore.team2Score > matchScore.team1Score;
-
-                return (
+      ) : (
+        activeGroup &&
+        groups[activeGroup] && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-headline text-lg font-semibold text-on-surface mb-3">Players</h2>
+              <div className="flex flex-wrap gap-2">
+                {groups[activeGroup].map((player) => (
                   <div
-                    key={idx}
-                    className={`bg-base-200 rounded-lg p-3 ${isGameStarted ? 'cursor-pointer hover:bg-base-300' : ''}`}
-                    onClick={() => handleMatchClick(activeGroup, idx, match)}
+                    key={player.id}
+                    className="px-3 py-1.5 rounded-xl bg-surface-container border border-gray-600 text-sm font-headline font-medium text-on-surface"
                   >
-                    <div className="grid grid-cols-11 gap-2 items-center">
-                      <div className="col-span-4">
-                        <div className={`text-center p-2 rounded ${isPlayed
-                            ? (team1Won ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30')
-                            : 'bg-base-100'
-                          }`}>
-                          <div className="flex items-center justify-center gap-1 mb-1">
+                    {capitalizeFirstLetter(player.name)}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h2 className="font-headline text-lg font-semibold text-on-surface mb-3">Matches</h2>
+              <div className="space-y-3">
+                {getMatchCombinations(groups[activeGroup].map((p) => p.name)).map((match, idx) => {
+                  const matchScore = scores[activeGroup]?.[idx];
+                  const hasScore = !!matchScore;
+                  const isPlayed =
+                    hasScore && (matchScore.team1Score > 0 || matchScore.team2Score > 0);
+                  const team1Won = isPlayed && matchScore.team1Score > matchScore.team2Score;
+                  const team2Won = isPlayed && matchScore.team2Score > matchScore.team1Score;
+
+                  const teamBoxClass = (won: boolean, played: boolean) => {
+                    if (!played) return 'bg-surface-container-high';
+                    return won ? 'bg-primary/20' : 'bg-red-950/40 border border-red-500/20';
+                  };
+
+                  return (
+                    <div
+                      key={idx}
+                      role={isGameStarted ? 'button' : undefined}
+                      tabIndex={isGameStarted ? 0 : undefined}
+                      className={`rounded-xl border border-gray-600 bg-surface-container p-3 transition-colors ${
+                        isGameStarted ? 'cursor-pointer hover:border-primary/40' : ''
+                      }`}
+                      onClick={() => handleMatchClick(activeGroup, idx, match)}
+                      onKeyDown={(e) => {
+                        if (isGameStarted && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          handleMatchClick(activeGroup, idx, match);
+                        }
+                      }}
+                    >
+                      <div className="grid grid-cols-11 gap-2 items-center">
+                        <div className="col-span-4">
+                          <div
+                            className={`flex items-center justify-center gap-2 p-2 rounded-lg ${teamBoxClass(team1Won, isPlayed)}`}
+                          >
                             {isPlayed && (
-                              <span className={`flex items-center justify-center w-4 h-4 rounded-full ${team1Won
-                                  ? 'bg-emerald-600 text-white'
-                                  : 'bg-red-600 text-white'
-                                }`}>
-                                {team1Won ? '✓' : '×'}
+                              <span
+                                className={`flex shrink-0 self-center items-center justify-center min-w-[1.25rem] h-5 px-1 rounded text-xs font-bold ${
+                                  team1Won ? 'bg-primary text-black' : 'bg-red-600 text-white'
+                                }`}
+                              >
+                                {team1Won ? 'W' : 'L'}
                               </span>
                             )}
-                            <div className="text-xs font-medium">
-                              {capitalizeFirstLetter(match.team1[0])}
+                            <div className="flex flex-col items-center min-w-0">
+                              <div className="text-xs font-headline font-medium text-on-surface">
+                                {capitalizeFirstLetter(match.team1[0])}
+                              </div>
+                              <div className="text-xs font-headline font-medium text-on-surface">
+                                {capitalizeFirstLetter(match.team1[1])}
+                              </div>
                             </div>
                           </div>
-                          <div className="text-xs font-medium">
-                            {capitalizeFirstLetter(match.team1[1])}
+                        </div>
+                        <div className="col-span-3 text-center">
+                          <div className="font-numeric font-bold text-lg text-on-surface tabular-nums">
+                            {hasScore ? `${matchScore.team1Score} - ${matchScore.team2Score}` : '0 - 0'}
                           </div>
                         </div>
-                      </div>
-                      <div className="col-span-3 text-center">
-                        <div className="font-bold text-lg">
-                          {hasScore ?
-                            `${matchScore.team1Score} - ${matchScore.team2Score}`
-                            : 'vs'}
-                        </div>
-                      </div>
-                      <div className="col-span-4">
-                        <div className={`text-center p-2 rounded ${isPlayed
-                            ? (team2Won ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30')
-                            : 'bg-base-100'
-                          }`}>
-                          <div className="flex items-center justify-center gap-1 mb-1">
+                        <div className="col-span-4">
+                          <div
+                            className={`flex items-center justify-center gap-2 p-2 rounded-lg ${teamBoxClass(team2Won, isPlayed)}`}
+                          >
                             {isPlayed && (
-                              <span className={`flex items-center justify-center w-4 h-4 rounded-full ${team2Won
-                                  ? 'bg-emerald-600 text-white'
-                                  : 'bg-red-600 text-white'
-                                }`}>
-                                {team2Won ? '✓' : '×'}
+                              <span
+                                className={`flex shrink-0 self-center items-center justify-center min-w-[1.25rem] h-5 px-1 rounded text-xs font-bold ${
+                                  team2Won ? 'bg-primary text-black' : 'bg-red-600 text-white'
+                                }`}
+                              >
+                                {team2Won ? 'W' : 'L'}
                               </span>
                             )}
-                            <div className="text-xs font-medium">
-                              {capitalizeFirstLetter(match.team2[0])}
+                            <div className="flex flex-col items-center min-w-0">
+                              <div className="text-xs font-headline font-medium text-on-surface">
+                                {capitalizeFirstLetter(match.team2[0])}
+                              </div>
+                              <div className="text-xs font-headline font-medium text-on-surface">
+                                {capitalizeFirstLetter(match.team2[1])}
+                              </div>
                             </div>
-                          </div>
-                          <div className="text-xs font-medium">
-                            {capitalizeFirstLetter(match.team2[1])}
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
+        )
       )}
 
-      {/* Password Modal */}
       {passwordModalOpen && (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg mb-4">Enter Password to Edit Score</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className={modalBoxClass} role="dialog" aria-modal="true">
+            <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">
+              Enter Password to Edit Score
+            </h3>
             <form onSubmit={handlePasswordSubmit}>
-              <div className="form-control">
-                <input
-                  type="password"
-                  id="edit-password"
-                  className={`input input-bordered ${passwordError ? 'input-error' : ''}`}
-                  placeholder="Enter password"
-                  autoComplete="off"
-                />
-                {passwordError && (
-                  <label className="label">
-                    <span className="label-text-alt text-error">Incorrect password</span>
-                  </label>
-                )}
-              </div>
-              <div className="modal-action">
+              <input
+                type="password"
+                id="edit-password"
+                className={`${inputFieldClass} ${passwordError ? 'border-red-500' : ''}`}
+                placeholder="Enter password"
+                autoComplete="off"
+              />
+              {passwordError && (
+                <p className="text-sm text-red-400 mt-2">Incorrect password</p>
+              )}
+              <div className={modalActionsClass}>
                 <button
                   type="button"
-                  className="btn btn-outline"
+                  className={outlineBtn}
                   onClick={() => {
                     setPasswordModalOpen(false);
                     setPasswordError(false);
@@ -638,37 +674,27 @@ const ScoreKeeperPage = () => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button type="submit" className={primaryBtn}>
                   Confirm
                 </button>
               </div>
             </form>
           </div>
-          <form method="dialog" className="modal-backdrop">
-            <button onClick={() => {
-              setPasswordModalOpen(false);
-              setPasswordError(false);
-              setPendingMatch(null);
-            }}>
-              close
-            </button>
-          </form>
-        </dialog>
+        </div>
       )}
 
-      {/* Existing Score Input Modal */}
       {selectedMatch && (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg mb-4">Enter Match Score</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className={modalBoxClass} role="dialog" aria-modal="true">
+            <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">Enter Match Score</h3>
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
-                <div className="font-medium text-center">
+                <div className="font-headline font-medium text-center text-on-surface">
                   {selectedMatch.team1.map(capitalizeFirstLetter).join(' & ')}
                 </div>
                 <input
                   type="number"
-                  className="input input-bordered w-full"
+                  className={inputFieldClass}
                   defaultValue={scores[selectedMatch.groupName]?.[selectedMatch.matchIndex]?.team1Score || 0}
                   min={0}
                   max={MAX_POINTS}
@@ -681,14 +707,14 @@ const ScoreKeeperPage = () => {
                   }}
                 />
               </div>
-              <div className="text-center font-bold">vs</div>
+              <div className="text-center font-headline font-bold text-on-surface-variant">vs</div>
               <div className="space-y-2">
-                <div className="font-medium text-center">
+                <div className="font-headline font-medium text-center text-on-surface">
                   {selectedMatch.team2.map(capitalizeFirstLetter).join(' & ')}
                 </div>
                 <input
                   type="number"
-                  className="input input-bordered w-full"
+                  className={inputFieldClass}
                   defaultValue={scores[selectedMatch.groupName]?.[selectedMatch.matchIndex]?.team2Score || 0}
                   min={0}
                   max={MAX_POINTS}
@@ -702,23 +728,23 @@ const ScoreKeeperPage = () => {
                 />
               </div>
             </div>
-            <div className="text-sm text-gray-500 mt-2">
-              * Scores must be between 0 and {MAX_POINTS} points
-              <br />
-              * Scores cannot be equal
+            <div className="text-sm text-on-surface-variant mt-3">
+              Scores must be between 0 and {MAX_POINTS} points and cannot be equal.
             </div>
-            <div className="modal-action">
-              <button
-                className="btn btn-outline"
-                onClick={() => setSelectedMatch(null)}
-              >
+            <div className={modalActionsClass}>
+              <button type="button" className={outlineBtn} onClick={() => setSelectedMatch(null)}>
                 Cancel
               </button>
               <button
-                className="btn btn-primary"
+                type="button"
+                className={primaryBtn}
                 onClick={() => {
-                  const team1Score = parseInt((document.getElementById('team1Score') as HTMLInputElement).value);
-                  const team2Score = parseInt((document.getElementById('team2Score') as HTMLInputElement).value);
+                  const team1Score = parseInt(
+                    (document.getElementById('team1Score') as HTMLInputElement).value,
+                  );
+                  const team2Score = parseInt(
+                    (document.getElementById('team2Score') as HTMLInputElement).value,
+                  );
 
                   if (!areValidMatchScores(team1Score, team2Score)) {
                     alert('Invalid scores. Please check the requirements and try again.');
@@ -732,39 +758,33 @@ const ScoreKeeperPage = () => {
               </button>
             </div>
           </div>
-          <form method="dialog" className="modal-backdrop">
-            <button onClick={() => setSelectedMatch(null)}>close</button>
-          </form>
-        </dialog>
+        </div>
       )}
 
-      {/* Submit Password Modal */}
       {showSubmitPasswordModal && (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg mb-4">Confirm Results Submission</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className={modalBoxClass} role="dialog" aria-modal="true">
+            <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">
+              Confirm Results Submission
+            </h3>
+            <p className="text-on-surface-variant mb-4">
               Please enter password to submit the final results.
             </p>
             <form onSubmit={handleSubmitPasswordVerify}>
-              <div className="form-control">
-                <input
-                  type="password"
-                  id="submit-password"
-                  className={`input input-bordered ${submitPasswordError ? 'input-error' : ''}`}
-                  placeholder="Enter password"
-                  autoComplete="off"
-                />
-                {submitPasswordError && (
-                  <label className="label">
-                    <span className="label-text-alt text-error">Incorrect password</span>
-                  </label>
-                )}
-              </div>
-              <div className="modal-action">
+              <input
+                type="password"
+                id="submit-password"
+                className={`${inputFieldClass} ${submitPasswordError ? 'border-red-500' : ''}`}
+                placeholder="Enter password"
+                autoComplete="off"
+              />
+              {submitPasswordError && (
+                <p className="text-sm text-red-400 mt-2">Incorrect password</p>
+              )}
+              <div className={modalActionsClass}>
                 <button
                   type="button"
-                  className="btn btn-outline"
+                  className={outlineBtn}
                   onClick={() => {
                     setShowSubmitPasswordModal(false);
                     setSubmitPasswordError(false);
@@ -772,33 +792,25 @@ const ScoreKeeperPage = () => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button type="submit" className={primaryBtn}>
                   Submit Results
                 </button>
               </div>
             </form>
           </div>
-          <form method="dialog" className="modal-backdrop">
-            <button onClick={() => {
-              setShowSubmitPasswordModal(false);
-              setSubmitPasswordError(false);
-            }}>
-              close
-            </button>
-          </form>
-        </dialog>
+        </div>
       )}
 
-      {/* Submit Warning Modal */}
       {showSubmitWarning && (
-        <dialog className="modal modal-open">
-          <div className="modal-box border-2 border-warning">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className={`${modalBoxClass} border-amber-500/40`} role="dialog" aria-modal="true">
             <div className="flex items-start gap-3 mb-4">
               <svg
-                className="w-6 h-6 text-warning flex-shrink-0 mt-1"
+                className="w-6 h-6 text-amber-400 flex-shrink-0 mt-1"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
+                aria-hidden
               >
                 <path
                   strokeLinecap="round"
@@ -808,21 +820,22 @@ const ScoreKeeperPage = () => {
                 />
               </svg>
               <div>
-                <h3 className="font-bold text-lg text-warning">Warning: Incomplete Matches</h3>
-                <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  Some matches have not been completed. Submitting now will finalize the game with missing scores.
+                <h3 className="font-headline text-lg font-semibold text-amber-300">
+                  Warning: Incomplete Matches
+                </h3>
+                <p className="text-on-surface-variant mt-2">
+                  Some matches have not been completed. Submitting now will finalize the game with missing
+                  scores.
                 </p>
               </div>
             </div>
-            <div className="modal-action">
-              <button
-                className="btn btn-outline"
-                onClick={() => setShowSubmitWarning(false)}
-              >
+            <div className={modalActionsClass}>
+              <button type="button" className={outlineBtn} onClick={() => setShowSubmitWarning(false)}>
                 Go Back
               </button>
               <button
-                className="btn btn-warning"
+                type="button"
+                className={warningBtn}
                 onClick={() => {
                   setShowSubmitWarning(false);
                   setTimeout(() => {
@@ -834,115 +847,101 @@ const ScoreKeeperPage = () => {
               </button>
             </div>
           </div>
-          <form method="dialog" className="modal-backdrop">
-            <button onClick={() => setShowSubmitWarning(false)}>close</button>
-          </form>
-        </dialog>
+        </div>
       )}
 
-      {/* Cancel Warning Modal */}
-      <dialog className={`modal ${showCancelWarning ? 'modal-open' : ''}`}>
-        <div className="modal-box">
-          <h3 className="font-bold text-lg mb-4">Cancel Game</h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Are you sure you want to cancel this game? All scores and progress will be permanently deleted.
-          </p>
-          <div className="modal-action">
-            <button
-              className="btn btn-outline"
-              onClick={() => setShowCancelWarning(false)}
-            >
-              Go Back
-            </button>
-            <button
-              className="btn btn-error"
-              onClick={handleCancelConfirm}
-            >
-              Yes, Cancel Game
-            </button>
+      {showCancelWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className={modalBoxClass} role="dialog" aria-modal="true">
+            <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">Cancel Game</h3>
+            <p className="text-on-surface-variant mb-4">
+              Are you sure you want to cancel this game? All scores and progress will be permanently deleted.
+            </p>
+            <div className={modalActionsClass}>
+              <button type="button" className={outlineBtn} onClick={() => setShowCancelWarning(false)}>
+                Go Back
+              </button>
+              <button type="button" className={dangerFilledBtn} onClick={handleCancelConfirm}>
+                Yes, Cancel Game
+              </button>
+            </div>
           </div>
         </div>
-        <form method="dialog" className="modal-backdrop">
-          <button onClick={() => setShowCancelWarning(false)}>close</button>
-        </form>
-      </dialog>
+      )}
 
-      {/* Cancel Password Modal */}
-      <dialog className={`modal ${showCancelPasswordModal ? 'modal-open' : ''}`}>
-        <div className="modal-box">
-          <h3 className="font-bold text-lg mb-4">Confirm Game Cancellation</h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Please enter password to confirm game cancellation.
-          </p>
-          <form onSubmit={handleCancelPasswordVerify}>
-            <div className="form-control">
+      {showCancelPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className={modalBoxClass} role="dialog" aria-modal="true">
+            <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">
+              Confirm Game Cancellation
+            </h3>
+            <p className="text-on-surface-variant mb-4">
+              Please enter password to confirm game cancellation.
+            </p>
+            <form onSubmit={handleCancelPasswordVerify}>
               <input
                 type="password"
                 id="password"
-                className={`input input-bordered ${cancelPasswordError ? 'input-error' : ''}`}
+                name="password"
+                className={`${inputFieldClass} ${cancelPasswordError ? 'border-red-500' : ''}`}
                 placeholder="Enter password"
                 autoComplete="off"
               />
               {cancelPasswordError && (
-                <label className="label">
-                  <span className="label-text-alt text-error">Incorrect password</span>
-                </label>
+                <p className="text-sm text-red-400 mt-2">Incorrect password</p>
               )}
-            </div>
-            <div className="modal-action">
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => {
-                  setShowCancelPasswordModal(false);
-                  setCancelPasswordError(false);
-                }}
-              >
-                Go Back
-              </button>
-              <button type="submit" className="btn btn-error">
-                Confirm Cancellation
-              </button>
-            </div>
-          </form>
+              <div className={modalActionsClass}>
+                <button
+                  type="button"
+                  className={outlineBtn}
+                  onClick={() => {
+                    setShowCancelPasswordModal(false);
+                    setCancelPasswordError(false);
+                  }}
+                >
+                  Go Back
+                </button>
+                <button type="submit" className={dangerFilledBtn}>
+                  Confirm Cancellation
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-        <form method="dialog" className="modal-backdrop">
-          <button onClick={() => {
-            setShowCancelPasswordModal(false);
-            setCancelPasswordError(false);
-          }}>
-            close
-          </button>
-        </form>
-      </dialog>
+      )}
 
-      {/* Submission Progress Modal */}
       {isSubmitting && (
-        <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg mb-4">Submitting Results</h3>
-            <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+          <div className={modalBoxClass} role="dialog" aria-modal="true">
+            <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">Submitting Results</h3>
+            <div className="w-full bg-surface-container-highest rounded-full h-2.5 mb-4">
               <div
-                className="bg-emerald-600 h-2.5 rounded-full transition-all duration-300"
+                className="bg-primary h-2.5 rounded-full transition-all duration-300"
                 style={{ width: `${submitProgress}%` }}
-              ></div>
+              />
             </div>
-            <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-center text-sm text-on-surface-variant mb-4 font-numeric tabular-nums">
               {submitProgress.toFixed(0)}% Complete
             </p>
 
             {submitError && (
-              <div className="mt-4 p-4 bg-error/10 border border-error rounded-lg">
-                <p className="text-error text-sm mb-2">{submitError}</p>
+              <div className="mt-4 p-4 rounded-xl border border-red-500/40 bg-red-950/20">
+                <p className="text-red-400 text-sm mb-2">{submitError}</p>
 
                 {failedMatches.length > 0 && (
                   <div className="mt-4">
-                    <h4 className="font-medium mb-2">Failed Matches:</h4>
+                    <h4 className="font-headline font-medium text-on-surface mb-2">Failed Matches:</h4>
                     <div className="max-h-48 overflow-y-auto">
                       {failedMatches.map((error, index) => (
-                        <div key={index} className="text-sm mb-2 p-2 bg-base-200 rounded">
-                          <p><span className="font-medium">{error.group}</span> - Match {parseInt(error.match) + 1}</p>
-                          <p className="text-error text-xs mt-1">{error.error}</p>
+                        <div
+                          key={index}
+                          className="text-sm mb-2 p-2 rounded-lg bg-surface-container border border-gray-600"
+                        >
+                          <p className="text-on-surface">
+                            <span className="font-medium">{error.group}</span> - Match{' '}
+                            {parseInt(error.match) + 1}
+                          </p>
+                          <p className="text-red-400 text-xs mt-1">{error.error}</p>
                         </div>
                       ))}
                     </div>
@@ -951,7 +950,8 @@ const ScoreKeeperPage = () => {
 
                 <div className="mt-4 flex justify-end gap-2">
                   <button
-                    className="btn btn-sm btn-outline"
+                    type="button"
+                    className={outlineBtn}
                     onClick={() => {
                       setIsSubmitting(false);
                       setSubmitError(null);
@@ -960,17 +960,14 @@ const ScoreKeeperPage = () => {
                   >
                     Cancel
                   </button>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={() => handleFinalSubmit()}
-                  >
+                  <button type="button" className={primaryBtn} onClick={() => handleFinalSubmit()}>
                     Retry All
                   </button>
                 </div>
               </div>
             )}
           </div>
-        </dialog>
+        </div>
       )}
 
       <ProcessScoresModal

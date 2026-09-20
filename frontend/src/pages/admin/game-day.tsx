@@ -14,18 +14,23 @@ const GameDayPage = () => {
 
   if (gameLoading || playersLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="loading loading-spinner loading-lg"></div>
+      <div className="flex justify-center items-center min-h-[40vh]">
+        <div
+          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
+          role="status"
+          aria-label="Loading game day"
+        />
       </div>
     );
   }
 
   if (!game) {
     return (
-      <div className="container mx-auto p-4 text-center">
-        <h1 className="text-2xl font-bold text-error">Game not found</h1>
-        <button 
-          className="btn btn-primary mt-4"
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8 pb-8 text-center">
+        <h1 className="font-headline text-2xl font-extrabold text-on-surface">Game not found</h1>
+        <button
+          type="button"
+          className="mt-6 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90"
           onClick={() => router.push('/admin/game-planner')}
         >
           Back to Game Planner
@@ -34,10 +39,9 @@ const GameDayPage = () => {
     );
   }
 
-  // Convert player IDs to full player objects
   const groups = Object.entries(game.groups as Record<string, number[]>).reduce((acc, [groupName, playerIds]) => {
     acc[groupName] = playerIds
-      .map(id => players.find(p => p.id === id))
+      .map((id) => players.find((p) => p.id === id))
       .filter((player): player is NonNullable<typeof player> => player !== undefined)
       .sort((a, b) => a.playerRank - b.playerRank);
     return acc;
@@ -46,46 +50,35 @@ const GameDayPage = () => {
   const handleBack = () => {
     router.push({
       pathname: '/admin/game-planner',
-      query: { gameId }
+      query: { gameId },
     });
   };
 
   const handleContinue = () => {
     router.push({
       pathname: '/admin/score-keeper',
-      query: { gameId }
+      query: { gameId },
     });
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="mb-6 sm:mb-8 text-center">
-        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-400 bg-clip-text text-transparent">
+    <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8 pb-8">
+      <section className="mb-6 sm:mb-8">
+        <h1 className="font-headline text-3xl sm:text-4xl font-extrabold tracking-tight text-on-surface">
           Game Day Groups
         </h1>
-        <p className="mt-2 text-sm sm:text-base text-base-content/60">
-          Players and their groups for the game day
-        </p>
+        <div className="mt-3 h-0.5 w-10 rounded-full bg-primary" aria-hidden />
+      </section>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+        {Object.entries(groups).map(([groupName, groupPlayers]) => (
+          <GroupCard key={groupName} groupName={groupName} players={groupPlayers} />
+        ))}
       </div>
 
-      <div className="bg-base-100 rounded-lg shadow-lg overflow-hidden border border-base-200">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-base-200">
-          {Object.entries(groups).map(([groupName, groupPlayers]) => (
-            <GroupCard
-              key={groupName}
-              groupName={groupName}
-              players={groupPlayers}
-            />
-          ))}
-        </div>
-      </div>
-
-      <NavigationButtons
-        onBack={handleBack}
-        onContinue={handleContinue}
-      />
+      <NavigationButtons onBack={handleBack} onContinue={handleContinue} />
     </div>
   );
 };
 
-export default GameDayPage; 
+export default GameDayPage;

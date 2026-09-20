@@ -133,6 +133,54 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ---
 
+### Admin Dashboard
+
+**Files:** `src/pages/admin/dashboard.tsx`, `src/components/dashboard/Header.tsx`
+
+**Purpose:** Admin home — quick links, games list, Telegram scheduler test.
+
+**Layout:** `max-w-7xl mx-auto px-4 sm:px-8`. **Mobile-first:** Games card first, then Quick Actions, then Telegram; **desktop (`md+`):** two columns — Actions + Telegram left, Games right.
+
+**Header:** `DashboardHeader` — `font-headline` title, orange accent rule, date subtitle (no avatar/logout; session is in nav).
+
+**Cards:** `rounded-xl bg-surface-container/90 border border-gray-600`. Primary CTA = filled `bg-primary`; secondary/telegram = outline `border-white/10`. Game rows are `Link`s with dark status chips (`IN_PROGRESS` orange, `COMPLETED` muted, `DRAFT` outline).
+
+**Loading:** Primary ring spinner (not DaisyUI).
+
+---
+
+### Game Day
+
+**Files:** `src/pages/admin/game-day.tsx`, `src/components/game-day/GroupCard.tsx`, `src/components/game-day/NavigationButtons.tsx`
+
+**Purpose:** Review skill-tier groups after planner selection; navigate back to planner or forward to score keeper.
+
+**Layout:** `max-w-7xl mx-auto px-4 sm:px-8`. **Mobile-first:** one group card per row; **`md+`:** 2 columns, **`xl+`:** up to 4. Title matches dashboard pattern (`font-headline`, orange accent rule; no subtitle).
+
+**GroupCard:** `rounded-xl bg-surface-container/90 border border-gray-600`; player name + rank; points as `font-numeric` (`rankScore`).
+
+**NavigationButtons:** outline Back, filled `bg-primary` Continue; stacked full-width on mobile (Back then Continue), row `justify-between` on `md+`.
+
+**Loading / not-found:** Primary ring spinner; not-found uses dark tokens (no DaisyUI).
+
+---
+
+### Game Planner
+
+**Files:** `src/pages/admin/game-planner.tsx`, `src/components/game-planner/PlayerCard.tsx`, `src/components/game-planner/ActionPanel.tsx`
+
+**Purpose:** Select 4–20 players (valid group sizes), create or update a draft game, route to game-day.
+
+**Layout:** `max-w-7xl mx-auto px-4 sm:px-8`, `pb-32 md:pb-8` for sticky mobile bar. Title + orange rule; subtitle only on create (“maximum 20”). Player grid `1` / `md:2` / `lg:3` columns (no outer panel).
+
+**PlayerCard:** `button` toggle; unselected solid `bg-surface-container`; selected `border-primary bg-surface-container-high`; orange check circle.
+
+**ActionPanel:** Opaque `fixed` mobile bar (`bg-background`, `border-white/5`); desktop count left, orange CTA right. Validation `text-red-400`; disabled CTA via opacity.
+
+**Loading:** Primary ring spinner (session, players, and game when `gameId` present).
+
+---
+
 ## Mapping from legacy UI
 
 | Legacy | New |
@@ -152,7 +200,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 Keep existing DaisyUI patterns until a dedicated restyle:
 
 - **Find Encounters** (`EncounterHistoryComponent`, `/encounter-history`) — form and results table still legacy; pills only share dark `ScoreBreakdownPills`
-- Admin dashboard, game planner, game day, score keeper
+- Score keeper, manage players
 - Modals, password gates, `ActionCard`, score keeper inputs
 - History charts (`RankingsHistoryComponent`, Recharts), ranking history page chrome
 - Login page styling
