@@ -49,13 +49,22 @@ model SquadAdmin {
 
 ## Data migration
 
-One-time backfill for the existing single-squad data:
-1. Push the new tables/columns.
-2. Create one `Squad` row for the existing data.
-3. Backfill `squadId` on every existing `Player`, `Encounter`, `Game` row to that squad's id.
-4. Audit existing players for a missing or duplicate email within that squad (today there's no email uniqueness or required-ness at all) and resolve any collisions. Any player with no email is grandfathered into the roster/history as-is but can't log in until an email is added.
-5. Make `squadId` required, make `Player.email` required, and add the `@@unique([squadId, email])` constraint.
-6. Convert today's `ALLOWED_ADMIN_EMAILS` list into `SquadAdmin` rows for that default squad. The env var itself stays in place — see below.
+This is a **staged migration**, not a single script run once. Two things force that: `db push` can't add a `NOT NULL` column and backfill it in the same shot against a populated table, and the email audit below is a data-quality checkpoint that depends on what's actually in the data — it can block and needs a human decision, so it can't be folded into an unattended run.
+
+**Stage 0 — Rehearsal.** Run every later stage against a scratch copy of a real production data dump first, not production itself. Confirms row counts and surfaces real email-audit findings (below) before anything touches the live database.
+
+**Stage 1 — Expand** (additive only; safe to run while the current single-squad app keeps running, since old code doesn't know these columns exist):
+1. Push the new `Squad`/`SquadAdmin` tables.
+2. Add `squadId` to `Player`, `Encounter`, and `Game` as **nullable**.
+3. Create one `Squad` row for the existing data.
+4. Backfill `squadId` on every existing `Player`, `Encounter`, `Game` row to that squad's id.
+5. Convert today's `ALLOWED_ADMIN_EMAILS` list into `SquadAdmin` rows for that default squad. The env var itself stays in place — see Auth & access model below.
+
+**Stage 2 — Data-quality gate.** Audit existing players for a missing or duplicate email within that squad (today there's no email uniqueness or required-ness at all). Resolve any collisions and fill in any missing email before continuing — a player with no email stays in the roster/history but can't log in until one is set. This stage blocks: it doesn't proceed until the audit is clean.
+
+**Stage 3 — Contract** (only once Stage 2 is clean; this is the hard-to-reverse step, so it goes last): make `squadId` required on `Player`/`Encounter`/`Game`, make `Player.email` required, and add the `@@unique([squadId, email])` constraint.
+
+**Stage 4 — Cutover.** Deploy the squad-aware application code (routing, auth, data-access layer) once Stage 3's constraints are in place.
 
 ## Auth & access model
 
