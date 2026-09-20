@@ -12,16 +12,16 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **Desktop layout (md+):** three-column grid — logo (`h-16`) seated in a solid black `h-20` band (left), centered **Rankings** / **Encounters** / **History**, right zone **Live** + Sign In or avatar.
 
-**Mobile:** hamburger left, centered logo (`h-12`) in a `h-16` band, auth (+ live dot) on the right; full-screen panel matching the black bar.
+**Mobile:** hamburger left, centered logo (`h-12`) in a `h-16` band, **LIVE** chip + avatar on the right when games are in progress. LIVE chip matches the game viewer pill (ping dot, red border); one live game links straight to `/game-viewer`, multiple games open a dropdown (same items as desktop Live). No chip when nothing is live. Full-screen menu panel matches the black bar (Live section remains as backup).
 
 **Behavior:**
 
 - Encounters → scrollable player list → `/player/{id}/encounters`
 - History → Ranking History, Encounter History
 - Live → game viewer links with progress (hidden on desktop when no live games)
-- Session: Management, Admin Dashboard, Sign out
+- Session: avatar menu → Profile, Matches (USER), Admin Dashboard (ADMIN), Sign out
 
-**Visual:** orange `border-b-2 border-primary` underline on active top-level links; dark dropdown surfaces (`surface-container`); no emerald pills or light menus.
+**Visual:** orange `border-b-2 border-primary` underline on active top-level links; dark dropdown surfaces (`surface-container`); no emerald pills or light menus. **Avatar menu:** `w-56`, `mt-3` below the header; icon + label rows (`min-h-[44px]`); divider before **Sign Out** (`text-red-400`).
 
 ---
 
@@ -31,7 +31,7 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **Purpose:** Page footer with club wordmark and copyright.
 
-**Content:** Dutch Lankan Shuttle Masters italic wordmark (desktop only); copyright year; links to `/`, `/encounter-history`, `/player-ranking-history`. **Mobile:** `py-6`, copyright `text-xs`, links in one `flex-nowrap` row (`text-xs`, `gap-4`). **Desktop:** wordmark + copyright left, links right (`py-12`).
+**Content:** Minimal — Dutch Lankan Shuttle Masters italic wordmark (`md+` only) and copyright line only (no nav links).
 
 **Used in:** `src/components/layout/Layout.tsx`
 
@@ -65,7 +65,19 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **Variants:** `podiumGold` | `podiumSilver` | `podiumBronze` | `podiumDark` | `default` from `playerRank`.
 
-**Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name + subtitle | `TrendIndicator`; Row 2: Last 5 / Win rate / Last day / Points with `flex-col gap-0.5` captions (no divider). `LastGameDayNet` sits under the Last day caption between Win rate and Points. Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
+**Behavior:** The whole row is a link to `/player/{id}/encounters`.
+
+**Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name and `PeakTenure` chip inline | `TrendIndicator`; Row 2: Last 5 / Win rate / Last day / Points with `flex-col gap-0.5` captions (no divider). `LastGameDayNet` sits under the Last day caption between Win rate and Points. Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
+
+---
+
+### PeakTenure
+
+**File:** `src/components/leaderboard/PeakTenure.tsx`
+
+**Props:** `playerRank`, `highestRank`, `timeInHighestRank`, `variant` (row podium styling).
+
+**Shows:** Context-sensitive pill beside the player name on `LeaderboardRow` (same row; name truncates when tight). At peak: tenure only (`18d at peak`, `New peak`, `At peak`). Off peak: `Peak #N · Nd`. Exported `peakTenureCopy()` / `parsePeakTenureDays()` for tests.
 
 ---
 
@@ -129,7 +141,129 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Shared:** `ScoreBreakdownPills` (dark chips on `surface-container-high`; muted `elo` caption under headline points on encounter cards; tier/consol chips when non-zero).
 
-**Loading/error:** Same primary ring spinner and red banner as `RankingsComponent`.
+**Loading/error:** `PageLoader` (`compact`) and red banner as `RankingsComponent`.
+
+---
+
+### Ranking history
+
+**Page:** `src/pages/player-ranking-history.tsx` → `RankingHistoryView.tsx`
+
+**Purpose:** Player-first view of standing (rank) over time — one focus player at a time instead of an all-player line chart.
+
+**Composes:** Dark page shell (`max-w-7xl`, `px-4 sm:px-8`, `font-headline` title + orange rule). `PlayerPicker` — Headless UI `Listbox` (full-width on mobile and desktop), rank-sorted options with color dot from `colorHex`, selection synced to `?player=`; **Match history** link beside the Player label → `/player/{id}/encounters`. `RankTrajectoryChart` (Recharts): **mobile** single selected line (~220px); **md+** other players at ~12% opacity; reversed Y-axis; tap/click date for dark tooltip (rank + day-over-day delta). `RankChangeList` — newest-first game days with `#old → #new` and `TrendIndicator`; row tap highlights chart date.
+
+**Data:** `useRankingHistory` + `usePlayers`; helpers in `src/utils/rankHistory.ts`. Default player: `?player=` if valid, else signed-in `session.user.playerId`, else current #1.
+
+**Loading/error:** `PageLoader` (`compact`) and red banner as `RankingsComponent`.
+
+**Legacy:** `RankingsHistoryComponent.client.tsx` re-exports `RankingHistoryView` for compatibility.
+
+---
+
+### Admin Dashboard
+
+**Files:** `src/pages/admin/dashboard.tsx`, `src/components/dashboard/Header.tsx`
+
+**Purpose:** Admin home — quick links, games list, Telegram scheduler test.
+
+**Layout:** `max-w-7xl mx-auto px-4 sm:px-8`. **Mobile-first:** Games card first, then Quick Actions, then Telegram; **desktop (`md+`):** two columns — Actions + Telegram left, Games right.
+
+**Header:** `DashboardHeader` — `font-headline` title, orange accent rule, date subtitle (no avatar/logout; session is in nav).
+
+**Cards:** `rounded-xl bg-surface-container/90 border border-gray-600`. Primary CTA = filled `bg-primary`; secondary/telegram = outline `border-white/10`. Game rows are `Link`s with dark status chips (`IN_PROGRESS` orange, `COMPLETED` muted, `DRAFT` outline).
+
+**Loading:** `PageLoader` (`compact`).
+
+---
+
+### Game Day
+
+**Files:** `src/pages/admin/game-day.tsx`, `src/components/game-day/GroupCard.tsx`, `src/components/game-day/NavigationButtons.tsx`
+
+**Purpose:** Review skill-tier groups after planner selection; navigate back to planner or forward to score keeper.
+
+**Layout:** `max-w-7xl mx-auto px-4 sm:px-8`. **Mobile-first:** one group card per row; **`md+`:** 2 columns, **`xl+`:** up to 4. Title matches dashboard pattern (`font-headline`, orange accent rule; no subtitle).
+
+**GroupCard:** `rounded-xl bg-surface-container/90 border border-gray-600`; player name + rank; points as `font-numeric` (`rankScore`).
+
+**NavigationButtons:** outline Back, filled `bg-primary` Continue; stacked full-width on mobile (Back then Continue), row `justify-between` on `md+`.
+
+**Loading / not-found:** `PageLoader` (`compact`); not-found uses dark tokens (no DaisyUI).
+
+---
+
+### Game Planner
+
+**Files:** `src/pages/admin/game-planner.tsx`, `src/components/game-planner/PlayerCard.tsx`, `src/components/game-planner/ActionPanel.tsx`
+
+**Purpose:** Select 4–20 players (valid group sizes), create or update a draft game, route to game-day.
+
+**Layout:** `max-w-7xl mx-auto px-4 sm:px-8`, `pb-32 md:pb-8` for sticky mobile bar. Title + orange rule; subtitle only on create (“maximum 20”). Player grid `1` / `md:2` / `lg:3` columns (no outer panel).
+
+**PlayerCard:** `button` toggle; unselected solid `bg-surface-container`; selected `border-primary bg-surface-container-high`; orange check circle.
+
+**ActionPanel:** Opaque `fixed` mobile bar (`bg-background`, `border-white/5`); desktop count left, orange CTA right. Validation `text-red-400`; disabled CTA via opacity.
+
+**Loading:** `PageLoader` (`compact`) (session, players, and game when `gameId` present).
+
+---
+
+### Score Keeper
+
+**Files:** `src/pages/admin/score-keeper.tsx`, `src/components/score-keeper/ProcessScoresModal.tsx`
+
+**Purpose:** Record round-robin match scores per group; start game, submit, process rankings, or cancel.
+
+**Layout:** `max-w-7xl mx-auto px-4 sm:px-8`, `pb-8`. Title + orange rule (no subtitle). Header gear (`bg-primary`, shadow) opens Game Management; ring when active; group pills hidden on management. Group pills (`bg-primary` active) on score views. Solid player chips and match cards; win/loss via tinted team cells (same **Last 5** colors as viewer).
+
+**Management:** progress + Start / Submit / Cancel on solid surface cards.
+
+**Dialogs:** Fixed overlay + `surface-container-high` panel; dark inputs; outline + primary (destructive red for cancel). `ProcessScoresModal` matches same pattern.
+
+**Loading:** `PageLoader` (`compact`) (session, players, game).
+
+**Match rows:** Shared `MatchScoreRow` + `MatchResultLegend` (`src/components/matches/`). Tinted team cells, `showResultChips={false}`, `text-sm` names; legend above the match list on each group view. Score keeper passes `interactive` + `onActivate` when the game is in progress (full `p-3` rows, not `compact`).
+
+---
+
+### Game Viewer
+
+**Files:** `src/pages/game-viewer.tsx`, `src/components/matches/MatchScoreRow.tsx`
+
+**Purpose:** Public read-only live view of an in-progress game (`/game-viewer?gameId=…`). Updates via SSE (`/api/games/{id}/live`); no score entry.
+
+**Layout:** Same shell as admin pages (`max-w-7xl`). **Mobile-compact:** tighter top margins, smaller title (`text-2xl` → `sm:text-4xl`), reduced progress/legend/group gaps and padding; `sm+` matches admin spacing (`pb-8`, etc.). Centered spectator header: **Game #{id}** with inline red **LIVE** pill (`GameLoader` `sm` `motion="rally"` smash swing + label) plus orange rule (no emoji or “live updates” chip). Progress card on `surface-container` with `font-numeric` count and orange bar (4 players → 3 matches per group, 5 → 5).
+
+**Groups:** Solid bordered cards; group title uses `font-label` `text-sm` uppercase bold (slightly larger than the match progress label), with a primary dot. Matches use `MatchScoreRow` with `showResultChips={false}`, `compact`, and `text-sm` names—win/loss uses `matchResultColors.ts` tints; shared `MatchResultLegend` between the progress card and group list. No `interactive` (display-only).
+
+**Loading / not found:** `PageLoader` (`tall`); dark copy + outline **Go Home** (no DaisyUI `btn`).
+
+---
+
+### User Profile
+
+**Files:** `src/pages/user/profile.tsx`, `src/hooks/useRequireUser.ts`, `src/components/leaderboard/TrendIndicator.tsx`
+
+**Purpose:** Signed-in players (`USER`) see identity and ranking snapshot at `/user/profile`.
+
+**Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name/email, outline sign-out; four-column stats (Rank, Change, Score, Highest).
+
+**Loading:** `PageLoader` (`tall`) (session + rankings).
+
+---
+
+### User Matches
+
+**Files:** `src/pages/user/matches.tsx`, `src/hooks/useRequireUser.ts`, `src/components/matches/MatchScoreRow.tsx`, `src/components/matches/MatchResultLegend.tsx`
+
+**Purpose:** Enter scores for the player’s own unplayed matches in live games (`/user/matches`).
+
+**Layout:** **Your matches** title + orange rule; `MatchResultLegend`; `max-w-3xl` game cards (live pulse, **Game #{id}**, date). `MatchScoreRow` (`showResultChips={false}`); `interactive` only when unscored. Score modal matches Score Keeper pattern.
+
+**Redirect:** `/user/management` → `/user/profile`.
+
+**Loading:** `PageLoader` (`tall`) (session, players, my-matches).
 
 ---
 
@@ -144,6 +278,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 | Highest rank column | Player subtitle |
 | DaisyUI table/stats on player encounters | `StatCard` + `EncounterCard` |
 | `PlayerEncounterComponent` mobile table | `EncounterCard` mobile scoreboard layout |
+| Multi-player Recharts line chart on ranking history | `RankingHistoryView` player picker + single-line chart + change list |
 
 ---
 
@@ -152,10 +287,10 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 Keep existing DaisyUI patterns until a dedicated restyle:
 
 - **Find Encounters** (`EncounterHistoryComponent`, `/encounter-history`) — form and results table still legacy; pills only share dark `ScoreBreakdownPills`
-- Admin dashboard, game planner, game day, score keeper
-- Modals, password gates, `ActionCard`, score keeper inputs
-- History charts (`RankingsHistoryComponent`, Recharts), ranking history page chrome
+- Manage players
+- Modals and password gates on other admin routes (score keeper and user management score entry restyled; logic unchanged)
+- `ActionCard`
 - Login page styling
-- `LoadingSpinner` on admin routes (may still use DaisyUI spinner internally)
+- `LoadingSpinner` (login) and `PageLoader` / `GameLoader` elsewhere — see `GameLoader.tsx` and `design.md` Loading
 
 When restyling those pages later, reuse tokens from `design.md` and prefer new primitives over new one-off styles.

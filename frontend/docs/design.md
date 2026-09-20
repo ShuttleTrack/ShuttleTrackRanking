@@ -2,7 +2,7 @@
 
 Dark, performance-oriented leaderboard aesthetic derived from the Stitch player-rankings mock. **Brand:** Dutch Lankan Shuttle Masters. Do not use placeholder names from the mock (e.g. COURTCLAN).
 
-**Footer:** full club name as italic wordmark on **`md+` only**; mobile shows copyright + compact link row (no duplicate wordmark).
+**Footer:** full club name as italic wordmark on **`md+` only**; mobile shows copyright only (no duplicate wordmark, no link row).
 
 **Page background:** `dutch-lankan-shuttle-masters-logo-gray.png` (transparent gray PNG — near-black pixels knocked out, foreground luminance boosted via `min(255, int(lum * 1.35 + 40))` for light-gray-on-dark legibility) rendered `fixed`, centered, `w-[min(78vw,44rem)]`, `opacity-[0.13]`, `z-0`, `pointer-events-none`. Decorative only — all content is `z-10` above it.
 
@@ -84,8 +84,19 @@ Last day shows net rank score on the player’s most recent played date.
 - **Points** = real `rankScore` (typically one decimal). Do not inflate to mock-style large integers.
 - **Last day** = sum of signed encounter scores on the player’s latest **played** date (`scoreBreakdown.finalScore` when present, else signed `calculatedScore`); `—` if none. Matches player history “Net Score” for that date.
 - **Win rate** = percentage from encounter history (`XX.X%` or consistent decimal style).
-- **Subtitle** under player name = highest rank + time in highest rank (we have no country field).
+- **Peak tenure chip** beside player name on the same row (context-sensitive): at personal best → compact tenure (`18d at peak`, `New peak`, or `At peak`); off peak → `Peak #N · Nd`. Parses days from the API `timeInHighestRank` string; full meaning in the chip’s `aria-label`.
 - **Last 5** = five vertical ticks on every row: win `rgb(238 138 51)`, loss `rgb(185 28 28)`, empty `rgb(255 255 255 / 0.45)`; each bar has a `1px` dark ring (`rgb(0 0 0 / 0.45)`) for contrast on podium gradients.
+
+## Loading
+
+Use the shared racket loader from `src/components/common/GameLoader.tsx` — not ad-hoc spinners or DaisyUI `loading-spinner`.
+
+| Piece | Usage |
+|-------|--------|
+| `PageLoader` | Full-page fetches: `variant` `compact` (40vh), `tall` (50vh), or `screen` (login / admin players) |
+| `GameLoader` | Inline: `sm` (nav, buttons), `md` (modals), `lg` (inside `PageLoader`) |
+
+Large loaders show a spinning racket (`motion="spin"`), orbiting shuttlecock, dashed court ring, and **Warming up…** (`font-label`, uppercase). Color via `text-primary` or `text-black` on orange buttons. For **live / in-play** badges (game viewer title chip), use `motion="rally"`: a short back-and-forth smash at the grip pivot — not a full spin. `prefers-reduced-motion` freezes animations in `globals.css`. Pass a specific `label` for `aria-label`; use `decorative` inside buttons that already show loading text.
 
 ## Do
 

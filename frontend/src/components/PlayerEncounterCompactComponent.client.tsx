@@ -14,6 +14,7 @@ import StatCard from '@/components/encounters/StatCard';
 import EncounterCard from '@/components/encounters/EncounterCard';
 import EncounterDesktopHeader from '@/components/encounters/EncounterDesktopHeader';
 import type { FormResult } from '@/utils/playerForm';
+import { PageLoader } from '@/components/common/GameLoader';
 
 interface PlayerEncountersComponentProps {
   playerId: string | string[] | undefined;
@@ -63,15 +64,7 @@ const PlayerEncountersCompactComponent: React.FC<PlayerEncountersComponentProps>
   }, [encounters]);
 
   if (encountersLoading || playersLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-[40vh]">
-        <div
-          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
-          role="status"
-          aria-label="Loading player history"
-        />
-      </div>
-    );
+    return <PageLoader variant="compact" label="Loading player history" />;
   }
 
   if (error) {

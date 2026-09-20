@@ -1,5 +1,3 @@
-export const LoadingSpinner = () => (
-  <div className="flex justify-center items-center min-h-screen">
-    <div className="loading loading-spinner loading-lg"></div>
-  </div>
-); 
+import { PageLoader } from '@/components/common/GameLoader';
+
+export const LoadingSpinner = () => <PageLoader variant="screen" label="Loading" />;

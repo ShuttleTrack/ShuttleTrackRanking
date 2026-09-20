@@ -1,6 +1,14 @@
 import { Fragment } from 'react';
 import { Disclosure, Menu, Transition } from '@headlessui/react';
-import { Bars3Icon, XMarkIcon, ChevronDownIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowRightOnRectangleIcon,
+  Bars3Icon,
+  ChevronDownIcon,
+  PencilSquareIcon,
+  Squares2X2Icon,
+  UserCircleIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { capitalizeFirstLetter } from '@/utils/string';
@@ -8,6 +16,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { usePlayers } from '@/hooks/usePlayers';
 import Image from 'next/image';
 import { useLiveGames } from '@/hooks/useLiveGames';
+import { GameLoader } from '@/components/common/GameLoader';
 
 const BUILD_IDENTIFIER = process.env.NEXT_PUBLIC_BUILD_IDENTIFIER;
 
@@ -27,6 +36,21 @@ const menuItemClass = (active: boolean) =>
   classNames(
     'block px-4 py-2 text-sm text-on-surface transition-colors',
     active ? 'bg-white/10' : 'hover:bg-white/5'
+  );
+
+const accountMenuPanelClass =
+  'absolute right-0 z-[60] mt-3 w-56 origin-top-right rounded-xl border border-white/5 bg-surface-container p-1.5 shadow-xl focus:outline-none';
+
+const accountMenuRowClass = (active: boolean) =>
+  classNames(
+    'flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 font-headline text-sm text-on-surface transition-colors',
+    active ? 'bg-white/10' : 'hover:bg-white/5'
+  );
+
+const accountMenuSignOutClass = (active: boolean) =>
+  classNames(
+    'flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 font-headline text-sm text-red-400 transition-colors',
+    active ? 'bg-red-950/30' : 'hover:bg-red-950/20'
   );
 
 const mobileItemClass = (active: boolean) =>
@@ -58,7 +82,9 @@ const NavigationComponent = () => {
   const renderPlayersList = () => {
     if (isLoading) {
       return (
-        <div className="px-4 py-3 text-sm text-on-surface-variant">Loading players…</div>
+        <div className="px-4 py-3 flex justify-center">
+          <GameLoader size="sm" label="Loading players" caption={false} />
+        </div>
       );
     }
 
@@ -82,7 +108,7 @@ const NavigationComponent = () => {
     if (liveGamesLoading) {
       return (
         <div className="px-4 py-3 flex justify-center">
-          <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <GameLoader size="sm" label="Loading live games" caption={false} />
         </div>
       );
     }
@@ -120,6 +146,57 @@ const NavigationComponent = () => {
     ));
   };
 
+  const liveChipClass =
+    'inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 font-label text-xs uppercase tracking-wider text-red-400';
+
+  const livePingDot = (
+    <span className="relative flex h-2 w-2 shrink-0">
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+      <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+    </span>
+  );
+
+  const renderMobileLiveControl = () => {
+    if (liveGamesLoading || liveGames.length === 0) return null;
+
+    if (liveGames.length === 1) {
+      const game = liveGames[0];
+      return (
+        <Link
+          href={`/game-viewer?gameId=${game.id}`}
+          className={liveChipClass}
+          aria-label={`Watch live game ${game.id.slice(-4)}`}
+        >
+          {livePingDot}
+          Live
+        </Link>
+      );
+    }
+
+    return (
+      <Menu as="div" className="relative">
+        <Menu.Button className={classNames(liveChipClass, 'gap-1')}>
+          {livePingDot}
+          Live
+          <ChevronDownIcon className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+        </Menu.Button>
+        <Transition
+          as={Fragment}
+          enter="transition ease-out duration-100"
+          enterFrom="transform opacity-0 scale-95"
+          enterTo="transform opacity-100 scale-100"
+          leave="transition ease-in duration-75"
+          leaveFrom="transform opacity-100 scale-100"
+          leaveTo="transform opacity-0 scale-95"
+        >
+          <Menu.Items className={classNames(menuPanelClass, 'right-0 w-64 origin-top-right')}>
+            {renderLiveGameItems()}
+          </Menu.Items>
+        </Transition>
+      </Menu>
+    );
+  };
+
   const logoLink = (
     <Link href="/" className="flex-shrink-0 inline-flex items-stretch self-stretch">
       <Image
@@ -136,6 +213,10 @@ const NavigationComponent = () => {
 
   const userMenu = () => {
     if (session) {
+      const showUserLinks = session.user.accessLevel?.includes('USER');
+      const showAdmin = session.user.accessLevel?.includes('ADMIN');
+      const showAccountLinks = showUserLinks || showAdmin;
+
       return (
         <Menu as="div" className="relative">
           <Menu.Button
@@ -163,32 +244,57 @@ const NavigationComponent = () => {
             leaveFrom="transform opacity-100 scale-100"
             leaveTo="transform opacity-0 scale-95"
           >
-            <Menu.Items className={classNames(menuPanelClass, 'w-48 right-0 origin-top-right')}>
-              {session.user.accessLevel?.includes('USER') && (
-                <Menu.Item>
-                  {({ active }) => (
-                    <Link href="/user/management" className={menuItemClass(active)}>
-                      Management
-                    </Link>
-                  )}
-                </Menu.Item>
+            <Menu.Items className={accountMenuPanelClass}>
+              {showUserLinks && (
+                <>
+                  <Menu.Item>
+                    {({ active }) => (
+                      <Link href="/user/profile" className={accountMenuRowClass(active)}>
+                        <UserCircleIcon
+                          className="h-5 w-5 shrink-0 text-on-surface-variant"
+                          aria-hidden
+                        />
+                        Profile
+                      </Link>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }) => (
+                      <Link href="/user/matches" className={accountMenuRowClass(active)}>
+                        <PencilSquareIcon
+                          className="h-5 w-5 shrink-0 text-on-surface-variant"
+                          aria-hidden
+                        />
+                        Matches
+                      </Link>
+                    )}
+                  </Menu.Item>
+                </>
               )}
-              {session.user.accessLevel?.includes('ADMIN') && (
+              {showAdmin && (
                 <Menu.Item>
                   {({ active }) => (
-                    <Link href="/admin/dashboard" className={menuItemClass(active)}>
+                    <Link href="/admin/dashboard" className={accountMenuRowClass(active)}>
+                      <Squares2X2Icon
+                        className="h-5 w-5 shrink-0 text-on-surface-variant"
+                        aria-hidden
+                      />
                       Admin Dashboard
                     </Link>
                   )}
                 </Menu.Item>
+              )}
+              {showAccountLinks && (
+                <div className="my-1 border-t border-white/10" role="separator" />
               )}
               <Menu.Item>
                 {({ active }) => (
                   <button
                     type="button"
                     onClick={() => signOut()}
-                    className={classNames(menuItemClass(active), 'w-full text-left')}
+                    className={accountMenuSignOutClass(active)}
                   >
+                    <ArrowRightOnRectangleIcon className="h-5 w-5 shrink-0" aria-hidden />
                     Sign Out
                   </button>
                 )}
@@ -227,12 +333,7 @@ const NavigationComponent = () => {
               </div>
               <div className="flex justify-center items-stretch">{logoLink}</div>
               <div className="flex justify-end items-center gap-2">
-                {liveGames.length > 0 && (
-                  <span
-                    className="animate-pulse bg-red-500 w-2 h-2 rounded-full"
-                    aria-hidden
-                  />
-                )}
+                {renderMobileLiveControl()}
                 {userMenu()}
               </div>
             </div>
@@ -443,7 +544,7 @@ const NavigationComponent = () => {
                     <Disclosure.Panel className="pl-3 space-y-2 pb-2">
                       {liveGamesLoading ? (
                         <div className="px-3 py-2 flex justify-center">
-                          <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                          <GameLoader size="sm" label="Loading live games" caption={false} />
                         </div>
                       ) : liveGames.length > 0 ? (
                         liveGames.map((game) => (
@@ -493,13 +594,22 @@ const NavigationComponent = () => {
                     {session.user?.name}
                   </p>
                   {session.user.accessLevel?.includes('USER') && (
-                    <Link
-                      href="/user/management"
-                      className={mobileItemClass(false)}
-                      onClick={() => close()}
-                    >
-                      Management
-                    </Link>
+                    <>
+                      <Link
+                        href="/user/profile"
+                        className={mobileItemClass(false)}
+                        onClick={() => close()}
+                      >
+                        Profile
+                      </Link>
+                      <Link
+                        href="/user/matches"
+                        className={mobileItemClass(false)}
+                        onClick={() => close()}
+                      >
+                        Matches
+                      </Link>
+                    </>
                   )}
                   {session.user.accessLevel?.includes('ADMIN') && (
                     <Link

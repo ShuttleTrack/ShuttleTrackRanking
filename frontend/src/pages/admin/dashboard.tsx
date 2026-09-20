@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import type { Game } from '@prisma/client';
 import type { MatchScore } from '@/types/game';
+import { GameLoader, PageLoader } from '@/components/common/GameLoader';
 
 type TelegramTestGroup = 'wednesday' | 'friday';
 
@@ -21,6 +22,56 @@ const TELEGRAM_TEST_GROUPS: { group: TelegramTestGroup; label: string }[] = [
   { group: 'wednesday', label: 'Test Wednesday group' },
   { group: 'friday', label: 'Test Friday group' },
 ];
+
+const cardClass =
+  'rounded-xl bg-surface-container/90 border border-gray-600 p-4 sm:p-6';
+
+const sectionTitleClass = 'font-headline text-base sm:text-lg font-semibold text-on-surface mb-4';
+
+const outlineButtonClass =
+  'flex w-full min-h-[44px] items-center justify-start gap-2 rounded-xl border border-white/10 bg-surface-container-high/50 px-4 py-3 font-medium text-on-surface transition-colors hover:border-primary/40 hover:bg-surface-container-high disabled:opacity-50';
+
+const getStatusBadgeClasses = (status: string) => {
+  switch (status) {
+    case 'IN_PROGRESS':
+      return 'bg-primary/20 text-primary border border-primary/40';
+    case 'COMPLETED':
+      return 'bg-surface-container-high text-on-surface-variant border border-gray-600';
+    default:
+      return 'bg-transparent text-on-surface-variant border border-outline-variant';
+  }
+};
+
+const getGameLink = (game: Game) => {
+  switch (game.status) {
+    case 'IN_PROGRESS':
+      return `/admin/score-keeper?gameId=${game.id}`;
+    case 'COMPLETED':
+      return `/admin/game-day?gameId=${game.id}`;
+    default:
+      return `/admin/game-day?gameId=${game.id}`;
+  }
+};
+
+const getGameStats = (game: Game) => {
+  const scores = game.scores as unknown as Record<string, Record<string, MatchScore>>;
+  const groups = game.groups as Record<string, number[]>;
+
+  let totalGames = 0;
+  let completedGames = 0;
+
+  Object.entries(groups).forEach(([groupName]) => {
+    const groupScores = scores[groupName] || {};
+    Object.values(groupScores).forEach((score) => {
+      totalGames++;
+      if (score.team1Score > 0 || score.team2Score > 0) {
+        completedGames++;
+      }
+    });
+  });
+
+  return { totalGames, completedGames };
+};
 
 const DashboardPage = () => {
   const router = useRouter();
@@ -56,7 +107,6 @@ const DashboardPage = () => {
     }
   };
 
-  // Add authentication check
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
@@ -64,191 +114,144 @@ const DashboardPage = () => {
   }, [status, router]);
 
   if (status === 'loading' || gamesLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="loading loading-spinner loading-lg"></div>
-      </div>
-    );
+    return <PageLoader variant="compact" label="Loading dashboard" />;
   }
 
   if (!session?.user?.isAdmin) return null;
 
-  // Group games by status
-  const gamesByStatus = Array.isArray(games) 
-    ? games.reduce((acc, game) => {
-        const status = game.status || 'DRAFT';
-        if (!acc[status]) acc[status] = [];
-        acc[status].push(game);
-        return acc;
-      }, {} as Record<string, typeof games>)
-    : {};
-
-  const getStatusBadgeClasses = (status: string) => {
-    switch (status) {
-      case 'IN_PROGRESS':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'COMPLETED':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-    }
-  };
-
-  const getGameLink = (game: Game) => {
-    switch (game.status) {
-      case 'IN_PROGRESS':
-        return `/admin/score-keeper?gameId=${game.id}`;
-      case 'COMPLETED':
-        return `/admin/game-day?gameId=${game.id}`; // Could also create a summary view
-      default: // DRAFT
-        return `/admin/game-day?gameId=${game.id}`;
-    }
-  };
-
-  const getGameStats = (game: Game) => {
-    const scores = (game.scores as unknown) as Record<string, Record<string, MatchScore>>;
-    const groups = game.groups as Record<string, number[]>;
-    
-    let totalGames = 0;
-    let completedGames = 0;
-
-    Object.entries(groups).forEach(([groupName]) => {
-      const groupScores = scores[groupName] || {};
-      Object.values(groupScores).forEach(score => {
-        totalGames++;
-        if (score.team1Score > 0 || score.team2Score > 0) {
-          completedGames++;
-        }
-      });
-    });
-
-    return { totalGames, completedGames };
-  };
-
   return (
-    <div className="min-h-screen bg-base-100">
-      <div className="container mx-auto px-4 py-8">
+    <div className="pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8">
         <DashboardHeader />
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
-          {/* Left Column - Actions */}
-          <div className="space-y-6">
-            <div className="bg-base-100 rounded-lg shadow-lg p-6 border border-base-200">
-              <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-              <div className="space-y-4">
-                <Link
-                  href="/admin/game-planner"
-                  className="btn btn-primary w-full justify-start"
-                >
-                  <PlusIcon className="h-5 w-5 mr-2" />
-                  Create New Game
-                </Link>
-                <Link
-                  href="/admin/players"
-                  className="btn btn-secondary w-full justify-start"
-                >
-                  <UserGroupIcon className="h-5 w-5 mr-2" />
-                  Manage Players
-                </Link>
-              </div>
-            </div>
 
-            <div className="bg-base-100 rounded-lg shadow-lg p-6 border border-base-200">
-              <h2 className="text-xl font-semibold mb-4">Telegram Scheduler Test</h2>
-              <p className="text-sm text-base-content/60 mb-4">
-                Sends a one-off test message to each configured group, so the bot token/chat id
-                pairs can be checked without waiting for the daily 17:00 poll.
-              </p>
+        <div className="flex flex-col gap-6 md:grid md:grid-cols-2 md:gap-8">
+          {/* Games — first on mobile */}
+          <div className={`${cardClass} order-1 md:order-2 md:col-start-2`}>
+            <h2 className={sectionTitleClass}>Games</h2>
+            {games.length > 0 ? (
               <div className="space-y-3">
-                {TELEGRAM_TEST_GROUPS.map(({ group, label }) => {
-                  const state = telegramTestState[group];
-                  return (
-                    <div key={group}>
-                      <button
-                        type="button"
-                        className="btn btn-outline w-full justify-start"
-                        disabled={state.loading}
-                        onClick={() => handleTelegramTest(group)}
-                      >
-                        {state.loading ? (
-                          <span className="loading loading-spinner loading-sm mr-2"></span>
-                        ) : (
-                          <PaperAirplaneIcon className="h-5 w-5 mr-2" />
-                        )}
-                        {label}
-                      </button>
-                      {state.message && (
-                        <p className={`text-sm mt-1 ${state.isError ? 'text-error' : 'text-success'}`}>
-                          {state.message}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+                {games.map((game) => {
+                  const gameStatus = game.status || 'DRAFT';
+                  const progressStats =
+                    gameStatus === 'IN_PROGRESS' ? getGameStats(game) : null;
+                  const progress =
+                    progressStats && progressStats.totalGames > 0
+                      ? Math.round((progressStats.completedGames / progressStats.totalGames) * 100)
+                      : 0;
 
-          {/* Right Column - Games List */}
-          <div className="space-y-6">
-            <div className="bg-base-100 rounded-lg shadow-lg p-6 border border-base-200">
-              <h2 className="text-xl font-semibold mb-4">Games</h2>
-              {gamesLoading ? (
-                <div className="flex justify-center py-8">
-                  <div className="loading loading-spinner loading-lg"></div>
-                </div>
-              ) : games.length > 0 ? (
-                <div className="space-y-4">
-                  {games.map((game) => (
-                    <div
+                  return (
+                    <Link
                       key={game.id}
-                      className="border border-base-200 rounded-lg p-4 hover:bg-base-200 transition-colors cursor-pointer"
-                      onClick={() => router.push(getGameLink(game))}
+                      href={getGameLink(game)}
+                      className="block rounded-xl border border-gray-600 p-4 transition-colors hover:border-primary/40 hover:bg-surface-container-high/50"
                     >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="font-medium">Game #{game.id.slice(-4)}</h3>
-                          <p className="text-sm text-base-content/60">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <h3 className="font-headline font-semibold text-on-surface">
+                            Game #{game.id.slice(-4)}
+                          </h3>
+                          <p className="text-sm text-on-surface-variant mt-0.5">
                             {format(new Date(game.createdAt), 'PPp')}
                           </p>
                         </div>
-                        <div className="flex items-center gap-3">
-                          {game.status === 'IN_PROGRESS' && (
-                            <span className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                        <div className="flex flex-col gap-2 sm:items-end">
+                          <div className="flex items-center gap-2">
+                            {gameStatus === 'IN_PROGRESS' && (
+                              <span className="relative flex h-3 w-3" aria-hidden>
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary" />
+                              </span>
+                            )}
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-label font-bold uppercase tracking-wide ${getStatusBadgeClasses(gameStatus)}`}
+                            >
+                              {gameStatus.replace('_', ' ')}
                             </span>
-                          )}
-                          <div className="flex flex-col items-end gap-2">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClasses(game.status)}`}>
-                              {(game.status || 'DRAFT').replace('_', ' ')}
-                            </span>
-                            {game.status === 'IN_PROGRESS' && (() => {
-                              const { completedGames, totalGames } = getGameStats(game);
-                              const progress = Math.round((completedGames / totalGames) * 100);
-                              return (
-                                <div className="w-32">
-                                  <div className="text-xs text-right mb-1">{completedGames}/{totalGames} completed</div>
-                                  <div className="w-full bg-base-300 rounded-full h-1.5">
-                                    <div 
-                                      className="bg-primary h-1.5 rounded-full transition-all duration-500"
-                                      style={{ width: `${progress}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            })()}
                           </div>
+                          {progressStats && progressStats.totalGames > 0 && (
+                            <div className="w-full sm:w-32">
+                              <div className="text-xs text-on-surface-variant text-right mb-1">
+                                {progressStats.completedGames}/{progressStats.totalGames} completed
+                              </div>
+                              <div className="w-full bg-surface-container-highest rounded-full h-1.5">
+                                <div
+                                  className="bg-primary h-1.5 rounded-full transition-all duration-500"
+                                  style={{ width: `${progress}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-base-content/60">
-                  No games available
-                </div>
-              )}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center py-8 text-on-surface-variant">No games available</p>
+            )}
+          </div>
+
+          {/* Quick Actions */}
+          <div className={`${cardClass} order-2 md:order-1`}>
+            <h2 className={sectionTitleClass}>Quick Actions</h2>
+            <div className="space-y-3">
+              <Link
+                href="/admin/game-planner"
+                className="flex w-full min-h-[44px] items-center justify-start gap-2 rounded-xl bg-primary px-4 py-3 font-semibold text-black transition-opacity hover:opacity-90"
+              >
+                <PlusIcon className="h-5 w-5 shrink-0" aria-hidden />
+                Create New Game
+              </Link>
+              <Link href="/admin/players" className={outlineButtonClass}>
+                <UserGroupIcon className="h-5 w-5 shrink-0" aria-hidden />
+                Manage Players
+              </Link>
+            </div>
+          </div>
+
+          {/* Telegram */}
+          <div className={`${cardClass} order-3 md:order-3 md:col-start-1`}>
+            <h2 className={sectionTitleClass}>Telegram Scheduler Test</h2>
+            <p className="text-sm text-on-surface-variant mb-4">
+              Sends a one-off test message to each configured group, so the bot token/chat id pairs
+              can be checked without waiting for the daily 17:00 poll.
+            </p>
+            <div className="space-y-3">
+              {TELEGRAM_TEST_GROUPS.map(({ group, label }) => {
+                const state = telegramTestState[group];
+                return (
+                  <div key={group}>
+                    <button
+                      type="button"
+                      className={outlineButtonClass}
+                      disabled={state.loading}
+                      onClick={() => handleTelegramTest(group)}
+                    >
+                      {state.loading ? (
+                        <GameLoader
+                          size="sm"
+                          label={`Sending test to ${group}`}
+                          caption={false}
+                          decorative
+                          inline
+                          className="shrink-0"
+                        />
+                      ) : (
+                        <PaperAirplaneIcon className="h-5 w-5 shrink-0" aria-hidden />
+                      )}
+                      {label}
+                    </button>
+                    {state.message && (
+                      <p
+                        className={`text-sm mt-1.5 ${state.isError ? 'text-red-400' : 'text-primary'}`}
+                      >
+                        {state.message}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -257,4 +260,4 @@ const DashboardPage = () => {
   );
 };
 
-export default DashboardPage; 
+export default DashboardPage;

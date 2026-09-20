@@ -1,4 +1,10 @@
 import type { CSSProperties } from 'react';
+import {
+  MATCH_RESULT_BAR_RING,
+  MATCH_RESULT_EMPTY,
+  MATCH_RESULT_LOSS,
+  MATCH_RESULT_WIN,
+} from '@/constants/matchResultColors';
 import type { FormResult } from '@/utils/playerForm';
 import type { RowVariant } from './RankBadge';
 
@@ -9,17 +15,17 @@ interface FormBarsProps {
   align?: 'start' | 'center';
 }
 
-const BAR_RING: CSSProperties = { boxShadow: '0 0 0 1px rgb(0 0 0 / 0.45)' };
+const BAR_RING: CSSProperties = { boxShadow: MATCH_RESULT_BAR_RING };
 
 function barStyle(result: FormResult | null): CSSProperties {
   const ring = BAR_RING;
   if (result === 'W') {
-    return { background: 'rgb(238 138 51)', ...ring };
+    return { background: MATCH_RESULT_WIN, ...ring };
   }
   if (result === 'L') {
-    return { background: 'rgb(185 28 28)', ...ring };
+    return { background: MATCH_RESULT_LOSS, ...ring };
   }
-  return { background: 'rgb(255 255 255 / 0.45)', ...ring };
+  return { background: MATCH_RESULT_EMPTY, ...ring };
 }
 
 const FormBars = ({ results, variant: _variant, align = 'center' }: FormBarsProps) => {

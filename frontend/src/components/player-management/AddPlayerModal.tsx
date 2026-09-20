@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { GameLoader } from '@/components/common/GameLoader';
 
 interface AddPlayerModalProps {
   isOpen: boolean;
@@ -109,7 +110,7 @@ export const AddPlayerModal = ({ isOpen, onClose, onSubmit }: AddPlayerModalProp
             >
               {isSubmitting ? (
                 <>
-                  <span className="loading loading-spinner loading-sm"></span>
+                  <GameLoader size="sm" label="Adding player" caption={false} decorative inline className="text-black" />
                   Adding...
                 </>
               ) : (
