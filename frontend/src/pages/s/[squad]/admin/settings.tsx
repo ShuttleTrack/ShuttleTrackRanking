@@ -26,6 +26,11 @@ const SquadSettingsPage = () => {
   const { id: squadId } = useSquad();
   const { settings, isLoading, mutate } = useSquadSettings();
 
+  const [isPublic, setIsPublic] = useState(true);
+  const [visibilityError, setVisibilityError] = useState<string | null>(null);
+  const [isSavingVisibility, setIsSavingVisibility] = useState(false);
+  const [visibilitySaved, setVisibilitySaved] = useState(false);
+
   const [isRecurring, setIsRecurring] = useState(false);
   const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>('WEDNESDAY');
   const [startTime, setStartTime] = useState('18:00');
@@ -40,6 +45,7 @@ const SquadSettingsPage = () => {
 
   useEffect(() => {
     if (!settings) return;
+    setIsPublic(settings.isPublic);
     setIsRecurring(settings.isRecurring);
     setDayOfWeek(settings.scheduleDayOfWeek ?? 'WEDNESDAY');
     setStartTime(settings.scheduleStartTime ?? '18:00');
@@ -61,6 +67,30 @@ const SquadSettingsPage = () => {
 
   const removeSkipDate = (date: string) => {
     setSkipDates(skipDates.filter((d) => d !== date));
+  };
+
+  const handleSaveVisibility = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingVisibility(true);
+    setVisibilityError(null);
+    setVisibilitySaved(false);
+    try {
+      const response = await fetch(`/api/squads/${squadId}/visibility`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic }),
+      });
+      if (!response.ok) {
+        const body = await response.json();
+        throw new Error(body.message || 'Failed to save visibility');
+      }
+      await mutate();
+      setVisibilitySaved(true);
+    } catch (err) {
+      setVisibilityError(err instanceof Error ? err.message : 'Failed to save visibility');
+    } finally {
+      setIsSavingVisibility(false);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -126,6 +156,30 @@ const SquadSettingsPage = () => {
           </span>
         </div>
       </div>
+
+      <form onSubmit={handleSaveVisibility} className={`${cardClass} mb-6`}>
+        <h2 className={sectionTitleClass}>Visibility</h2>
+        <p className="text-sm text-on-surface-variant mb-4">
+          No behavioral difference yet - reserved for a future public squad directory. You can
+          change this any time.
+        </p>
+        <label className="flex items-center gap-3 cursor-pointer mb-4">
+          <input
+            type="checkbox"
+            className="toggle toggle-primary"
+            checked={isPublic}
+            onChange={(e) => setIsPublic(e.target.checked)}
+          />
+          <span className="text-sm font-medium text-on-surface">
+            {isPublic ? 'Public' : 'Private'}
+          </span>
+        </label>
+        {visibilityError && <p className="text-sm text-red-400 mb-4">{visibilityError}</p>}
+        {visibilitySaved && !visibilityError && <p className="text-sm text-primary mb-4">Saved.</p>}
+        <button type="submit" className={primaryBtn} disabled={isSavingVisibility}>
+          {isSavingVisibility ? 'Saving…' : 'Save visibility'}
+        </button>
+      </form>
 
       <form onSubmit={handleSave} className={cardClass}>
         <h2 className={sectionTitleClass}>Play schedule</h2>

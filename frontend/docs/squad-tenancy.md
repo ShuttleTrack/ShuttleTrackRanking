@@ -23,8 +23,9 @@ supersedes those now that the feature is built and in production.
 ## Data model
 
 - **`Squad`** (`prisma/schema.prisma`) - the tenant. `id`, `name`, `slug` (unique, used in URLs),
-  `enabled`, `maxPlayers` (nullable = unlimited), plus the recurrence-schedule fields below.
-  Frontend-owned, like `Game` - not part of the original Java backend's schema.
+  `enabled`, `maxPlayers` (nullable = unlimited), `isPublic` (default `true`, no behavioral
+  difference yet), plus the recurrence-schedule fields below. Frontend-owned, like `Game` - not
+  part of the original Java backend's schema.
 - **`SquadAdmin`** - join table (`squadId`, `email`) granting admin rights scoped to one squad.
   Keyed by email (lowercased), not a numeric user id - matches how this app already resolves
   identity (Google-verified email), no separate `User` table.
@@ -136,6 +137,15 @@ squad-scoped route can't be used to touch another squad's row by guessing an id)
   and `/s/[squad]/admin/settings`, via `useSquadSettings()` / `GET /api/squads/[squadId]`) but
   **only editable by a platform superadmin** (`PATCH /api/squads/[squadId]`, `/platform/squads`).
 
+## Squad visibility: `isPublic`
+
+Public (default `true`) vs. private, on `Squad`. **No behavioral difference yet** - reserved for
+a future public directory/dashboard that pulls together all public squads' info; nothing reads
+this field today. Unlike `enabled`/`maxPlayers`, editable by the squad's **own admins**
+(`requireSquadAdmin`, not superadmin-only - same reasoning as the schedule fields: this is the
+squad's own call, not platform governance), via `PATCH /api/squads/[squadId]/visibility` and a
+toggle on `/s/[squad]/admin/settings`.
+
 ## Squad schedule
 
 `isRecurring` + one recurrence rule per squad (day of week, start/end time, effective start/end
@@ -205,3 +215,5 @@ didn't need staging - just `prisma db push`.
    fixes in `CLAUDE.md`.
 6. [#194](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/194) - fixed several
    `/s/[squad]/...` links that #189 missed (see the routing gotcha above).
+7. [#195](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/195) - squad `isPublic`
+   (public/private), squad-admin-editable.

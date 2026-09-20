@@ -29,6 +29,7 @@ export default async function handler(
         enabled: squad.enabled,
         maxPlayers: squad.maxPlayers,
         playerCount,
+        isPublic: squad.isPublic,
         isRecurring: squad.isRecurring,
         scheduleDayOfWeek: squad.scheduleDayOfWeek,
         scheduleStartTime: squad.scheduleStartTime,
