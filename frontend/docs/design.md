@@ -62,7 +62,7 @@ Use Tailwind theme keys (see `tailwind.config.ts`), not raw hex in components wh
 - Content width: `max-w-7xl mx-auto px-8`
 - Fixed nav: solid black band `surface-header` (`#000000`); thin **kinetic-gradient** hairline (`0.5` height) above the bar; bottom edge `border-white/5`. Link row `h-16` mobile / `h-20` desktop; logo fills the full bar height via `h-full object-contain` on the `<Image>`. Desktop primary nav is a **scoreboard pill** (Rankings link + Encounters popover + History menu); active segment: `bg-primary/15` orange chip with `aria-current="page"`.
 - Desktop nav: **three zones** — logo (left), centered **scoreboard pill** (`gap-0.5` inside pill, `font-label` segments), live chip + auth (right)
-- **Live chip:** matches game viewer — `GameLoader` `motion="rally"`, red pill border; hidden when no in-progress games; one game links directly, several open a dropdown with progress bars
+- **Live chip (nav):** `GameLoader` `motion="rally"`, red pill border — header only; hidden when no in-progress games; one game links directly, several open a dropdown with progress bars. **Game viewer** title uses a quiet red ping-dot only (no rally pill, no “Live” text).
 - **Mobile menu:** full-screen scoreboard overlay (not nested accordions) — Rankings tile, History tiles, searchable **Find a player**, optional multi-live progress cards, account block; locks body scroll while open; no build string in the menu
 - Dropdown panels: `bg-surface-container`, `border-white/5`, `rounded-xl`
 - Main offset: **`pt-16`** mobile, **`md:pt-20`** desktop
@@ -98,7 +98,7 @@ Use the shared racket loader from `src/components/common/GameLoader.tsx` — not
 | `PageLoader` | Full-page fetches: `variant` `compact` (40vh), `tall` (50vh), or `screen` (login / admin players) |
 | `GameLoader` | Inline: `sm` (nav, buttons), `md` (modals), `lg` (inside `PageLoader`) |
 
-Large loaders show a spinning racket (`motion="spin"`), orbiting shuttlecock, dashed court ring, and **Warming up…** (`font-label`, uppercase). Color via `text-primary` or `text-black` on orange buttons. For **live / in-play** badges (game viewer title chip), use `motion="rally"`: a short back-and-forth smash at the grip pivot — not a full spin. `prefers-reduced-motion` freezes animations in `globals.css`. Pass a specific `label` for `aria-label`; use `decorative` inside buttons that already show loading text.
+Large loaders show a spinning racket (`motion="spin"`), orbiting shuttlecock, dashed court ring, and **Warming up…** (`font-label`, uppercase). Color via `text-primary` or `text-black` on orange buttons. For **live / in-play** badges, use `motion="rally"` on the **nav live chip** only: a short back-and-forth smash at the grip pivot — not a full spin. The game viewer title uses a ping-dot only (`aria-label="Live"`). `prefers-reduced-motion` freezes animations in `globals.css`. Pass a specific `label` for `aria-label`; use `decorative` inside buttons that already show loading text.
 
 ## Do
 
