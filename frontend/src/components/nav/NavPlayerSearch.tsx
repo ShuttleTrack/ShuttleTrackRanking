@@ -5,6 +5,7 @@ import { GameLoader } from '@/components/common/GameLoader';
 import { filterPlayersByQuery, sortPlayersByName } from './playerNavSearchUtils';
 import { NavPlayerRow } from './NavPlayerRow';
 import { classNames } from './navUtils';
+import { useSquad } from '@/contexts/SquadContext';
 
 interface NavPlayerSearchProps {
   players: Player[];
@@ -23,6 +24,7 @@ export function NavPlayerSearch({
   onNavigate,
 }: NavPlayerSearchProps) {
   const router = useRouter();
+  const { slug } = useSquad();
   const [query, setQuery] = useState('');
 
   const sortedPlayers = useMemo(() => sortPlayersByName(players), [players]);
@@ -32,7 +34,7 @@ export function NavPlayerSearch({
   );
 
   const handleSelect = (player: Player) => {
-    void router.push(`/player/${player.id}/encounters`);
+    void router.push(`/s/${slug}/player/${player.id}/encounters`);
     setQuery('');
     onNavigate?.();
   };

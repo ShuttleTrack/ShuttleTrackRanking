@@ -3,6 +3,7 @@ import { Menu } from '@headlessui/react';
 import type { LiveGame } from '@/hooks/useLiveGames';
 import { GameLoader } from '@/components/common/GameLoader';
 import { classNames } from './navUtils';
+import { useSquad } from '@/contexts/SquadContext';
 
 const rowLinkClass = (active: boolean) =>
   classNames(
@@ -19,12 +20,13 @@ export function LiveGameProgressCards({
   onNavigate?: () => void;
   className?: string;
 }) {
+  const { slug } = useSquad();
   return (
     <div className={classNames('space-y-2', className)}>
       {games.map((game) => (
         <Link
           key={game.id}
-          href={`/game-viewer?gameId=${game.id}`}
+          href={`/s/${slug}/game-viewer?gameId=${game.id}`}
           className={rowLinkClass(false)}
           onClick={onNavigate}
         >
@@ -55,6 +57,7 @@ export function LiveGameMenuItems({
   isLoading: boolean;
   onNavigate?: () => void;
 }) {
+  const { slug } = useSquad();
   if (isLoading) {
     return (
       <div className="px-4 py-3 flex justify-center">
@@ -69,7 +72,7 @@ export function LiveGameMenuItems({
         <Menu.Item key={game.id}>
           {({ active, close }) => (
             <Link
-              href={`/game-viewer?gameId=${game.id}`}
+              href={`/s/${slug}/game-viewer?gameId=${game.id}`}
               className={rowLinkClass(active)}
               onClick={() => {
                 close();

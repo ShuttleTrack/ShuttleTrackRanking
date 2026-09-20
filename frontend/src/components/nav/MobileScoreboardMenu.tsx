@@ -68,43 +68,47 @@ export function MobileScoreboardMenu({
         </>
       )}
 
-      {/* Encounters tile — expands to reveal search */}
-      <div className="rounded-xl border border-white/10 overflow-hidden">
-        <button
-          type="button"
-          className={classNames(
-            'flex w-full min-h-[52px] items-center justify-between px-4 py-3 transition-colors font-headline font-semibold text-base',
-            encountersOpen
-              ? 'bg-white/[0.06] text-white border-b border-white/10'
-              : 'bg-white/[0.03] text-white/90 hover:bg-white/[0.06]'
-          )}
-          onClick={() => setEncountersOpen((v) => !v)}
-          aria-expanded={encountersOpen}
-        >
-          <span>Encounters</span>
-          <ChevronDownIcon
+      {/* Encounters tile — expands to reveal search. Squad-only: searching for a player's
+          encounters makes no sense without one, and NavPlayerSearch assumes a squad is in
+          context. */}
+      {squad && (
+        <div className="rounded-xl border border-white/10 overflow-hidden">
+          <button
+            type="button"
             className={classNames(
-              'h-5 w-5 text-white/50 transition-transform duration-200',
-              encountersOpen && 'rotate-180'
+              'flex w-full min-h-[52px] items-center justify-between px-4 py-3 transition-colors font-headline font-semibold text-base',
+              encountersOpen
+                ? 'bg-white/[0.06] text-white border-b border-white/10'
+                : 'bg-white/[0.03] text-white/90 hover:bg-white/[0.06]'
             )}
-            aria-hidden
-          />
-        </button>
-
-        {encountersOpen && (
-          <div className="px-3 py-3 bg-white/[0.02]">
-            <NavPlayerSearch
-              players={players}
-              isLoading={playersLoading}
-              variant="mobile-encounters"
-              onNavigate={() => {
-                setEncountersOpen(false);
-                onClose();
-              }}
+            onClick={() => setEncountersOpen((v) => !v)}
+            aria-expanded={encountersOpen}
+          >
+            <span>Encounters</span>
+            <ChevronDownIcon
+              className={classNames(
+                'h-5 w-5 text-white/50 transition-transform duration-200',
+                encountersOpen && 'rotate-180'
+              )}
+              aria-hidden
             />
-          </div>
-        )}
-      </div>
+          </button>
+
+          {encountersOpen && (
+            <div className="px-3 py-3 bg-white/[0.02]">
+              <NavPlayerSearch
+                players={players}
+                isLoading={playersLoading}
+                variant="mobile-encounters"
+                onNavigate={() => {
+                  setEncountersOpen(false);
+                  onClose();
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Live games (only when multiple — header chip handles single) */}
       {liveGames.length > 1 ? (
