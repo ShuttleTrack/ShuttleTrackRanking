@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { getMatchCombinations } from '@/utils/match';
 import MatchResultLegend from '@/components/matches/MatchResultLegend';
 import MatchScoreRow from '@/components/matches/MatchScoreRow';
-import { PageLoader } from '@/components/common/GameLoader';
+import { GameLoader, PageLoader } from '@/components/common/GameLoader';
 
 const outlineBtn =
   'inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/10 bg-surface-container-high/50 px-6 py-3 font-medium text-on-surface transition-colors hover:border-primary/40';
@@ -116,13 +116,18 @@ const GameViewer = () => {
             Game #{gameId.slice(-4)}
           </h1>
           <span
-            className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5"
+            className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1"
             aria-label="Live"
           >
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-            </span>
+            <GameLoader
+              size="sm"
+              label="Live"
+              caption={false}
+              decorative
+              inline
+              motion="rally"
+              className="text-red-400 shrink-0"
+            />
             <span className="font-label text-xs uppercase tracking-wider text-red-400">Live</span>
           </span>
         </div>

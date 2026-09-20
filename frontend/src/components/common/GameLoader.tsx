@@ -8,6 +8,8 @@ const sizePx: Record<GameLoaderSize, number> = {
   lg: 64,
 };
 
+type GameLoaderMotion = 'spin' | 'rally';
+
 type GameLoaderProps = {
   size?: GameLoaderSize;
   label: string;
@@ -17,6 +19,8 @@ type GameLoaderProps = {
   inline?: boolean;
   /** Omit role="status" when parent control already exposes loading text. */
   decorative?: boolean;
+  /** `spin` for loading; `rally` for live / in-play smash swing. */
+  motion?: GameLoaderMotion;
 };
 
 function RacketIcon({ className }: { className?: string }) {
@@ -49,6 +53,7 @@ export function GameLoader({
   className = 'text-primary',
   inline = false,
   decorative = false,
+  motion = 'spin',
 }: GameLoaderProps) {
   const px = sizePx[size];
   const showCaption = caption ?? size === 'lg';
@@ -95,7 +100,16 @@ export function GameLoader({
               </g>
             </g>
           )}
-          <g className="game-loader-racket-spin" style={{ transformOrigin: '32px 38px' }}>
+          <g
+            className={
+              motion === 'rally' ? 'game-loader-racket-rally' : 'game-loader-racket-spin'
+            }
+            style={
+              motion === 'rally'
+                ? { transformOrigin: '32px 58px' }
+                : { transformOrigin: '32px 38px' }
+            }
+          >
             <RacketIcon />
           </g>
         </svg>

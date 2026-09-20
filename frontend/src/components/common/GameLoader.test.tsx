@@ -22,6 +22,20 @@ describe('GameLoader', () => {
     expect(html).not.toContain('role="status"');
     expect(html).toContain('aria-hidden="true"');
   });
+
+  it('uses rally swing class when motion is rally', () => {
+    const html = renderToStaticMarkup(
+      <GameLoader size="sm" label="Live" motion="rally" caption={false} decorative />,
+    );
+    expect(html).toContain('game-loader-racket-rally');
+    expect(html).not.toContain('game-loader-racket-spin');
+  });
+
+  it('uses spin class by default', () => {
+    const html = renderToStaticMarkup(<GameLoader size="sm" label="Loading" caption={false} />);
+    expect(html).toContain('game-loader-racket-spin');
+    expect(html).not.toContain('game-loader-racket-rally');
+  });
 });
 
 describe('PageLoader', () => {

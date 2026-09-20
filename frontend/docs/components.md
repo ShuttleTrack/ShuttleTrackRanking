@@ -217,7 +217,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Purpose:** Public read-only live view of an in-progress game (`/game-viewer?gameId=…`). Updates via SSE (`/api/games/{id}/live`); no score entry.
 
-**Layout:** Same shell as admin pages (`max-w-7xl`). **Mobile-compact:** tighter top margins, smaller title (`text-2xl` → `sm:text-4xl`), reduced progress/legend/group gaps and padding; `sm+` matches admin spacing (`pb-8`, etc.). Centered spectator header: **Game #{id}** with inline red **LIVE** chip plus orange rule (no emoji or “live updates” chip). Progress card on `surface-container` with `font-numeric` count and orange bar (4 players → 3 matches per group, 5 → 5).
+**Layout:** Same shell as admin pages (`max-w-7xl`). **Mobile-compact:** tighter top margins, smaller title (`text-2xl` → `sm:text-4xl`), reduced progress/legend/group gaps and padding; `sm+` matches admin spacing (`pb-8`, etc.). Centered spectator header: **Game #{id}** with inline red **LIVE** pill (`GameLoader` `sm` `motion="rally"` smash swing + label) plus orange rule (no emoji or “live updates” chip). Progress card on `surface-container` with `font-numeric` count and orange bar (4 players → 3 matches per group, 5 → 5).
 
 **Groups:** Solid bordered cards; group title uses `font-label` `text-sm` uppercase bold (slightly larger than the match progress label), with a primary dot. Matches use `MatchScoreRow` with `showResultChips={false}`, `compact`, and `text-sm` names—win/loss uses `matchResultColors.ts` tints; shared `MatchResultLegend` between the progress card and group list. No `interactive` (display-only).
 

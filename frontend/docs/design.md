@@ -96,7 +96,7 @@ Use the shared racket loader from `src/components/common/GameLoader.tsx` — not
 | `PageLoader` | Full-page fetches: `variant` `compact` (40vh), `tall` (50vh), or `screen` (login / admin players) |
 | `GameLoader` | Inline: `sm` (nav, buttons), `md` (modals), `lg` (inside `PageLoader`) |
 
-Large loaders show a spinning racket, orbiting shuttlecock, dashed court ring, and **Warming up…** (`font-label`, uppercase). Color via `text-primary` or `text-black` on orange buttons. `prefers-reduced-motion` freezes animations in `globals.css`. Pass a specific `label` for `aria-label`; use `decorative` inside buttons that already show loading text.
+Large loaders show a spinning racket (`motion="spin"`), orbiting shuttlecock, dashed court ring, and **Warming up…** (`font-label`, uppercase). Color via `text-primary` or `text-black` on orange buttons. For **live / in-play** badges (game viewer title chip), use `motion="rally"`: a short back-and-forth smash at the grip pivot — not a full spin. `prefers-reduced-motion` freezes animations in `globals.css`. Pass a specific `label` for `aria-label`; use `decorative` inside buttons that already show loading text.
 
 ## Do
 
