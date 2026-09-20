@@ -64,7 +64,6 @@ export function LiveGamesControl({ liveGames, isLoading, onNavigate }: LiveGames
             games={liveGames}
             isLoading={false}
             onNavigate={onNavigate}
-            MenuItem={Menu.Item}
           />
         </Menu.Items>
       </Transition>
@@ -105,7 +104,7 @@ export function LiveGamesControlDesktop({
               <GameLoader size="sm" label="Loading live games" caption={false} />
             </div>
           ) : (
-            <LiveGameMenuItems games={liveGames} isLoading={false} MenuItem={Menu.Item} />
+            <LiveGameMenuItems games={liveGames} isLoading={false} />
           )}
         </Menu.Items>
       </Transition>
