@@ -55,13 +55,15 @@ Use Tailwind theme keys (see `tailwind.config.ts`), not raw hex in components wh
 - Rankings page title: `font-headline text-3xl`–`text-4xl font-extrabold`; `px-8 sm:px-16` aligns left edge with the `RANK` column; a thin `h-0.5 w-10 bg-primary` accent rule sits beneath the heading.
 - Column headers: `font-label text-xs font-bold uppercase tracking-widest opacity-60`
 - Footer wordmark: italic, `font-black`, tight tracking — full club name
-- Nav links: `font-headline font-semibold`, active `border-b-2 border-white`
+- Nav links: `font-label` uppercase in the desktop scoreboard pill; active segment uses `bg-primary/15 text-primary` with inset orange ring — not a text underline.
 
 ## Layout
 
 - Content width: `max-w-7xl mx-auto px-8`
-- Fixed nav: solid black band `surface-header` (`#000000`), no gradient, no blur; link row `h-16` mobile / `h-20` desktop; logo seated inside (`h-12` mobile / `h-16` desktop). Active link: `border-b-2 border-primary` orange underline.
-- Desktop nav: **three zones** — logo (left), centered links (`gap-8`, `text-sm`), live + auth (right)
+- Fixed nav: solid black band `surface-header` (`#000000`); thin **kinetic-gradient** hairline (`0.5` height) above the bar; bottom edge `border-white/5`. Link row `h-16` mobile / `h-20` desktop; logo fills the full bar height via `h-full object-contain` on the `<Image>`. Desktop primary nav is a **scoreboard pill** (Rankings link + Encounters popover + History menu); active segment: `bg-primary/15` orange chip with `aria-current="page"`.
+- Desktop nav: **three zones** — logo (left), centered **scoreboard pill** (`gap-0.5` inside pill, `font-label` segments), live chip + auth (right)
+- **Live chip:** matches game viewer — `GameLoader` `motion="rally"`, red pill border; hidden when no in-progress games; one game links directly, several open a dropdown with progress bars
+- **Mobile menu:** full-screen scoreboard overlay (not nested accordions) — Rankings tile, History tiles, searchable **Find a player**, optional multi-live progress cards, account block; locks body scroll while open; no build string in the menu
 - Dropdown panels: `bg-surface-container`, `border-white/5`, `rounded-xl`
 - Main offset: **`pt-16`** mobile, **`md:pt-20`** desktop
 - Row cards: `rounded-xl`, `px-8 py-4`, vertical stack `space-y-3`
@@ -100,13 +102,13 @@ Large loaders show a spinning racket (`motion="spin"`), orbiting shuttlecock, da
 
 ## Do
 
-- Dark-only public chrome; single visual system on rankings, player encounter history (`/player/{id}/encounters`), and shared nav/footer.
+- Dark-only public chrome; single visual system on rankings, player encounter history (`/player/{id}/encounters`), cross-player encounter search (`/encounter-history`), and shared nav/footer.
 - Link player names to `/player/{id}/encounters`.
 - Use Heroicons for crown, medal, trend (no Material Symbols dependency required).
 
 ## Don’t
 
-- DaisyUI `table`, `stat`, or `alert-*` on public rankings or player encounter history pages.
+- DaisyUI `table`, `stat`, or `alert-*` on public rankings, player encounter history, or cross-player encounter history pages.
 - Invent nav items (Tournaments, Stats) or footer legal pages without real routes.
 - Light/emerald theme toggle on restyled public chrome.
 - Fake placeholder player or country data from the Stitch HTML.

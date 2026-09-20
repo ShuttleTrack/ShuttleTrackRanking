@@ -1,0 +1,164 @@
+import { useState } from 'react';
+import Link from 'next/link';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import { signOut, useSession } from 'next-auth/react';
+import { useRouter } from 'next/router';
+import type { Player } from '@/types/player';
+import type { LiveGame } from '@/hooks/useLiveGames';
+import { NavPlayerSearch } from './NavPlayerSearch';
+import { LiveGameProgressCards } from './LiveGameProgressList';
+import { classNames, historyLinks } from './navUtils';
+
+const tileClass = (active: boolean) =>
+  classNames(
+    'flex min-h-[52px] flex-col justify-center rounded-xl border px-4 py-3 transition-colors',
+    active
+      ? 'border-primary/40 bg-primary/10 text-white'
+      : 'border-white/10 bg-white/[0.03] text-white/90 hover:border-primary/25 hover:bg-white/[0.06]'
+  );
+
+interface MobileScoreboardMenuProps {
+  players: Player[];
+  playersLoading: boolean;
+  liveGames: LiveGame[];
+  onClose: () => void;
+}
+
+export function MobileScoreboardMenu({
+  players,
+  playersLoading,
+  liveGames,
+  onClose,
+}: MobileScoreboardMenuProps) {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const [encountersOpen, setEncountersOpen] = useState(false);
+
+  return (
+    <div className="px-3 pt-4 pb-8 space-y-3">
+      {/* Rankings tile */}
+      <Link
+        href="/"
+        className={classNames(tileClass(router.pathname === '/'), 'text-lg font-headline font-bold')}
+        onClick={onClose}
+        aria-current={router.pathname === '/' ? 'page' : undefined}
+      >
+        Rankings
+      </Link>
+
+      {/* History tiles */}
+      <div className="grid grid-cols-2 gap-2">
+        {historyLinks.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={tileClass(router.pathname === link.href)}
+            onClick={onClose}
+            aria-current={router.pathname === link.href ? 'page' : undefined}
+          >
+            <span className="font-headline text-sm font-semibold leading-tight">{link.name}</span>
+            <span className="text-[11px] text-on-surface-variant mt-1 leading-snug">{link.hint}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* Encounters tile — expands to reveal search */}
+      <div className="rounded-xl border border-white/10 overflow-hidden">
+        <button
+          type="button"
+          className={classNames(
+            'flex w-full min-h-[52px] items-center justify-between px-4 py-3 transition-colors font-headline font-semibold text-base',
+            encountersOpen
+              ? 'bg-white/[0.06] text-white border-b border-white/10'
+              : 'bg-white/[0.03] text-white/90 hover:bg-white/[0.06]'
+          )}
+          onClick={() => setEncountersOpen((v) => !v)}
+          aria-expanded={encountersOpen}
+        >
+          <span>Encounters</span>
+          <ChevronDownIcon
+            className={classNames(
+              'h-5 w-5 text-white/50 transition-transform duration-200',
+              encountersOpen && 'rotate-180'
+            )}
+            aria-hidden
+          />
+        </button>
+
+        {encountersOpen && (
+          <div className="px-3 py-3 bg-white/[0.02]">
+            <NavPlayerSearch
+              players={players}
+              isLoading={playersLoading}
+              variant="mobile-encounters"
+              onNavigate={() => {
+                setEncountersOpen(false);
+                onClose();
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Live games (only when multiple — header chip handles single) */}
+      {liveGames.length > 1 ? (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3">
+          <p className="font-label text-xs uppercase tracking-wider text-red-400 mb-2">
+            Live games
+          </p>
+          <LiveGameProgressCards games={liveGames} onNavigate={onClose} />
+        </div>
+      ) : null}
+
+      {/* Auth */}
+      {!session ? (
+        <Link href="/login" className={tileClass(false)} onClick={onClose}>
+          Sign In
+        </Link>
+      ) : (
+        <div className="border-t border-white/10 pt-4 space-y-1">
+          <p className="px-1 py-1 text-xs text-on-surface-variant truncate font-label uppercase tracking-wide">
+            {session.user?.name}
+          </p>
+          {session.user.accessLevel?.includes('USER') && (
+            <>
+              <Link
+                href="/user/profile"
+                className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
+                onClick={onClose}
+              >
+                Profile
+              </Link>
+              <Link
+                href="/user/matches"
+                className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
+                onClick={onClose}
+              >
+                Matches
+              </Link>
+            </>
+          )}
+          {session.user.accessLevel?.includes('ADMIN') && (
+            <Link
+              href="/admin/dashboard"
+              className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
+              onClick={onClose}
+            >
+              Admin Dashboard
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              signOut();
+              onClose();
+            }}
+            className="block w-full text-left px-3 py-2.5 rounded-lg font-headline text-base text-red-400 hover:bg-red-950/20"
+          >
+            Sign Out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

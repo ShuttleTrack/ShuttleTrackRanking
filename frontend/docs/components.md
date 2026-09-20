@@ -10,18 +10,20 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **Purpose:** Fixed top navigation — logo-only brand, primary routes, auth, optional live games.
 
-**Desktop layout (md+):** three-column grid — logo (`h-16`) seated in a solid black `h-20` band (left), centered **Rankings** / **Encounters** / **History**, right zone **Live** + Sign In or avatar.
+**Desktop layout (md+):** three-column grid — logo (`h-16`) in a solid black `h-20` band (left), centered **scoreboard pill** (Rankings / Encounters / History), right zone **Live** rally chip + Sign In or avatar.
 
-**Mobile:** hamburger left, centered logo (`h-12`) in a `h-16` band, **LIVE** chip + avatar on the right when games are in progress. LIVE chip matches the game viewer pill (ping dot, red border); one live game links straight to `/game-viewer`, multiple games open a dropdown (same items as desktop Live). No chip when nothing is live. Full-screen menu panel matches the black bar (Live section remains as backup).
+**Mobile:** hamburger left, centered logo (fills `h-16` bar via `h-full object-contain`) on the right when games are in progress. One live game links straight to `/game-viewer`; multiple games open a header dropdown. No chip when nothing is live. Full-screen **scoreboard overlay** (tiles + account) — not nested accordions; body scroll locked while open.
+
+Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter History (2-column grid) → **Encounters tile** (tap to expand inline search; results appear only after typing, collapsed by default) → Live progress cards (only when >1 game) → account block. No player list is shown until the user types in the Encounters search.
 
 **Behavior:**
 
-- Encounters → scrollable player list → `/player/{id}/encounters`
-- History → Ranking History, Encounter History
-- Live → game viewer links with progress (hidden on desktop when no live games)
+- Encounters → searchable player list (color dot + `#` rank) → `/player/{id}/encounters`
+- History → Ranking History, Encounter History (card rows with short hints)
+- Live → game viewer links with progress (hidden when no live games)
 - Session: avatar menu → Profile, Matches (USER), Admin Dashboard (ADMIN), Sign out
 
-**Visual:** orange `border-b-2 border-primary` underline on active top-level links; dark dropdown surfaces (`surface-container`); no emerald pills or light menus. **Avatar menu:** `w-56`, `mt-3` below the header; icon + label rows (`min-h-[44px]`); divider before **Sign Out** (`text-red-400`).
+**Visual:** active desktop segment uses `bg-primary/15` orange chip (`aria-current="page"`); dark dropdown surfaces (`surface-container`); kinetic gradient hairline on the nav band. **Avatar menu:** `w-56`, `mt-3` below the header; icon + label rows (`min-h-[44px]`); `ring-primary/40` on photo; divider before **Sign Out** (`text-red-400`).
 
 ---
 
@@ -161,6 +163,24 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ---
 
+### Encounter history (cross-player search)
+
+**Page:** `src/pages/encounter-history.tsx` → `EncounterHistoryView.tsx`
+
+**Purpose:** Find matches where selected players appeared together (Team 1 Player 1 required; partner and opponents optional). Results are from Team 1 Player 1’s perspective (same as legacy Find Encounters).
+
+**Composes:** Dark page shell (`max-w-7xl`, `px-4 sm:px-8`, `font-headline` title + orange rule). One filter card with Team 1 / Team 2 slots and orange **VS** chip on desktop; `SearchablePlayerPicker` — Headless UI `Combobox` with typeahead, color dot, optional rank, `excludeIds` for other slots. **Find Matches** (filled `bg-primary`) runs the search; URL updates to `?a1=&a2=&b1=&b2=` on submit (shallow) for share/reload. **Clear** resets pickers and results.
+
+**Results:** `StatCard` row (games / wins / losses / win rate), then a flat list: `EncounterDesktopHeader` + `EncounterCard` rows (newest first) with a muted date caption above each card. Idle until **Find Matches** (shared `?a1=` still hydrates and loads on open).
+
+**Data:** `useEncounterHistory` + `usePlayers`; helpers in `src/utils/encounterHistory.ts`. API: `GET /api/encounters/history`.
+
+**Loading/error:** `PageLoader` (`compact`) for players and in-flight match fetch; red banner as `RankingsComponent`.
+
+**Legacy:** `EncounterHistoryComponent.client.tsx` re-exports `EncounterHistoryView` for compatibility.
+
+---
+
 ### Admin Dashboard
 
 **Files:** `src/pages/admin/dashboard.tsx`, `src/components/dashboard/Header.tsx`
@@ -279,6 +299,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 | DaisyUI table/stats on player encounters | `StatCard` + `EncounterCard` |
 | `PlayerEncounterComponent` mobile table | `EncounterCard` mobile scoreboard layout |
 | Multi-player Recharts line chart on ranking history | `RankingHistoryView` player picker + single-line chart + change list |
+| DaisyUI Find Encounters form + table | `EncounterHistoryView` filter card + `EncounterCard` results |
 
 ---
 
@@ -286,7 +307,6 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 Keep existing DaisyUI patterns until a dedicated restyle:
 
-- **Find Encounters** (`EncounterHistoryComponent`, `/encounter-history`) — form and results table still legacy; pills only share dark `ScoreBreakdownPills`
 - Manage players
 - Modals and password gates on other admin routes (score keeper and user management score entry restyled; logic unchanged)
 - `ActionCard`

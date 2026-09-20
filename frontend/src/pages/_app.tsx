@@ -1,5 +1,6 @@
 import '../app/globals.css';
 import type { AppProps } from 'next/app';
+import Head from 'next/head';
 import Layout from '@/components/layout/Layout';
 import React, { useEffect } from 'react';
 import { SessionProvider } from 'next-auth/react';
@@ -33,6 +34,12 @@ export default function App({ Component, pageProps: { session, ...pageProps } }:
 
   return (
     <SessionProvider session={session}>
+      <Head>
+        <title>Dutch Lankan Shuttle Masters</title>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      </Head>
       <div
         className={`${inter.variable} ${manrope.variable} ${spaceGrotesk.variable} ${shareTechMono.variable} min-h-screen`}
       >
