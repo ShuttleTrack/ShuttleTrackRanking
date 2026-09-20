@@ -65,7 +65,7 @@ Google SSO itself is untouched. What changes is what "admin" means, since it's n
 - A new `SquadAdmin` join table (squad + email) grants admin rights scoped to one squad — the day-to-day equivalent of what today's global admin flag does, just per-tenant.
 - Access checks resolve **per request, per squad** rather than being cached as one flag on the session: given a signed-in email and a squad id, look up whether that email is a `SquadAdmin` for that squad, and separately whether it has a `Player` row in that squad. This lets the same person be an admin in one squad and just a player (or nobody) in another, with no stale cross-squad state.
 - The session itself shrinks to identity + platform-superadmin status; squad-specific admin/player status is resolved fresh wherever it's needed.
-- **Login is required for everything except the public ranking page.** Viewing a squad's leaderboard needs no sign-in; encounter history, game viewer, player ranking history, all user pages, and all admin pages require a signed-in, recognized account. Today only `/admin/*` is gated — this widens that gate to nearly the whole app.
+- **Login is required for everything except the public boards.** A squad's ranking/leaderboard, encounter history, game viewer, and player ranking history need no sign-in; every user page and every admin page requires a signed-in, recognized account. Today only `/admin/*` is gated — this widens that gate to the user-facing pages too, while keeping the public boards public.
 
 ## Ranking/data-access layer
 
@@ -77,11 +77,11 @@ What changes is the **data-access layer around them**: every function that curre
 
 Every board needs to stay bookmarkable and shareable, so squads are identified in the URL rather than through a session-only "active squad" selector:
 
-- The **only public, no-login page** is a squad's ranking/leaderboard, e.g. `/s/{squad-slug}`.
-- Everything else sits behind sign-in: encounter history, game viewer, and player ranking history move under `/s/{squad-slug}/...` alongside the existing player-facing pages under `/s/{squad-slug}/user/...`, all requiring a signed-in account.
+- **Public pages** — ranking/leaderboard, encounter history, game viewer, and player ranking history — move under a squad-scoped path with no login required, e.g. `/s/{squad-slug}/...`.
+- User pages (the authenticated player-facing views) move under `/s/{squad-slug}/user/...`, requiring a signed-in account.
 - Admin pages move under `/s/{squad-slug}/admin/...`, gated by the per-squad admin check described above.
-- API routes move under `/api/squads/{squadId}/...`, with every handler validating the squad id and scoping its queries accordingly; every route except the public ranking read requires a session.
-- `middleware.ts`'s matcher, which today only protects `/admin/:path*`, widens to cover everything squad-scoped except the ranking root.
+- API routes move under `/api/squads/{squadId}/...`, with every handler validating the squad id and scoping its queries accordingly; the public-board reads stay open, everything under `user/` and `admin/` requires a session.
+- `middleware.ts`'s matcher, which today only protects `/admin/:path*`, widens to also cover `/s/{squad-slug}/user/:path*`.
 - Sign-in stays global. After signing in, a squad-picker landing page lists the squads the signed-in email administers or plays in.
 - A new platform-level, superadmin-only surface handles creating squads and assigning/removing squad admins.
 
