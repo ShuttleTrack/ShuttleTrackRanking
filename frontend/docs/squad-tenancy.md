@@ -215,3 +215,5 @@ didn't need staging - just `prisma db push`.
    fixes in `CLAUDE.md`.
 6. [#194](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/194) - fixed several
    `/s/[squad]/...` links that #189 missed (see the routing gotcha above).
+7. [#195](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/195) - squad `isPublic`
+   (public/private), squad-admin-editable.
