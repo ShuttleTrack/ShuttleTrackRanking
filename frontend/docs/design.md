@@ -87,6 +87,17 @@ Last day shows net rank score on the player’s most recent played date.
 - **Peak tenure chip** beside player name on the same row (context-sensitive): at personal best → compact tenure (`18d at peak`, `New peak`, or `At peak`); off peak → `Peak #N · Nd`. Parses days from the API `timeInHighestRank` string; full meaning in the chip’s `aria-label`.
 - **Last 5** = five vertical ticks on every row: win `rgb(238 138 51)`, loss `rgb(185 28 28)`, empty `rgb(255 255 255 / 0.45)`; each bar has a `1px` dark ring (`rgb(0 0 0 / 0.45)`) for contrast on podium gradients.
 
+## Loading
+
+Use the shared racket loader from `src/components/common/GameLoader.tsx` — not ad-hoc spinners or DaisyUI `loading-spinner`.
+
+| Piece | Usage |
+|-------|--------|
+| `PageLoader` | Full-page fetches: `variant` `compact` (40vh), `tall` (50vh), or `screen` (login / admin players) |
+| `GameLoader` | Inline: `sm` (nav, buttons), `md` (modals), `lg` (inside `PageLoader`) |
+
+Large loaders show a spinning racket, orbiting shuttlecock, dashed court ring, and **Warming up…** (`font-label`, uppercase). Color via `text-primary` or `text-black` on orange buttons. `prefers-reduced-motion` freezes animations in `globals.css`. Pass a specific `label` for `aria-label`; use `decorative` inside buttons that already show loading text.
+
 ## Do
 
 - Dark-only public chrome; single visual system on rankings, player encounter history (`/player/{id}/encounters`), and shared nav/footer.

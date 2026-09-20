@@ -7,6 +7,7 @@ import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import type { Player } from '@/types/player';
 import { AddPlayerModal } from '@/components/player-management/AddPlayerModal';
 import { EditPlayerModal } from '@/components/player-management/EditPlayerModal';
+import { PageLoader } from '@/components/common/GameLoader';
 
 const PlayerTable = ({ players, onEdit, onDelete }: {
   players: Player[];
@@ -131,11 +132,7 @@ const PlayerManagementPage = () => {
   }, [status, router]);
 
   if (status === 'loading' || activeLoading || inactiveLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="loading loading-spinner loading-lg"></div>
-      </div>
-    );
+    return <PageLoader variant="screen" label="Loading players" />;
   }
 
   if (!session?.user?.isAdmin) return null;

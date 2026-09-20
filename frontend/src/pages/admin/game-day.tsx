@@ -5,6 +5,7 @@ import { useGame } from '@/hooks/useGame';
 import { GroupCard } from '@/components/game-day/GroupCard';
 import { NavigationButtons } from '@/components/game-day/NavigationButtons';
 import type { Player } from '@/types/player';
+import { PageLoader } from '@/components/common/GameLoader';
 
 const GameDayPage = () => {
   const router = useRouter();
@@ -13,15 +14,7 @@ const GameDayPage = () => {
   const { game, isLoading: gameLoading } = useGame(gameId as string);
 
   if (gameLoading || playersLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-[40vh]">
-        <div
-          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
-          role="status"
-          aria-label="Loading game day"
-        />
-      </div>
-    );
+    return <PageLoader variant="compact" label="Loading game day" />;
   }
 
   if (!game) {

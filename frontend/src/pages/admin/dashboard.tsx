@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import type { Game } from '@prisma/client';
 import type { MatchScore } from '@/types/game';
+import { GameLoader, PageLoader } from '@/components/common/GameLoader';
 
 type TelegramTestGroup = 'wednesday' | 'friday';
 
@@ -113,15 +114,7 @@ const DashboardPage = () => {
   }, [status, router]);
 
   if (status === 'loading' || gamesLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-[40vh]">
-        <div
-          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
-          role="status"
-          aria-label="Loading dashboard"
-        />
-      </div>
-    );
+    return <PageLoader variant="compact" label="Loading dashboard" />;
   }
 
   if (!session?.user?.isAdmin) return null;
@@ -236,9 +229,13 @@ const DashboardPage = () => {
                       onClick={() => handleTelegramTest(group)}
                     >
                       {state.loading ? (
-                        <span
-                          className="h-5 w-5 shrink-0 rounded-full border-2 border-primary border-t-transparent animate-spin"
-                          aria-hidden
+                        <GameLoader
+                          size="sm"
+                          label={`Sending test to ${group}`}
+                          caption={false}
+                          decorative
+                          inline
+                          className="shrink-0"
                         />
                       ) : (
                         <PaperAirplaneIcon className="h-5 w-5 shrink-0" aria-hidden />

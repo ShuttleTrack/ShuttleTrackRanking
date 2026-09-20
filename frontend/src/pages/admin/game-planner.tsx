@@ -7,6 +7,7 @@ import { gameService } from '@/services/gameService';
 import { PlayerCard } from '@/components/game-planner/PlayerCard';
 import { ActionPanel } from '@/components/game-planner/ActionPanel';
 import { isValidPlayerCount } from '@/utils/game-validation';
+import { PageLoader } from '@/components/common/GameLoader';
 
 const MAX_PLAYERS = 20;
 
@@ -113,15 +114,7 @@ const GamePlannerPage = () => {
   const isGameLoadPending = Boolean(gameId) && gameLoading;
 
   if (status === 'loading' || playersLoading || isGameLoadPending) {
-    return (
-      <div className="flex justify-center items-center min-h-[40vh]">
-        <div
-          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
-          role="status"
-          aria-label="Loading game planner"
-        />
-      </div>
-    );
+    return <PageLoader variant="compact" label="Loading game planner" />;
   }
 
   const handlePlayerToggle = (playerId: number) => {

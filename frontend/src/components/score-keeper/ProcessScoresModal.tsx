@@ -1,3 +1,5 @@
+import { GameLoader } from '@/components/common/GameLoader';
+
 interface ProcessScoresModalProps {
   isOpen: boolean;
   isProcessing: boolean;
@@ -67,12 +69,8 @@ export const ProcessScoresModal = ({
               All results have been submitted. Would you like to process the scores now?
             </p>
             {isProcessing ? (
-              <div className="flex items-center justify-center gap-3 py-4">
-                <div
-                  className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin"
-                  role="status"
-                  aria-label="Processing scores"
-                />
+              <div className="flex items-center justify-center gap-3 py-4" role="status" aria-label="Processing scores">
+                <GameLoader size="md" label="Processing scores" caption={false} decorative inline />
                 <span className="text-on-surface-variant">Processing scores...</span>
               </div>
             ) : (

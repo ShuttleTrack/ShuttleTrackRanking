@@ -12,6 +12,7 @@ import {
 import { capitalizeFirstLetter } from '@/utils/string';
 import { usePlayers } from '@/hooks/usePlayers';
 import { useRankingHistory } from '@/hooks/useRankingHistory';
+import { PageLoader } from '@/components/common/GameLoader';
 
 const RankingsHistoryComponent = () => {
   const { players, isLoading: playersLoading } = usePlayers();
@@ -30,11 +31,7 @@ const RankingsHistoryComponent = () => {
   }, [players, playersLoading]);
 
   if (playersLoading || historyLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="loading loading-spinner loading-lg"></div>
-      </div>
-    );
+    return <PageLoader variant="compact" label="Loading ranking history" />;
   }
 
   const onLegendMouseEnter = (o: any) => {

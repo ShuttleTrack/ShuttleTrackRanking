@@ -4,6 +4,7 @@ import { useEncounterHistory } from '@/hooks/useEncounterHistory';
 import { capitalizeFirstLetter } from '@/utils/string';
 import { ScoreBreakdown } from '@/types/encounter';
 import ScoreBreakdownPills from './ScoreBreakdownPills';
+import { GameLoader } from '@/components/common/GameLoader';
 
 interface Encounter {
   encounterDate: string;
@@ -399,7 +400,7 @@ const EncounterHistoryComponent = () => {
           >
             {encountersLoading ? (
               <>
-                <span className="loading loading-spinner loading-sm"></span>
+                <GameLoader size="sm" label="Finding matches" caption={false} decorative inline className="text-black" />
                 <span className="ml-2">Finding...</span>
               </>
             ) : (

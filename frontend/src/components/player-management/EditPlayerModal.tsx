@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import type { Player } from '@/types/player';
+import { GameLoader } from '@/components/common/GameLoader';
 
 interface EditPlayerModalProps {
   isOpen: boolean;
@@ -124,7 +125,7 @@ export const EditPlayerModal = ({ isOpen, onClose, onSubmit, player }: EditPlaye
             >
               {isSubmitting ? (
                 <>
-                  <span className="loading loading-spinner loading-sm"></span>
+                  <GameLoader size="sm" label="Updating player" caption={false} decorative inline className="text-black" />
                   Updating...
                 </>
               ) : (
@@ -145,7 +146,7 @@ export const EditPlayerModal = ({ isOpen, onClose, onSubmit, player }: EditPlaye
             >
               {isSubmitting ? (
                 <>
-                  <span className="loading loading-spinner loading-sm"></span>
+                  <GameLoader size="sm" label="Activating player" caption={false} decorative inline />
                   Activating...
                 </>
               ) : (

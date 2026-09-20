@@ -7,6 +7,7 @@ import { userScoreService } from '@/services/userScoreService';
 import { isValidMatchScore } from '@/utils/scoreValidation';
 import MatchResultLegend from '@/components/matches/MatchResultLegend';
 import MatchScoreRow from '@/components/matches/MatchScoreRow';
+import { GameLoader, PageLoader } from '@/components/common/GameLoader';
 
 const MAX_POINTS = 30;
 
@@ -85,15 +86,7 @@ const UserMatchesPage = () => {
   };
 
   if (status === 'loading' || matchesLoading || playersLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div
-          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
-          role="status"
-          aria-label="Loading"
-        />
-      </div>
-    );
+    return <PageLoader variant="tall" label="Loading" />;
   }
 
   if (!isUser) return null;
@@ -237,10 +230,7 @@ const UserMatchesPage = () => {
               >
                 {isSubmitting ? (
                   <span className="inline-flex items-center gap-2">
-                    <span
-                      className="h-4 w-4 rounded-full border-2 border-black border-t-transparent animate-spin"
-                      aria-hidden
-                    />
+                    <GameLoader size="sm" label="Saving score" caption={false} decorative inline className="text-black" />
                     Saving…
                   </span>
                 ) : (

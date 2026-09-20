@@ -16,6 +16,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { usePlayers } from '@/hooks/usePlayers';
 import Image from 'next/image';
 import { useLiveGames } from '@/hooks/useLiveGames';
+import { GameLoader } from '@/components/common/GameLoader';
 
 const BUILD_IDENTIFIER = process.env.NEXT_PUBLIC_BUILD_IDENTIFIER;
 
@@ -81,7 +82,9 @@ const NavigationComponent = () => {
   const renderPlayersList = () => {
     if (isLoading) {
       return (
-        <div className="px-4 py-3 text-sm text-on-surface-variant">Loading players…</div>
+        <div className="px-4 py-3 flex justify-center">
+          <GameLoader size="sm" label="Loading players" caption={false} />
+        </div>
       );
     }
 
@@ -105,7 +108,7 @@ const NavigationComponent = () => {
     if (liveGamesLoading) {
       return (
         <div className="px-4 py-3 flex justify-center">
-          <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <GameLoader size="sm" label="Loading live games" caption={false} />
         </div>
       );
     }
@@ -541,7 +544,7 @@ const NavigationComponent = () => {
                     <Disclosure.Panel className="pl-3 space-y-2 pb-2">
                       {liveGamesLoading ? (
                         <div className="px-3 py-2 flex justify-center">
-                          <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                          <GameLoader size="sm" label="Loading live games" caption={false} />
                         </div>
                       ) : liveGames.length > 0 ? (
                         liveGames.map((game) => (

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { getMatchCombinations } from '@/utils/match';
 import MatchResultLegend from '@/components/matches/MatchResultLegend';
 import MatchScoreRow from '@/components/matches/MatchScoreRow';
+import { PageLoader } from '@/components/common/GameLoader';
 
 const outlineBtn =
   'inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/10 bg-surface-container-high/50 px-6 py-3 font-medium text-on-surface transition-colors hover:border-primary/40';
@@ -88,15 +89,7 @@ const GameViewer = () => {
   }, [liveGame]);
 
   if (playersLoading || gameLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div
-          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
-          role="status"
-          aria-label="Loading"
-        />
-      </div>
-    );
+    return <PageLoader variant="tall" label="Loading" />;
   }
 
   if (!liveGame) {

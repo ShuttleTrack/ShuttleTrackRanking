@@ -141,7 +141,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Shared:** `ScoreBreakdownPills` (dark chips on `surface-container-high`; muted `elo` caption under headline points on encounter cards; tier/consol chips when non-zero).
 
-**Loading/error:** Same primary ring spinner and red banner as `RankingsComponent`.
+**Loading/error:** `PageLoader` (`compact`) and red banner as `RankingsComponent`.
 
 ---
 
@@ -157,7 +157,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Cards:** `rounded-xl bg-surface-container/90 border border-gray-600`. Primary CTA = filled `bg-primary`; secondary/telegram = outline `border-white/10`. Game rows are `Link`s with dark status chips (`IN_PROGRESS` orange, `COMPLETED` muted, `DRAFT` outline).
 
-**Loading:** Primary ring spinner (not DaisyUI).
+**Loading:** `PageLoader` (`compact`).
 
 ---
 
@@ -173,7 +173,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **NavigationButtons:** outline Back, filled `bg-primary` Continue; stacked full-width on mobile (Back then Continue), row `justify-between` on `md+`.
 
-**Loading / not-found:** Primary ring spinner; not-found uses dark tokens (no DaisyUI).
+**Loading / not-found:** `PageLoader` (`compact`); not-found uses dark tokens (no DaisyUI).
 
 ---
 
@@ -189,7 +189,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **ActionPanel:** Opaque `fixed` mobile bar (`bg-background`, `border-white/5`); desktop count left, orange CTA right. Validation `text-red-400`; disabled CTA via opacity.
 
-**Loading:** Primary ring spinner (session, players, and game when `gameId` present).
+**Loading:** `PageLoader` (`compact`) (session, players, and game when `gameId` present).
 
 ---
 
@@ -205,7 +205,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Dialogs:** Fixed overlay + `surface-container-high` panel; dark inputs; outline + primary (destructive red for cancel). `ProcessScoresModal` matches same pattern.
 
-**Loading:** Primary ring spinner (session, players, game).
+**Loading:** `PageLoader` (`compact`) (session, players, game).
 
 **Match rows:** Shared `MatchScoreRow` + `MatchResultLegend` (`src/components/matches/`). Tinted team cells, `showResultChips={false}`, `text-sm` names; legend above the match list on each group view. Score keeper passes `interactive` + `onActivate` when the game is in progress (full `p-3` rows, not `compact`).
 
@@ -221,7 +221,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Groups:** Solid bordered cards; group title uses `font-label` `text-sm` uppercase bold (slightly larger than the match progress label), with a primary dot. Matches use `MatchScoreRow` with `showResultChips={false}`, `compact`, and `text-sm` names—win/loss uses `matchResultColors.ts` tints; shared `MatchResultLegend` between the progress card and group list. No `interactive` (display-only).
 
-**Loading / not found:** Primary ring spinner; dark copy + outline **Go Home** (no DaisyUI `btn`).
+**Loading / not found:** `PageLoader` (`tall`); dark copy + outline **Go Home** (no DaisyUI `btn`).
 
 ---
 
@@ -233,7 +233,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name/email, outline sign-out; four-column stats (Rank, Change, Score, Highest).
 
-**Loading:** Primary ring spinner (session + rankings).
+**Loading:** `PageLoader` (`tall`) (session + rankings).
 
 ---
 
@@ -247,7 +247,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Redirect:** `/user/management` → `/user/profile`.
 
-**Loading:** Primary ring spinner (session, players, my-matches).
+**Loading:** `PageLoader` (`tall`) (session, players, my-matches).
 
 ---
 
@@ -275,6 +275,6 @@ Keep existing DaisyUI patterns until a dedicated restyle:
 - `ActionCard`
 - History charts (`RankingsHistoryComponent`, Recharts), ranking history page chrome
 - Login page styling
-- `LoadingSpinner` on admin routes (may still use DaisyUI spinner internally)
+- `LoadingSpinner` (login) and `PageLoader` / `GameLoader` elsewhere — see `GameLoader.tsx` and `design.md` Loading
 
 When restyling those pages later, reuse tokens from `design.md` and prefer new primitives over new one-off styles.

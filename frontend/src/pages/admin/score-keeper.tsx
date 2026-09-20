@@ -14,6 +14,7 @@ import { isValidMatchScore } from '@/utils/scoreValidation';
 import { Cog6ToothIcon } from '@heroicons/react/24/outline';
 import MatchResultLegend from '@/components/matches/MatchResultLegend';
 import MatchScoreRow from '@/components/matches/MatchScoreRow';
+import { PageLoader } from '@/components/common/GameLoader';
 
 interface MatchScore {
   team1Score: number;
@@ -311,15 +312,7 @@ const ScoreKeeperPage = () => {
   };
 
   if (status === 'loading' || gameLoading || playersLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-[40vh]">
-        <div
-          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
-          role="status"
-          aria-label="Loading score keeper"
-        />
-      </div>
-    );
+    return <PageLoader variant="compact" label="Loading score keeper" />;
   }
 
   if (!game) {

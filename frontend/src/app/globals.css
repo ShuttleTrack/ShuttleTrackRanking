@@ -80,3 +80,53 @@
 .animate-shimmer {
   animation: shimmer 2s infinite;
 }
+
+@keyframes racket-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes shuttle-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes court-spin {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.game-loader-racket-spin {
+  animation: racket-spin 1.1s linear infinite;
+  transform-origin: 32px 38px;
+}
+
+.game-loader-shuttle-orbit {
+  animation: shuttle-orbit 2.4s linear infinite;
+  transform-origin: 32px 32px;
+}
+
+.game-loader-court {
+  animation: court-spin 8s linear infinite;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-loader-racket-spin,
+  .game-loader-shuttle-orbit,
+  .game-loader-court {
+    animation: none;
+  }
+}

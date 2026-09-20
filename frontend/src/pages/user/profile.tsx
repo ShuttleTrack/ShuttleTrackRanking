@@ -4,6 +4,7 @@ import { useRankings } from '@/hooks/useRankings';
 import { useRequireUser } from '@/hooks/useRequireUser';
 import { capitalizeFirstLetter } from '@/utils/string';
 import TrendIndicator from '@/components/leaderboard/TrendIndicator';
+import { PageLoader } from '@/components/common/GameLoader';
 
 const iconOutlineBtn =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-surface-container-high/50 text-on-surface transition-colors hover:border-primary/40';
@@ -14,15 +15,7 @@ const UserProfilePage = () => {
   const currentUser = rankings?.players.find((p) => p.id === session?.user?.playerId);
 
   if (status === 'loading' || rankingsLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div
-          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
-          role="status"
-          aria-label="Loading"
-        />
-      </div>
-    );
+    return <PageLoader variant="tall" label="Loading" />;
   }
 
   if (!isUser) return null;

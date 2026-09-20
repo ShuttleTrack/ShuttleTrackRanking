@@ -2,20 +2,13 @@ import React from 'react';
 import { useRankings } from '@/hooks/useRankings';
 import Leaderboard from '@/components/leaderboard/Leaderboard';
 import PageHeader from '@/components/leaderboard/PageHeader';
+import { PageLoader } from '@/components/common/GameLoader';
 
 const RankingsComponent = () => {
   const { rankings, error, isLoading } = useRankings();
 
   if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-[40vh]">
-        <div
-          className="h-10 w-10 rounded-full border-2 border-primary border-t-transparent animate-spin"
-          role="status"
-          aria-label="Loading rankings"
-        />
-      </div>
-    );
+    return <PageLoader variant="compact" label="Loading rankings" />;
   }
 
   if (error) {
