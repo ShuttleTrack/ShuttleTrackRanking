@@ -2,7 +2,7 @@
 
 Dark, performance-oriented leaderboard aesthetic derived from the Stitch player-rankings mock. **Brand:** Dutch Lankan Shuttle Masters. Do not use placeholder names from the mock (e.g. COURTCLAN).
 
-**Footer:** full club name as italic wordmark on **`md+` only**; mobile shows copyright + compact link row (no duplicate wordmark).
+**Footer:** full club name as italic wordmark on **`md+` only**; mobile shows copyright only (no duplicate wordmark, no link row).
 
 **Page background:** `dutch-lankan-shuttle-masters-logo-gray.png` (transparent gray PNG — near-black pixels knocked out, foreground luminance boosted via `min(255, int(lum * 1.35 + 40))` for light-gray-on-dark legibility) rendered `fixed`, centered, `w-[min(78vw,44rem)]`, `opacity-[0.13]`, `z-0`, `pointer-events-none`. Decorative only — all content is `z-10` above it.
 

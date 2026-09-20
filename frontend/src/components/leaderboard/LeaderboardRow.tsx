@@ -100,9 +100,12 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
 
   const subtitle = `Best rank #${player.highestRank}${player.timeInHighestRank ? ` · ${player.timeInHighestRank}` : ''}`;
 
+  const encountersHref = `/player/${player.id}/encounters`;
+
   return (
-    <div
-      className={`relative overflow-hidden group rounded-xl px-3 sm:px-8 py-2 md:py-4 ${rowClass} ${hoverBorder}`}
+    <Link
+      href={encountersHref}
+      className={`relative overflow-hidden group block cursor-pointer rounded-xl px-3 sm:px-8 py-2 md:py-4 ${rowClass} ${hoverBorder}`}
       style={style}
     >
       {(variant === 'gold' || variant === 'dark') && (
@@ -115,12 +118,11 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
           <RankBadge rank={player.playerRank} variant={variant} />
         </div>
         <div>
-          <Link
-            href={`/player/${player.id}/encounters`}
-            className={`font-headline font-bold hover:underline ${nameClass[variant]}`}
+          <span
+            className={`font-headline font-bold group-hover:underline ${nameClass[variant]}`}
           >
             {capitalizeFirstLetter(player.name)}
-          </Link>
+          </span>
           <p className={`text-xs font-medium tracking-wide mt-0.5 ${subtitleClass[variant]}`}>
             {subtitle}
           </p>
@@ -154,12 +156,11 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
             <RankBadge rank={player.playerRank} variant={variant} />
           </div>
           <div className="flex-1 min-w-0">
-            <Link
-              href={`/player/${player.id}/encounters`}
-              className={`font-headline font-bold text-base hover:underline truncate block ${nameClass[variant]}`}
+            <span
+              className={`font-headline font-bold text-base group-hover:underline truncate block ${nameClass[variant]}`}
             >
               {capitalizeFirstLetter(player.name)}
-            </Link>
+            </span>
             <p className={`text-xs font-medium mt-0.5 truncate ${subtitleClass[variant]}`}>{subtitle}</p>
           </div>
           <div className="flex-shrink-0">
@@ -200,7 +201,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 

@@ -12,16 +12,16 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **Desktop layout (md+):** three-column grid — logo (`h-16`) seated in a solid black `h-20` band (left), centered **Rankings** / **Encounters** / **History**, right zone **Live** + Sign In or avatar.
 
-**Mobile:** hamburger left, centered logo (`h-12`) in a `h-16` band, auth (+ live dot) on the right; full-screen panel matching the black bar.
+**Mobile:** hamburger left, centered logo (`h-12`) in a `h-16` band, **LIVE** chip + avatar on the right when games are in progress. LIVE chip matches the game viewer pill (ping dot, red border); one live game links straight to `/game-viewer`, multiple games open a dropdown (same items as desktop Live). No chip when nothing is live. Full-screen menu panel matches the black bar (Live section remains as backup).
 
 **Behavior:**
 
 - Encounters → scrollable player list → `/player/{id}/encounters`
 - History → Ranking History, Encounter History
 - Live → game viewer links with progress (hidden on desktop when no live games)
-- Session: Management, Admin Dashboard, Sign out
+- Session: avatar menu → Profile, Matches (USER), Admin Dashboard (ADMIN), Sign out
 
-**Visual:** orange `border-b-2 border-primary` underline on active top-level links; dark dropdown surfaces (`surface-container`); no emerald pills or light menus.
+**Visual:** orange `border-b-2 border-primary` underline on active top-level links; dark dropdown surfaces (`surface-container`); no emerald pills or light menus. **Avatar menu:** `w-56`, `mt-3` below the header; icon + label rows (`min-h-[44px]`); divider before **Sign Out** (`text-red-400`).
 
 ---
 
@@ -31,7 +31,7 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 
 **Purpose:** Page footer with club wordmark and copyright.
 
-**Content:** Dutch Lankan Shuttle Masters italic wordmark (desktop only); copyright year; links to `/`, `/encounter-history`, `/player-ranking-history`. **Mobile:** `py-6`, copyright `text-xs`, links in one `flex-nowrap` row (`text-xs`, `gap-4`). **Desktop:** wordmark + copyright left, links right (`py-12`).
+**Content:** Minimal — Dutch Lankan Shuttle Masters italic wordmark (`md+` only) and copyright line only (no nav links).
 
 **Used in:** `src/components/layout/Layout.tsx`
 
@@ -64,6 +64,8 @@ Reference for building and extending the dark leaderboard UI. Full tokens: [desi
 **Props:** One enriched `PlayerRankingData` including `lastFive`, `winRate`, `lastGameDayNet`, `rankChange`.
 
 **Variants:** `podiumGold` | `podiumSilver` | `podiumBronze` | `podiumDark` | `default` from `playerRank`.
+
+**Behavior:** The whole row is a link to `/player/{id}/encounters`.
 
 **Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name + subtitle | `TrendIndicator`; Row 2: Last 5 / Win rate / Last day / Points with `flex-col gap-0.5` captions (no divider). `LastGameDayNet` sits under the Last day caption between Win rate and Points. Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
 
@@ -213,6 +215,32 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ---
 
+### User Profile
+
+**Files:** `src/pages/user/profile.tsx`, `src/hooks/useRequireUser.ts`, `src/components/leaderboard/TrendIndicator.tsx`
+
+**Purpose:** Signed-in players (`USER`) see identity and ranking snapshot at `/user/profile`.
+
+**Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name/email, outline sign-out; four-column stats (Rank, Change, Score, Highest).
+
+**Loading:** Primary ring spinner (session + rankings).
+
+---
+
+### User Matches
+
+**Files:** `src/pages/user/matches.tsx`, `src/hooks/useRequireUser.ts`, `src/components/matches/MatchScoreRow.tsx`, `src/components/matches/MatchResultLegend.tsx`
+
+**Purpose:** Enter scores for the player’s own unplayed matches in live games (`/user/matches`).
+
+**Layout:** **Your matches** title + orange rule; `MatchResultLegend`; `max-w-3xl` game cards (live pulse, **Game #{id}**, date). `MatchScoreRow` (`showResultChips={false}`); `interactive` only when unscored. Score modal matches Score Keeper pattern.
+
+**Redirect:** `/user/management` → `/user/profile`.
+
+**Loading:** Primary ring spinner (session, players, my-matches).
+
+---
+
 ## Mapping from legacy UI
 
 | Legacy | New |
@@ -233,7 +261,7 @@ Keep existing DaisyUI patterns until a dedicated restyle:
 
 - **Find Encounters** (`EncounterHistoryComponent`, `/encounter-history`) — form and results table still legacy; pills only share dark `ScoreBreakdownPills`
 - Manage players
-- Modals and password gates on other admin routes (score keeper dialogs restyled; logic unchanged)
+- Modals and password gates on other admin routes (score keeper and user management score entry restyled; logic unchanged)
 - `ActionCard`
 - History charts (`RankingsHistoryComponent`, Recharts), ranking history page chrome
 - Login page styling
