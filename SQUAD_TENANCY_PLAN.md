@@ -42,7 +42,7 @@ model SquadAdmin {
 }
 ```
 
-- **`Player`** gains `squadId` + relation. The same Google email can now have one `Player` row per squad, each with its own `rankScore`/`playerRank`/etc. — the same person can be an independently-ranked player in multiple squads.
+- **`Player`** gains `squadId` + relation, and `email` becomes **required** (not nullable) going forward — email is now the only link between a login and a role in a squad, so every player needs one. The same Google email can now have one `Player` row per squad, each with its own `rankScore`/`playerRank`/etc. — the same person can be an independently-ranked player in multiple squads.
 - **`Encounter`** gains `squadId` + relation; the uniqueness constraint becomes `[squadId, team1, team2, encounterDate]`. This needs a direct column (not a derived join) because `team1`/`team2` are opaque encoded player-id strings — query filters like "all unprocessed encounters for date X" need `squadId` directly in the `where` clause.
 - **`Game`** gains `squadId` + relation, same reasoning — `groups`/`scores` are JSON blobs of player ids, not FK-joinable.
 - **`ScoreHistory`** is left unchanged. It's always queried by `playerId`, and `playerId` already uniquely pins a squad once `Player` is squad-scoped, so no denormalized `squadId` is needed there.
@@ -53,8 +53,9 @@ One-time backfill for the existing single-squad data:
 1. Push the new tables/columns.
 2. Create one `Squad` row for the existing data.
 3. Backfill `squadId` on every existing `Player`, `Encounter`, `Game` row to that squad's id.
-4. Make `squadId` required.
-5. Convert today's `ALLOWED_ADMIN_EMAILS` list into `SquadAdmin` rows for that default squad. The env var itself stays in place — see below.
+4. Audit existing players for a missing or duplicate email within that squad (today there's no email uniqueness or required-ness at all) and resolve any collisions. Any player with no email is grandfathered into the roster/history as-is but can't log in until an email is added.
+5. Make `squadId` required, make `Player.email` required, and add the `@@unique([squadId, email])` constraint.
+6. Convert today's `ALLOWED_ADMIN_EMAILS` list into `SquadAdmin` rows for that default squad. The env var itself stays in place — see below.
 
 ## Auth & access model
 
@@ -64,6 +65,7 @@ Google SSO itself is untouched. What changes is what "admin" means, since it's n
 - A new `SquadAdmin` join table (squad + email) grants admin rights scoped to one squad — the day-to-day equivalent of what today's global admin flag does, just per-tenant.
 - Access checks resolve **per request, per squad** rather than being cached as one flag on the session: given a signed-in email and a squad id, look up whether that email is a `SquadAdmin` for that squad, and separately whether it has a `Player` row in that squad. This lets the same person be an admin in one squad and just a player (or nobody) in another, with no stale cross-squad state.
 - The session itself shrinks to identity + platform-superadmin status; squad-specific admin/player status is resolved fresh wherever it's needed.
+- **Login is required for everything except the public ranking page.** Viewing a squad's leaderboard needs no sign-in; encounter history, game viewer, player ranking history, all user pages, and all admin pages require a signed-in, recognized account. Today only `/admin/*` is gated — this widens that gate to nearly the whole app.
 
 ## Ranking/data-access layer
 
@@ -75,10 +77,11 @@ What changes is the **data-access layer around them**: every function that curre
 
 Every board needs to stay bookmarkable and shareable, so squads are identified in the URL rather than through a session-only "active squad" selector:
 
-- Public pages (leaderboard, rankings, encounter history) move under a squad-scoped path, e.g. `/s/{squad-slug}/...`.
+- The **only public, no-login page** is a squad's ranking/leaderboard, e.g. `/s/{squad-slug}`.
+- Everything else sits behind sign-in: encounter history, game viewer, and player ranking history move under `/s/{squad-slug}/...` alongside the existing player-facing pages under `/s/{squad-slug}/user/...`, all requiring a signed-in account.
 - Admin pages move under `/s/{squad-slug}/admin/...`, gated by the per-squad admin check described above.
-- Player-facing authenticated pages move under `/s/{squad-slug}/user/...`.
-- API routes move under `/api/squads/{squadId}/...`, with every handler validating the squad id and scoping its queries accordingly.
+- API routes move under `/api/squads/{squadId}/...`, with every handler validating the squad id and scoping its queries accordingly; every route except the public ranking read requires a session.
+- `middleware.ts`'s matcher, which today only protects `/admin/:path*`, widens to cover everything squad-scoped except the ranking root.
 - Sign-in stays global. After signing in, a squad-picker landing page lists the squads the signed-in email administers or plays in.
 - A new platform-level, superadmin-only surface handles creating squads and assigning/removing squad admins.
 
