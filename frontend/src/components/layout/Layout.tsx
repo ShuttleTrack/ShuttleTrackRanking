@@ -2,7 +2,7 @@ import Image from 'next/image';
 import NavigationComponent from '../NavigationComponent';
 import SiteFooter from './SiteFooter';
 
-const BUILD_IDENTIFIER = process.env.NEXT_PUBLIC_BUILD_IDENTIFIER;
+const BUILD_IDENTIFIER = process.env.NEXT_PUBLIC_BUILD_IDENTIFIER ?? 'local';
 
 interface LayoutProps {
   children: React.ReactNode;
