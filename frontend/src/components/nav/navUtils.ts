@@ -1,18 +1,20 @@
 export const BUILD_IDENTIFIER =
   process.env.NEXT_PUBLIC_BUILD_IDENTIFIER ?? 'local';
 
-export const historyLinks = [
-  {
-    name: 'Ranking History',
-    href: '/player-ranking-history',
-    hint: 'Rank changes over time',
-  },
-  {
-    name: 'Encounter History',
-    href: '/encounter-history',
-    hint: 'Search matches across players',
-  },
-] as const;
+export function buildHistoryLinks(squadSlug: string) {
+  return [
+    {
+      name: 'Ranking History',
+      href: `/s/${squadSlug}/player-ranking-history`,
+      hint: 'Rank changes over time',
+    },
+    {
+      name: 'Encounter History',
+      href: `/s/${squadSlug}/encounter-history`,
+      hint: 'Search matches across players',
+    },
+  ] as const;
+}
 
 export function classNames(...classes: (string | boolean | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
@@ -35,7 +37,7 @@ export function isEncountersRoute(pathname: string): boolean {
 }
 
 export function isHistoryRoute(pathname: string): boolean {
-  return historyLinks.some((link) => pathname === link.href);
+  return pathname.endsWith('/player-ranking-history') || pathname.endsWith('/encounter-history');
 }
 
 export const scoreboardSegmentClass = (active: boolean) =>

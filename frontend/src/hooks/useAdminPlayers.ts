@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 import type { Player } from '@/types/player';
+import { useSquad } from '@/contexts/SquadContext';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -8,8 +9,9 @@ const fetcher = async (url: string) => {
 };
 
 export function useAdminPlayers(status: 'active' | 'inactive') {
+  const { id: squadId } = useSquad();
   const { data, error, isLoading, mutate } = useSWR<Player[]>(
-    `/api/admin/players?status=${status}`,
+    `/api/squads/${squadId}/admin/players?status=${status}`,
     fetcher
   );
 
@@ -25,4 +27,4 @@ export function useAdminPlayers(status: 'active' | 'inactive') {
     error,
     mutate
   };
-} 
+}

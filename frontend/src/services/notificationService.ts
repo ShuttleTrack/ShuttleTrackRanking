@@ -91,9 +91,12 @@ class NotificationService {
     });
   }
 
-  async notifyGameStarted(gameId: string) {
-    const gameViewerUrl = encodeURI(`${publicUrl}/game-viewer?gameId=${gameId}`);
-    
+  // squadSlug identifies which squad's public board to link to. Making the underlying Telegram
+  // scheduler itself per-squad-configurable is out of scope for this pass (SQUAD_TENANCY_PLAN.md)
+  // - this only keeps the linked URLs pointing at a real, valid squad-scoped page.
+  async notifyGameStarted(squadSlug: string, gameId: string) {
+    const gameViewerUrl = encodeURI(`${publicUrl}/s/${squadSlug}/game-viewer?gameId=${gameId}`);
+
     return this.sendNotificationWithConfirm({
       title: `🏸 Game #${gameId.slice(-4)} has started!`,
       message: `Track live scores, groups and game combinations by clicking the button below.`,
@@ -108,7 +111,7 @@ class NotificationService {
     });
   }
 
-  async notifyGameCompleted(gameId: string) {
+  async notifyGameCompleted(squadSlug: string, gameId: string) {
     return this.sendNotificationWithConfirm({
       title: `🏆 Game #${gameId.slice(-4)} has been completed!`,
       message: `Game #${gameId.slice(-4)} has been completed and scores have been processed. Check the updated rankings by clicking the button below.`,
@@ -116,7 +119,7 @@ class NotificationService {
         inline_keyboard: [[
           {
             text: '🏆 Check Rankings',
-            url: encodeURI(`${publicUrl}`)
+            url: encodeURI(`${publicUrl}/s/${squadSlug}`)
           }
         ]]
       }

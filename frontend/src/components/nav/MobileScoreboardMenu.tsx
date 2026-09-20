@@ -7,7 +7,8 @@ import type { Player } from '@/types/player';
 import type { LiveGame } from '@/hooks/useLiveGames';
 import { NavPlayerSearch } from './NavPlayerSearch';
 import { LiveGameProgressCards } from './LiveGameProgressList';
-import { classNames, historyLinks } from './navUtils';
+import { classNames, buildHistoryLinks } from './navUtils';
+import { useOptionalSquad } from '@/contexts/SquadContext';
 
 const tileClass = (active: boolean) =>
   classNames(
@@ -32,35 +33,40 @@ export function MobileScoreboardMenu({
 }: MobileScoreboardMenuProps) {
   const router = useRouter();
   const { data: session } = useSession();
+  const squad = useOptionalSquad();
   const [encountersOpen, setEncountersOpen] = useState(false);
 
   return (
     <div className="px-3 pt-4 pb-8 space-y-3">
-      {/* Rankings tile */}
-      <Link
-        href="/"
-        className={classNames(tileClass(router.pathname === '/'), 'text-lg font-headline font-bold')}
-        onClick={onClose}
-        aria-current={router.pathname === '/' ? 'page' : undefined}
-      >
-        Rankings
-      </Link>
-
-      {/* History tiles */}
-      <div className="grid grid-cols-2 gap-2">
-        {historyLinks.map((link) => (
+      {squad && (
+        <>
+          {/* Rankings tile */}
           <Link
-            key={link.href}
-            href={link.href}
-            className={tileClass(router.pathname === link.href)}
+            href={`/s/${squad.slug}`}
+            className={classNames(tileClass(router.pathname === '/s/[squad]'), 'text-lg font-headline font-bold')}
             onClick={onClose}
-            aria-current={router.pathname === link.href ? 'page' : undefined}
+            aria-current={router.pathname === '/s/[squad]' ? 'page' : undefined}
           >
-            <span className="font-headline text-sm font-semibold leading-tight">{link.name}</span>
-            <span className="text-[11px] text-on-surface-variant mt-1 leading-snug">{link.hint}</span>
+            Rankings
           </Link>
-        ))}
-      </div>
+
+          {/* History tiles */}
+          <div className="grid grid-cols-2 gap-2">
+            {buildHistoryLinks(squad.slug).map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={tileClass(router.asPath === link.href)}
+                onClick={onClose}
+                aria-current={router.asPath === link.href ? 'page' : undefined}
+              >
+                <span className="font-headline text-sm font-semibold leading-tight">{link.name}</span>
+                <span className="text-[11px] text-on-surface-variant mt-1 leading-snug">{link.hint}</span>
+              </Link>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Encounters tile — expands to reveal search */}
       <div className="rounded-xl border border-white/10 overflow-hidden">
@@ -120,17 +126,17 @@ export function MobileScoreboardMenu({
           <p className="px-1 py-1 text-xs text-on-surface-variant truncate font-label uppercase tracking-wide">
             {session.user?.name}
           </p>
-          {session.user.accessLevel?.includes('USER') && (
+          {squad?.isPlayerHere && (
             <>
               <Link
-                href="/user/profile"
+                href={`/s/${squad.slug}/user/profile`}
                 className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
                 onClick={onClose}
               >
                 Profile
               </Link>
               <Link
-                href="/user/matches"
+                href={`/s/${squad.slug}/user/matches`}
                 className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
                 onClick={onClose}
               >
@@ -138,15 +144,22 @@ export function MobileScoreboardMenu({
               </Link>
             </>
           )}
-          {session.user.accessLevel?.includes('ADMIN') && (
+          {squad?.isSquadAdmin && (
             <Link
-              href="/admin/dashboard"
+              href={`/s/${squad.slug}/admin/dashboard`}
               className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
               onClick={onClose}
             >
               Admin Dashboard
             </Link>
           )}
+          <Link
+            href="/"
+            className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
+            onClick={onClose}
+          >
+            Switch Squad
+          </Link>
           <button
             type="button"
             onClick={() => {

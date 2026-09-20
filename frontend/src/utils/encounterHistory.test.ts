@@ -105,12 +105,12 @@ describe('groupEncountersByDate', () => {
 
 describe('buildEncounterHistoryUrl', () => {
   it('returns null without teamA1', () => {
-    expect(buildEncounterHistoryUrl({ teamA1: 0, teamA2: 0, teamB1: 0, teamB2: 0 })).toBeNull();
+    expect(buildEncounterHistoryUrl(7, { teamA1: 0, teamA2: 0, teamB1: 0, teamB2: 0 })).toBeNull();
   });
 
-  it('builds API url with all slots', () => {
+  it('builds API url with all slots, scoped to the squad', () => {
     expect(
-      buildEncounterHistoryUrl({ teamA1: 1, teamA2: 2, teamB1: 3, teamB2: 4 }),
-    ).toBe('/api/encounters/history?teamA1=1&teamA2=2&teamB1=3&teamB2=4');
+      buildEncounterHistoryUrl(7, { teamA1: 1, teamA2: 2, teamB1: 3, teamB2: 4 }),
+    ).toBe('/api/squads/7/encounters/history?teamA1=1&teamA2=2&teamB1=3&teamB2=4');
   });
 });

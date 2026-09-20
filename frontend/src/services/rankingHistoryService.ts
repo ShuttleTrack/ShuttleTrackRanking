@@ -16,8 +16,8 @@ interface PlayerHistory {
   }[];
 }
 
-export const getRankingHistory = async (): Promise<RankingHistoryData[]> => {
-  const data = (await getAllPlayersHistory('RANK')) as PlayerHistory[];
+export const getRankingHistory = async (squadId: number): Promise<RankingHistoryData[]> => {
+  const data = (await getAllPlayersHistory(squadId, 'RANK')) as PlayerHistory[];
 
   // Transform data for graph
   let graphData = transformDataForGraph(data);

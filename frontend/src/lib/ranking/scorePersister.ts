@@ -51,8 +51,8 @@ type PrismaTx = Omit<typeof prisma, '$transaction' | '$connect' | '$disconnect' 
 // caches per-date on the singleton bean across the whole process; not replicated here since it's
 // a performance detail, not a correctness one, and a per-request cache would need request-scoped
 // state this module doesn't have).
-async function isScoreGapLargeEnoughForDate(encounterDate: Date): Promise<boolean> {
-  const dayEncounters = await prisma.encounter.findMany({ where: { encounterDate } });
+async function isScoreGapLargeEnoughForDate(squadId: number, encounterDate: Date): Promise<boolean> {
+  const dayEncounters = await prisma.encounter.findMany({ where: { squadId, encounterDate } });
   const distinctTeamStrings = new Set<string>();
   for (const e of dayEncounters) {
     distinctTeamStrings.add(e.team1);
@@ -74,7 +74,7 @@ export async function calculateAndPersistElo(encounterId: number): Promise<void>
   const team1Players = await prisma.player.findMany({ where: { id: { in: parseTeamIds(encounter.team1) } } });
   const team2Players = await prisma.player.findMany({ where: { id: { in: parseTeamIds(encounter.team2) } } });
 
-  const dayWideScoreGapLargeEnough = await isScoreGapLargeEnoughForDate(encounter.encounterDate);
+  const dayWideScoreGapLargeEnough = await isScoreGapLargeEnoughForDate(encounter.squadId, encounter.encounterDate);
 
   const result = calculateElo({
     team1AverageRankScore: team1Players.reduce((s, p) => s + p.rankScore, 0) / team1Players.length,
@@ -155,8 +155,11 @@ export async function applyAbsenteeDeductions(playerIds: number[]): Promise<void
 }
 
 // ScorePersister.activatePlayer, entered via PlayerService.activatePlayer's already-active guard.
-export async function activatePlayer(playerId: number, explicitScore: number | null): Promise<void> {
+export async function activatePlayer(squadId: number, playerId: number, explicitScore: number | null): Promise<void> {
   const player = await prisma.player.findUniqueOrThrow({ where: { id: playerId } });
+  if (player.squadId !== squadId) {
+    throw new Error(`Player not found: ${playerId}`);
+  }
   if (player.playerStatus === 'ACTIVE') {
     return; // PlayerService.activatePlayer: "Player is already active" - no-op.
   }
@@ -172,7 +175,7 @@ export async function activatePlayer(playerId: number, explicitScore: number | n
     if (!lastActiveGame) {
       throw new Error(`No prior active game found for player ${playerId} - cannot auto-calculate activation score`);
     }
-    const activePlayers = await prisma.player.findMany({ where: { playerStatus: 'ACTIVE' } });
+    const activePlayers = await prisma.player.findMany({ where: { squadId: player.squadId, playerStatus: 'ACTIVE' } });
     const sameRankPlayer = activePlayers.find((p) => p.playerRank === lastActiveGame.playerNewRank);
     currentSameRankPlayerScore = sameRankPlayer ? sameRankPlayer.rankScore : null;
     currentMinActiveRankScore = Math.min(...activePlayers.map((p) => p.rankScore));
@@ -191,8 +194,11 @@ export async function activatePlayer(playerId: number, explicitScore: number | n
 
 // ScorePersister.deactivatePlayer, as called by CommonAbsenteeManager for long-term absentees
 // (also usable standalone, matching the Java method's own visibility).
-export async function deactivatePlayer(playerId: number): Promise<void> {
+export async function deactivatePlayer(squadId: number, playerId: number): Promise<void> {
   const player = await prisma.player.findUniqueOrThrow({ where: { id: playerId } });
+  if (player.squadId !== squadId) {
+    throw new Error(`Player not found: ${playerId}`);
+  }
   const today = todayDateOnly();
   await prisma.$transaction(async (tx) => {
     await tx.player.update({
@@ -207,8 +213,8 @@ export async function deactivatePlayer(playerId: number): Promise<void> {
 // asc tiebreak), bumping highestRank/rankSince when a player reaches a new personal best.
 // Returns the updated players (Java: `List<Player>`), needed by callers that then backfill
 // ScoreHistory.playerNewRank for the day (see processEncounters.ts).
-export async function updatePlayerRanking(): Promise<PrismaPlayer[]> {
-  const allPlayers = await prisma.player.findMany();
+export async function updatePlayerRanking(squadId: number): Promise<PrismaPlayer[]> {
+  const allPlayers = await prisma.player.findMany({ where: { squadId } });
   const activePlayers = allPlayers.filter((p) => p.playerStatus === 'ACTIVE');
   const ranked = getRankedPlayers(activePlayers.map((p) => ({ ...p, playerRank: p.playerRank ?? 0 })));
 
