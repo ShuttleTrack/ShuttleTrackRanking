@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { signOut, useSession } from 'next-auth/react';
 import { classNames, menuTransitionProps, scoreboardSegmentClass } from './navUtils';
+import { useOptionalSquad } from '@/contexts/SquadContext';
 
 const accountMenuPanelClass =
   'absolute top-full right-0 z-[60] mt-3 w-56 origin-top-right rounded-xl border border-white/5 bg-surface-container p-1.5 shadow-xl focus:outline-none';
@@ -28,6 +29,7 @@ const accountMenuSignOutClass = (active: boolean) =>
 
 export function AccountMenu() {
   const { data: session } = useSession();
+  const squad = useOptionalSquad();
 
   if (!session) {
     return (
@@ -37,8 +39,11 @@ export function AccountMenu() {
     );
   }
 
-  const showUserLinks = session.user.accessLevel?.includes('USER');
-  const showAdmin = session.user.accessLevel?.includes('ADMIN');
+  // Squad-specific admin/player status only exists once a squad is in context (see
+  // SquadContext.tsx) - on a non-squad-scoped page (the squad picker, platform admin) there's
+  // nothing squad-specific to show.
+  const showUserLinks = Boolean(squad?.isPlayerHere);
+  const showAdmin = Boolean(squad?.isSquadAdmin);
   const showAccountLinks = showUserLinks || showAdmin;
 
   return (
@@ -65,7 +70,7 @@ export function AccountMenu() {
             <>
               <Menu.Item>
                 {({ active }) => (
-                  <Link href="/user/profile" className={accountMenuRowClass(active)}>
+                  <Link href={`/s/${squad?.slug}/user/profile`} className={accountMenuRowClass(active)}>
                     <UserCircleIcon
                       className="h-5 w-5 shrink-0 text-on-surface-variant"
                       aria-hidden
@@ -76,7 +81,7 @@ export function AccountMenu() {
               </Menu.Item>
               <Menu.Item>
                 {({ active }) => (
-                  <Link href="/user/matches" className={accountMenuRowClass(active)}>
+                  <Link href={`/s/${squad?.slug}/user/matches`} className={accountMenuRowClass(active)}>
                     <PencilSquareIcon
                       className="h-5 w-5 shrink-0 text-on-surface-variant"
                       aria-hidden
@@ -90,7 +95,7 @@ export function AccountMenu() {
           {showAdmin && (
             <Menu.Item>
               {({ active }) => (
-                <Link href="/admin/dashboard" className={accountMenuRowClass(active)}>
+                <Link href={`/s/${squad?.slug}/admin/dashboard`} className={accountMenuRowClass(active)}>
                   <Squares2X2Icon
                     className="h-5 w-5 shrink-0 text-on-surface-variant"
                     aria-hidden
@@ -100,6 +105,17 @@ export function AccountMenu() {
               )}
             </Menu.Item>
           )}
+          <Menu.Item>
+            {({ active }) => (
+              <Link href="/" className={accountMenuRowClass(active)}>
+                <Squares2X2Icon
+                  className="h-5 w-5 shrink-0 text-on-surface-variant"
+                  aria-hidden
+                />
+                Switch Squad
+              </Link>
+            )}
+          </Menu.Item>
           {showAccountLinks && (
             <div className="my-1 border-t border-white/10" role="separator" />
           )}

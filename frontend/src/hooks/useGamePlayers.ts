@@ -1,6 +1,7 @@
 import useSWR from 'swr';
 import type { Player } from '@/types/player';
 import { usePlayers } from './usePlayers';
+import { useSquad } from '@/contexts/SquadContext';
 
 interface GamePlayerResponse {
   id: number;
@@ -14,8 +15,9 @@ const fetcher = async (url: string) => {
 };
 
 export function useGamePlayers() {
-  const { data: eligiblePlayers, error: eligibleError, isLoading: eligibleLoading } = 
-    useSWR<GamePlayerResponse[]>('/api/game/players', fetcher);
+  const { id: squadId } = useSquad();
+  const { data: eligiblePlayers, error: eligibleError, isLoading: eligibleLoading } =
+    useSWR<GamePlayerResponse[]>(`/api/squads/${squadId}/game/players`, fetcher);
   const { players: allPlayers, isLoading: playersLoading } = usePlayers();
 
   const players = eligiblePlayers?.map(eligible => {
@@ -31,4 +33,4 @@ export function useGamePlayers() {
     isLoading: eligibleLoading || playersLoading,
     error: eligibleError
   };
-} 
+}

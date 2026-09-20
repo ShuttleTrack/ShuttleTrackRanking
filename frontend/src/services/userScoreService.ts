@@ -7,8 +7,8 @@ interface ScoreUpdate {
 }
 
 export const userScoreService = {
-  submitScore: async (data: ScoreUpdate): Promise<void> => {
-    const response = await fetch('/api/user/scores', {
+  submitScore: async (squadId: number, data: ScoreUpdate): Promise<void> => {
+    const response = await fetch(`/api/squads/${squadId}/user/scores`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -19,4 +19,4 @@ export const userScoreService = {
       throw new Error(error.message || 'Failed to submit score');
     }
   }
-}; 
+};

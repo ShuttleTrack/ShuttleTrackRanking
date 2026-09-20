@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import useSWR from 'swr';
 import type { Player } from '@/types/player';
 import { GameLoader } from '@/components/common/GameLoader';
+import { useSquad } from '@/contexts/SquadContext';
 
 interface EditPlayerModalProps {
   isOpen: boolean;
@@ -16,8 +17,10 @@ export const EditPlayerModal = ({ isOpen, onClose, onSubmit, player }: EditPlaye
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Use SWR to manage player data
-  const { mutate } = useSWR('/api/players');
+  // Use SWR to manage player data - same key usePlayers() fetches with, so this mutate()
+  // invalidates the same cache entry the roster page reads from.
+  const { id: squadId } = useSquad();
+  const { mutate } = useSWR(`/api/squads/${squadId}/players`);
 
   useEffect(() => {
     if (player) {
@@ -30,7 +33,7 @@ export const EditPlayerModal = ({ isOpen, onClose, onSubmit, player }: EditPlaye
     if (!player) return;
     setIsSubmitting(true);
     try {
-      const response = await fetch(`/api/players/${player.id}/activate`, {
+      const response = await fetch(`/api/squads/${squadId}/players/${player.id}/activate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

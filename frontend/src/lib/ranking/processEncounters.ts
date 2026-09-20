@@ -21,9 +21,10 @@ export interface AddEncounterInput {
 // EncounterController.persistEncounterResultV2 / PlayerUtil.getTeamPlayerIdsStringV2. Unlike
 // v1's getTeamPlayerIdsString (which resolves player *names* to ids first), v2 already takes
 // ids directly - just sorted ascending and joined, no existence check against PLAYER.
-export async function addEncounter(date: Date, input: AddEncounterInput) {
+export async function addEncounter(squadId: number, date: Date, input: AddEncounterInput) {
   return prisma.encounter.create({
     data: {
+      squadId,
       team1: encodeTeamIds([input.team1.player1, input.team1.player2]),
       team2: encodeTeamIds([input.team2.player1, input.team2.player2]),
       encounterDate: date,
@@ -52,14 +53,14 @@ export async function addEncounter(date: Date, input: AddEncounterInput) {
 // absentee pass) rather than guessing at a possible identity-equality bug. Verify against the
 // real backend (a real multi-encounter game-day process call) before trusting this endpoint in
 // production - see MIGRATION_PLAN.md Phase 4.
-export async function processEncountersForDate(date: Date): Promise<void> {
-  const dayEncounters = await prisma.encounter.findMany({ where: { encounterDate: date } });
+export async function processEncountersForDate(squadId: number, date: Date): Promise<void> {
+  const dayEncounters = await prisma.encounter.findMany({ where: { squadId, encounterDate: date } });
   const unprocessed = dayEncounters.filter((e) => !e.processed);
   if (unprocessed.length === 0) {
     throw new Error('No unprocessed encounters');
   }
 
-  const allPlayers = await prisma.player.findMany();
+  const allPlayers = await prisma.player.findMany({ where: { squadId } });
   const absentPlayerIds = new Set(allPlayers.map((p) => p.id));
 
   for (const encounter of unprocessed) {
@@ -71,7 +72,7 @@ export async function processEncountersForDate(date: Date): Promise<void> {
 
   await applyAbsenteeDeductions(Array.from(absentPlayerIds));
 
-  const rankedPlayers = await updatePlayerRanking();
+  const rankedPlayers = await updatePlayerRanking(squadId);
   for (const player of rankedPlayers) {
     // player.playerRank is always set here (just assigned by updatePlayerRanking).
     await updatePlayerEncounterNewRanking(player.id, date, player.playerRank as number);

@@ -23,6 +23,11 @@ export default withAuth(
   }
 );
 
+// Multi-squad tenancy (SQUAD_TENANCY_PLAN.md): this only covers "signed in at all" - the real
+// per-squad admin/player boundary is each page's own getServerSideProps
+// (resolveSquadAdminOrRedirect / resolveSquadUserOrRedirect) and each API route's
+// requireSquadAdmin/requireSuperAdmin. Public boards (the squad root, encounter-history,
+// game-viewer, player-ranking-history, player/*) are deliberately left out of this matcher.
 export const config = {
-  matcher: ['/admin/:path*'],
-}; 
+  matcher: ['/s/:squad/admin/:path*', '/s/:squad/user/:path*', '/platform/:path*'],
+};

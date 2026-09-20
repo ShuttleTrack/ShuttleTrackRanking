@@ -1,20 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { decideAccessLevels } from './accessDecision';
+import { isSuperAdmin } from './accessDecision';
 
-describe('decideAccessLevels (ported GoogleSSOAuthExtractor.extract /v2/auth branch)', () => {
-  const adminEmails = new Set(['admin@test.com']);
+describe('isSuperAdmin', () => {
+  const superAdminEmails = new Set(['admin@test.com']);
 
-  it('admin email -> [ADMIN, USER]', () => {
-    expect(decideAccessLevels('admin@test.com', adminEmails)).toEqual(['ADMIN', 'USER']);
+  it('platform-superadmin email -> true', () => {
+    expect(isSuperAdmin('admin@test.com', superAdminEmails)).toBe(true);
   });
 
-  it('admin email in different case still matches (comparison is lowercased)', () => {
-    expect(decideAccessLevels('Admin@Test.com', adminEmails)).toEqual(['ADMIN', 'USER']);
+  it('different case still matches (comparison is lowercased)', () => {
+    expect(isSuperAdmin('Admin@Test.com', superAdminEmails)).toBe(true);
   });
 
-  it('non-admin verified email -> [USER] (this module IS the /v2/auth endpoint, where a '
-    + 'verified non-admin is granted access - the Java extractor denies this on every other '
-    + '/v2/* route, which is out of scope here)', () => {
-    expect(decideAccessLevels('someone@test.com', adminEmails)).toEqual(['USER']);
+  it('non-superadmin email -> false', () => {
+    expect(isSuperAdmin('someone@test.com', superAdminEmails)).toBe(false);
   });
 });

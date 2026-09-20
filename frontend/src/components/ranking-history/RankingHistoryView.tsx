@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useSession } from 'next-auth/react';
 import { usePlayers } from '@/hooks/usePlayers';
 import { useRankingHistory } from '@/hooks/useRankingHistory';
 import { PageLoader } from '@/components/common/GameLoader';
@@ -9,6 +8,7 @@ import type { RowVariant } from '@/components/leaderboard/RankBadge';
 import PlayerPicker from '@/components/ranking-history/PlayerPicker';
 import RankTrajectoryChart from '@/components/ranking-history/RankTrajectoryChart';
 import RankChangeList from '@/components/ranking-history/RankChangeList';
+import { useSquad } from '@/contexts/SquadContext';
 import {
   buildRankChangeRows,
   historyKeyForPlayerName,
@@ -37,7 +37,7 @@ function useIsMdUp(): boolean {
 
 const RankingHistoryView = () => {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { slug } = useSquad();
   const isMdUp = useIsMdUp();
   const { players, isLoading: playersLoading, error: playersError } = usePlayers();
   const { rankingHistory, isLoading: historyLoading, error: historyError } = useRankingHistory();
@@ -64,18 +64,9 @@ const RankingHistoryView = () => {
     if (selectedPlayerId !== null && activePlayers.some((p) => p.id === selectedPlayerId)) {
       return;
     }
-    const defaultId = resolveDefaultPlayerId(activePlayers, {
-      queryPlayerId,
-      sessionPlayerId: session?.user?.playerId,
-    });
+    const defaultId = resolveDefaultPlayerId(activePlayers, { queryPlayerId });
     setSelectedPlayerId(defaultId);
-  }, [
-    playersLoading,
-    activePlayers,
-    selectedPlayerId,
-    queryPlayerId,
-    session?.user?.playerId,
-  ]);
+  }, [playersLoading, activePlayers, selectedPlayerId, queryPlayerId]);
 
   const selectPlayer = useCallback(
     (playerId: number) => {
@@ -164,7 +155,7 @@ const RankingHistoryView = () => {
               Player
             </p>
             <Link
-              href={`/player/${selectedPlayer.id}/encounters`}
+              href={`/s/${slug}/player/${selectedPlayer.id}/encounters`}
               className="font-headline text-xs font-semibold text-primary hover:text-primary-container shrink-0"
             >
               Match history

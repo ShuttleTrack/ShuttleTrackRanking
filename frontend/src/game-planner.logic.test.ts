@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateGroupDistribution } from '@/pages/admin/game-planner';
+import { calculateGroupDistribution } from '@/pages/s/[squad]/admin/game-planner';
 
 // Expected size composition (order-independent) for every supported count.
 const EXPECTED_MULTISETS: Record<number, number[]> = {

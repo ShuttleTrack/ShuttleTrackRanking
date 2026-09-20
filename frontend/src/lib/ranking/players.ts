@@ -24,7 +24,7 @@ export interface PlayerInfo {
 }
 
 export interface SecurePlayerInfo extends PlayerInfo {
-  email: string | null;
+  email: string;
 }
 
 export type HistoryType = 'RANK' | 'SCORE' | 'ALL';
@@ -100,8 +100,8 @@ async function mostRecentScoreHistoryFor(playerId: number): Promise<PrismaScoreH
 }
 
 // GET /players ?status=
-export async function getPlayers(status?: string): Promise<PlayerInfo[]> {
-  const allPlayers = await prisma.player.findMany();
+export async function getPlayers(squadId: number, status?: string): Promise<PlayerInfo[]> {
+  const allPlayers = await prisma.player.findMany({ where: { squadId } });
   const eligible = filterPlayersByStatusParam(allPlayers, status);
   return Promise.all(
     eligible.map(async (player) => toPlayerInfo(player, await mostRecentScoreHistoryFor(player.id)))
@@ -109,8 +109,8 @@ export async function getPlayers(status?: string): Promise<PlayerInfo[]> {
 }
 
 // GET /v2/auth/players ?status=
-export async function getSecurePlayers(status?: string): Promise<SecurePlayerInfo[]> {
-  const allPlayers = await prisma.player.findMany();
+export async function getSecurePlayers(squadId: number, status?: string): Promise<SecurePlayerInfo[]> {
+  const allPlayers = await prisma.player.findMany({ where: { squadId } });
   const eligible = filterPlayersByStatusParam(allPlayers, status);
   return Promise.all(
     eligible.map(async (player) => toSecurePlayerInfo(player, await mostRecentScoreHistoryFor(player.id)))
@@ -183,8 +183,8 @@ function dedupeByKey<T>(items: T[], keyOf: (item: T) => string): T[] {
 }
 
 // GET /players/history ?type= (defaults RANK) - only active players, per PlayerController.
-export async function getAllPlayersHistory(type: HistoryType = 'RANK') {
-  const allPlayers = await prisma.player.findMany();
+export async function getAllPlayersHistory(squadId: number, type: HistoryType = 'RANK') {
+  const allPlayers = await prisma.player.findMany({ where: { squadId } });
   const activePlayers = allPlayers.filter(isActive);
   return Promise.all(
     activePlayers.map(async (player) => {
@@ -195,10 +195,12 @@ export async function getAllPlayersHistory(type: HistoryType = 'RANK') {
 }
 
 // GET /players/{playerId}/history ?type= (defaults RANK). No not-found handling in the
-// original (player.orElseThrow()) - mirrors that by letting a missing player throw.
-export async function getPlayerHistory(playerId: number, type: HistoryType = 'RANK') {
+// original (player.orElseThrow()) - mirrors that by letting a missing player throw. squadId is
+// required so a squad-scoped route can't be used to pull another squad's player history by
+// guessing a player id - player ids are a shared, globally-unique sequence across all squads.
+export async function getPlayerHistory(squadId: number, playerId: number, type: HistoryType = 'RANK') {
   const player = await prisma.player.findUnique({ where: { id: playerId } });
-  if (!player) {
+  if (!player || player.squadId !== squadId) {
     throw new Error(`Player not found: ${playerId}`);
   }
   const rows = await prisma.scoreHistory.findMany({ where: { playerId } });
@@ -216,7 +218,9 @@ function generateRandomColorHex(): string {
 export interface NewPlayerInput {
   name: string;
   initialScore: number;
-  email: string | null;
+  // Required going forward (SQUAD_TENANCY_PLAN.md) - email is the only link between a login and
+  // a role in a squad.
+  email: string;
 }
 
 // PlayerService.addPlayer: POST /v2/players. Note the real Java return type declares
@@ -224,22 +228,26 @@ export interface NewPlayerInput {
 // Jackson serializes the *runtime* object, so `email` genuinely is present in the real
 // response despite the narrower declared type. `previousRank` is the player's own brand-new
 // rank (not looked up from history) and `timeInHighestRank` is left unset - preserved exactly.
-export async function addPlayer(input: NewPlayerInput): Promise<SecurePlayerInfo> {
-  const activePlayers = await prisma.player.findMany({ where: { playerStatus: 'ACTIVE' } });
-  const lastActivePlayer = activePlayers.reduce((max, p) =>
-    (p.playerRank ?? -Infinity) > (max.playerRank ?? -Infinity) ? p : max
-  );
-  const newRank = (lastActivePlayer.playerRank ?? 0) + 1;
+export async function addPlayer(squadId: number, input: NewPlayerInput): Promise<SecurePlayerInfo> {
+  // A brand-new squad has no players yet, unlike the single-squad original this was ported from
+  // (which could always assume at least one existing player) - guard the empty case explicitly.
+  const activePlayers = await prisma.player.findMany({ where: { squadId, playerStatus: 'ACTIVE' } });
+  const newRank =
+    activePlayers.length === 0
+      ? 1
+      : (activePlayers.reduce((max, p) => ((p.playerRank ?? -Infinity) > (max.playerRank ?? -Infinity) ? p : max))
+          .playerRank ?? 0) + 1;
 
   const player = await prisma.player.create({
     data: {
+      squadId,
       name: input.name,
       playerRank: newRank,
       highestRank: newRank,
       rankScore: input.initialScore,
       rankSince: new Date(),
       colorHex: generateRandomColorHex(),
-      email: input.email ? input.email.toLowerCase() : null,
+      email: input.email.toLowerCase(),
     },
   });
 
@@ -265,9 +273,13 @@ export interface UpdatePlayerInput {
 
 // PlayerService.updatePlayer: PUT /v2/players/{id}. Returns plain PlayerInfo (no email, even
 // though email may have just been updated) with `timeInHighestRank` hardcoded to "0 day(s)"
-// rather than computed - both preserved exactly as quirks of the original.
-export async function updatePlayer(input: UpdatePlayerInput): Promise<PlayerInfo> {
+// rather than computed - both preserved exactly as quirks of the original. squadId is required
+// so a squad-scoped route can't be used to update another squad's player by guessing an id.
+export async function updatePlayer(squadId: number, input: UpdatePlayerInput): Promise<PlayerInfo> {
   const existing = await prisma.player.findUniqueOrThrow({ where: { id: input.id } });
+  if (existing.squadId !== squadId) {
+    throw new Error(`Player not found: ${input.id}`);
+  }
   const data: { name?: string; email?: string } = {};
   if (input.name !== undefined && input.name !== null) data.name = input.name;
   if (input.email !== undefined && input.email !== null) data.email = input.email.toLowerCase();
@@ -297,8 +309,8 @@ export interface GamePlayer {
 // GameService.getAvailablePlayersForGame: GET /v2/game/players. Ranked list (by rankScore desc,
 // current playerRank asc tiebreak) of every non-disabled player, with a fresh sequential
 // game-day rank (distinct from their persisted `playerRank`).
-export async function getAvailablePlayersForGame(): Promise<GamePlayer[]> {
-  const allPlayers = await prisma.player.findMany();
+export async function getAvailablePlayersForGame(squadId: number): Promise<GamePlayer[]> {
+  const allPlayers = await prisma.player.findMany({ where: { squadId } });
   const available = allPlayers.filter((p) => p.playerStatus !== 'DISABLED');
   const ranked = getRankedPlayers(available.map((p) => ({ ...p, playerRank: p.playerRank ?? 0 })));
   return ranked.map((player, index) => ({ id: player.id, rank: index + 1 }));
@@ -313,7 +325,7 @@ export interface RawPlayerJson {
   highestRank: number | null;
   rankSince: string | null;
   status: string | null;
-  email: string | null;
+  email: string;
   // Jackson auto-detects `isXxx()` boolean getters as bean properties, so the real Java
   // `List<Player>` response (POST /v2/players/update-ranking - the entity, not a DTO) actually
   // includes these three derived fields too, not just the raw columns.

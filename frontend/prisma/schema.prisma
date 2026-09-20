@@ -10,8 +10,13 @@ datasource db {
 // Finalized from the Phase 1 introspection (MIGRATION_PLAN.md) against the real `brs` schema.
 // Model/field names are PascalCase/camelCase for TS ergonomics; @@map/@map preserve the actual
 // legacy (Java/Hibernate-created) table and column names underneath.
+//
+// Multi-squad tenancy (SQUAD_TENANCY_PLAN.md): Player/Encounter/Game are squad-scoped so
+// independent friend groups can share one deployment. A single Google email can have one
+// Player row per squad (own rankScore/playerRank/etc per squad) - see Squad/SquadAdmin below.
 model Player {
   id           Int       @id @default(autoincrement())
+  squadId      Int       @map("squad_id")
   name         String    @db.VarChar(32)
   rankScore    Float     @default(1000) @map("rank_score")
   playerRank   Int?      @map("player_rank")
@@ -23,7 +28,10 @@ model Player {
   // column kept here only for introspection fidelity. Don't use; don't drop without checking
   // nothing else reads it directly.
   disabled     Boolean   @default(dbgenerated("b'0'")) @db.Bit(1)
-  email        String?   @db.VarChar(255)
+  // Required going forward (SQUAD_TENANCY_PLAN.md): email is the only link between a login and
+  // a role in a squad, so every player needs one. Unique per squad, not globally - the same
+  // email can be a separately-ranked player in more than one squad.
+  email        String    @db.VarChar(255)
   // Free-form varchar in the DB (Hibernate `@Enumerated(STRING)`), not a real SQL enum, and
   // nullable - some rows may have no status. Kept as String? rather than a Prisma enum so an
   // unexpected/legacy value can't make a query throw; port PlayerStatus derivation exactly
@@ -31,11 +39,16 @@ model Player {
   // column alone.
   playerStatus String?   @map("player_status")
 
+  squad Squad @relation(fields: [squadId], references: [id])
+
+  @@unique([squadId, email])
+  @@index([squadId])
   @@map("PLAYER")
 }
 
 model Encounter {
   id              Int      @id @default(autoincrement())
+  squadId         Int      @map("squad_id")
   team1           String   @map("team_1") @db.VarChar(32)
   team2           String   @map("team_2") @db.VarChar(32)
   encounterDate   DateTime @map("encounter_date") @db.Date
@@ -51,7 +64,13 @@ model Encounter {
   // ScoreBreakdown/TeamScoreBreakdown shape used in EloRankScoreCalculator.
   scoreBreakdown  Json?    @map("score_breakdown")
 
-  @@unique([team1, team2, encounterDate], map: "team_uniqness")
+  squad Squad @relation(fields: [squadId], references: [id])
+
+  // team1/team2 are opaque encoded player-id strings (playerUtil.encodeTeamIds), not FK-joinable
+  // back to a squad - squadId has to be a direct column so date-scoped queries (e.g. "today's
+  // unprocessed encounters") can filter by squad without decoding every row.
+  @@unique([squadId, team1, team2, encounterDate], map: "team_uniqness")
+  @@index([squadId])
   @@map("ENCOUNTER")
 }
 
@@ -76,9 +95,48 @@ model ScoreHistory {
 // MIGRATION_PLAN.md Phase 1. Run `prisma db push` after editing this model.
 model Game {
   id        String   @id @default(cuid())
+  squadId   Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   groups    Json // Store groups as JSON
   scores    Json     @default("{}") // Default empty object for scores
   status    String   @default("DRAFT") // DRAFT, IN_PROGRESS, COMPLETED
+
+  squad Squad @relation(fields: [squadId], references: [id])
+
+  // groups/scores are JSON blobs of player ids, not FK-joinable back to a squad - same reasoning
+  // as Encounter.squadId above.
+  @@index([squadId])
+}
+
+// Multi-squad tenancy (SQUAD_TENANCY_PLAN.md). A Squad is an independent tenant: its own roster,
+// game days, and ranking board. New, frontend-owned table like Game - not part of the original
+// Java backend's schema.
+model Squad {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  admins     SquadAdmin[]
+  players    Player[]
+  encounters Encounter[]
+  games      Game[]
+}
+
+// Per-squad admin membership (squad + email), replacing the old flat ALLOWED_ADMIN_EMAILS env
+// var. The env var itself becomes the platform-superadmin list (see lib/auth/adminEmails.ts) -
+// implicitly an admin of every squad - while SquadAdmin rows grant admin rights scoped to one
+// squad. Keyed by email, not a User id, matching how this app already resolves identity (Google-
+// verified email), not a numeric user id.
+model SquadAdmin {
+  id      Int    @id @default(autoincrement())
+  squadId Int
+  email   String
+
+  squad Squad @relation(fields: [squadId], references: [id])
+
+  @@unique([squadId, email])
 }

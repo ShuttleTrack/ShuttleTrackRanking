@@ -5,6 +5,7 @@ import { toPlayerInfo, toSecurePlayerInfo, buildPlayerHistory, toRawPlayerJson }
 function player(overrides: Partial<PrismaPlayer> = {}): PrismaPlayer {
   return {
     id: 1,
+    squadId: 1,
     name: 'chathura',
     rankScore: 858.48,
     playerRank: 1,

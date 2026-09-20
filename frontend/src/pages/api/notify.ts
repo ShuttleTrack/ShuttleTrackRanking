@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAuth } from '@/lib/auth';
+import { requireSuperAdmin } from '@/lib/auth';
 
 interface TelegramMessage {
   chat_id: string;
@@ -23,7 +23,7 @@ export default async function handler(
   }
 
   // Require authentication
-  const session = await requireAuth(req, res);
+  const session = await requireSuperAdmin(req, res);
   if (!session) return;
 
   const { title, message, buttons } = req.body;

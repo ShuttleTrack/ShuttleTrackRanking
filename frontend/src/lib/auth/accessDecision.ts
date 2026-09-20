@@ -1,15 +1,9 @@
-// Ported from backend configuration/GoogleSSOAuthExtractor.java's branch for the `/v2/auth`
-// route specifically (MIGRATION_PLAN.md Phase 5). The Java extractor is shared across all
-// `/v2/*` routes and only grants USER to a verified-but-non-admin email on the literal `/v2/auth`
-// URI (rejecting it everywhere else) - this module IS that endpoint's logic, so that branch
-// collapses to "verified non-admin always gets USER here".
-//
-// NOTE: this alone isn't the full access decision - PlayerService.getPlayerAuth() additionally
-// requires a matching Player row by email (for *both* ADMIN and USER), or denies outright. That
-// DB-dependent half lives in validateUserAccess.ts, not here, so this piece stays pure/testable.
+// Multi-squad tenancy (SQUAD_TENANCY_PLAN.md): the old ADMIN/USER access-level split was a
+// single global flag derived purely from ALLOWED_ADMIN_EMAILS. That env var is now the
+// platform-superadmin list instead - superadmin-ness is still decided the same way (email
+// membership in a static set), but per-squad admin/player status is no longer decidable from
+// this alone; see lib/auth/squadAccess.ts for the per-request, per-squad resolution.
 
-export type AccessLevel = 'ADMIN' | 'USER';
-
-export function decideAccessLevels(email: string, adminEmails: Set<string>): AccessLevel[] {
-  return adminEmails.has(email.toLowerCase()) ? ['ADMIN', 'USER'] : ['USER'];
+export function isSuperAdmin(email: string, superAdminEmails: Set<string>): boolean {
+  return superAdminEmails.has(email.toLowerCase());
 }

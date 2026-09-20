@@ -28,5 +28,9 @@ frontend/*.tsbuildinfo
 # contains real player emails, must never be committed.
 /db_data/
 
+# Real production data dump used locally for the multi-squad tenancy migration - contains
+# real player emails, must never be committed.
+/2026-09-20-backup/
+
 # Claude Code local session/tooling config, not shared repo config.
 /.claude/
