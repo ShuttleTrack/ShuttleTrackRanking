@@ -161,6 +161,24 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ---
 
+### Encounter history (cross-player search)
+
+**Page:** `src/pages/encounter-history.tsx` → `EncounterHistoryView.tsx`
+
+**Purpose:** Find matches where selected players appeared together (Team 1 Player 1 required; partner and opponents optional). Results are from Team 1 Player 1’s perspective (same as legacy Find Encounters).
+
+**Composes:** Dark page shell (`max-w-7xl`, `px-4 sm:px-8`, `font-headline` title + orange rule). One filter card with Team 1 / Team 2 slots and orange **VS** chip on desktop; `SearchablePlayerPicker` — Headless UI `Combobox` with typeahead, color dot, optional rank, `excludeIds` for other slots. **Find Matches** (filled `bg-primary`) runs the search; URL updates to `?a1=&a2=&b1=&b2=` on submit (shallow) for share/reload. **Clear** resets pickers and results.
+
+**Results:** `StatCard` row (games / wins / losses / win rate), then a flat list: `EncounterDesktopHeader` + `EncounterCard` rows (newest first) with a muted date caption above each card. Idle until **Find Matches** (shared `?a1=` still hydrates and loads on open).
+
+**Data:** `useEncounterHistory` + `usePlayers`; helpers in `src/utils/encounterHistory.ts`. API: `GET /api/encounters/history`.
+
+**Loading/error:** `PageLoader` (`compact`) for players and in-flight match fetch; red banner as `RankingsComponent`.
+
+**Legacy:** `EncounterHistoryComponent.client.tsx` re-exports `EncounterHistoryView` for compatibility.
+
+---
+
 ### Admin Dashboard
 
 **Files:** `src/pages/admin/dashboard.tsx`, `src/components/dashboard/Header.tsx`
@@ -279,6 +297,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 | DaisyUI table/stats on player encounters | `StatCard` + `EncounterCard` |
 | `PlayerEncounterComponent` mobile table | `EncounterCard` mobile scoreboard layout |
 | Multi-player Recharts line chart on ranking history | `RankingHistoryView` player picker + single-line chart + change list |
+| DaisyUI Find Encounters form + table | `EncounterHistoryView` filter card + `EncounterCard` results |
 
 ---
 
@@ -286,7 +305,6 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 Keep existing DaisyUI patterns until a dedicated restyle:
 
-- **Find Encounters** (`EncounterHistoryComponent`, `/encounter-history`) — form and results table still legacy; pills only share dark `ScoreBreakdownPills`
 - Manage players
 - Modals and password gates on other admin routes (score keeper and user management score entry restyled; logic unchanged)
 - `ActionCard`

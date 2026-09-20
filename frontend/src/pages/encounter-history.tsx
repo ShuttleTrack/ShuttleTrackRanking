@@ -1,12 +1,12 @@
 import React from 'react';
-import EncounterHistoryComponent from '@/components/EncounterHistoryComponent.client';
+import EncounterHistoryView from '@/components/encounter-history/EncounterHistoryView';
 
 const EncounterHistoryPage = () => {
   return (
-    <div className="container mx-auto p-4 min-h-screen">
-      <EncounterHistoryComponent />
+    <div className="min-h-screen">
+      <EncounterHistoryView />
     </div>
   );
 };
 
-export default EncounterHistoryPage; 
+export default EncounterHistoryPage;

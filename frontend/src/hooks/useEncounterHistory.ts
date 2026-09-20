@@ -1,28 +1,34 @@
 import useSWR from 'swr';
 import type { Encounter } from '@/types/encounter';
+import { buildEncounterHistoryUrl, type EncounterTeamQuery } from '@/utils/encounterHistory';
 
-const fetcher = (url: string) => fetch(url).then(res => res.json());
+async function encounterHistoryFetcher(url: string): Promise<Encounter[]> {
+  const res = await fetch(url);
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message =
+      body && typeof body === 'object' && 'message' in body && typeof body.message === 'string'
+        ? body.message
+        : `Request failed (${res.status})`;
+    throw new Error(message);
+  }
+  if (!Array.isArray(body)) {
+    throw new Error('Invalid encounter history response');
+  }
+  return body as Encounter[];
+}
 
-export function useEncounterHistory(teamA1: number, teamA2: number, teamB1: number, teamB2: number) {
-  const { data, error, isLoading, mutate } = useSWR<Encounter[]>(
-    'encounters', // Use a key for the cache
-    null, // No automatic fetching
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false
-    }
-  );
+export function useEncounterHistory(slots: EncounterTeamQuery, enabled: boolean) {
+  const key = enabled ? buildEncounterHistoryUrl(slots) : null;
 
-  const fetchEncounters = async () => {
-    if (!teamA1) return;
-    const url = `/api/encounters/history?teamA1=${teamA1}&teamA2=${teamA2}&teamB1=${teamB1}&teamB2=${teamB2}`;
-    return mutate(fetcher(url), { revalidate: false });
-  };
+  const { data, error, isLoading } = useSWR<Encounter[]>(key, encounterHistoryFetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+  });
 
   return {
-    encounters: data || [],
-    isLoading,
+    encounters: key ? data : undefined,
+    isLoading: Boolean(key) && isLoading,
     error,
-    fetchEncounters
   };
-} 
+}

@@ -100,13 +100,13 @@ Large loaders show a spinning racket (`motion="spin"`), orbiting shuttlecock, da
 
 ## Do
 
-- Dark-only public chrome; single visual system on rankings, player encounter history (`/player/{id}/encounters`), and shared nav/footer.
+- Dark-only public chrome; single visual system on rankings, player encounter history (`/player/{id}/encounters`), cross-player encounter search (`/encounter-history`), and shared nav/footer.
 - Link player names to `/player/{id}/encounters`.
 - Use Heroicons for crown, medal, trend (no Material Symbols dependency required).
 
 ## Don’t
 
-- DaisyUI `table`, `stat`, or `alert-*` on public rankings or player encounter history pages.
+- DaisyUI `table`, `stat`, or `alert-*` on public rankings, player encounter history, or cross-player encounter history pages.
 - Invent nav items (Tournaments, Stats) or footer legal pages without real routes.
 - Light/emerald theme toggle on restyled public chrome.
 - Fake placeholder player or country data from the Stitch HTML.
