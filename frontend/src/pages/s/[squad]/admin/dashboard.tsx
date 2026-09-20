@@ -11,6 +11,7 @@ import type { MatchScore } from '@/types/game';
 import { GameLoader, PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
 import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
+import { useSquadSettings } from '@/hooks/useSquadSettings';
 
 type TelegramTestGroup = 'wednesday' | 'friday';
 
@@ -68,6 +69,7 @@ const DashboardPage = () => {
   const { slug } = useSquad();
   const { data: session } = useSession();
   const { games = [], isLoading: gamesLoading } = useGames();
+  const { settings: squadSettings } = useSquadSettings();
   const [telegramTestState, setTelegramTestState] = useState<Record<TelegramTestGroup, TelegramTestState>>({
     wednesday: { loading: false },
     friday: { loading: false },
@@ -189,6 +191,24 @@ const DashboardPage = () => {
           {/* Quick Actions */}
           <div className={`${cardClass} order-2 md:order-1`}>
             <h2 className={sectionTitleClass}>Quick Actions</h2>
+            {squadSettings && (
+              <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-label font-bold uppercase tracking-wide ${
+                    squadSettings.enabled
+                      ? 'bg-primary/20 text-primary border border-primary/40'
+                      : 'bg-red-950/30 text-red-400 border border-red-500/40'
+                  }`}
+                >
+                  {squadSettings.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <span>
+                  {squadSettings.playerCount}
+                  {squadSettings.maxPlayers !== null ? ` / ${squadSettings.maxPlayers}` : ''} players
+                  {squadSettings.maxPlayers === null && ' (no limit)'}
+                </span>
+              </div>
+            )}
             <div className="space-y-3">
               <Link
                 href={`/s/${slug}/admin/game-planner`}

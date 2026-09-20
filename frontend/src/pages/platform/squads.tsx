@@ -9,8 +9,10 @@ import { PlusIcon } from '@heroicons/react/24/outline';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-// Platform-superadmin only: create squads, manage each squad's admins. Not squad-scoped, so no
-// SquadProvider - see lib/auth.ts's requireSuperAdmin for the equivalent API-side gate.
+// Platform-superadmin only: create squads, manage each squad's admins, and edit
+// enabled/maxPlayers (visible to a squad's own admins on their dashboard, but only editable
+// here). Not squad-scoped, so no SquadProvider - see lib/auth.ts's requireSuperAdmin for the
+// equivalent API-side gate.
 const PlatformSquadsPage = () => {
   const { data: squads, isLoading, mutate } = useSWR<Squad[]>('/api/squads', fetcher);
   const [showCreate, setShowCreate] = useState(false);
@@ -19,6 +21,7 @@ const PlatformSquadsPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [managingSquad, setManagingSquad] = useState<Squad | null>(null);
+  const [editingSquad, setEditingSquad] = useState<Squad | null>(null);
 
   if (isLoading) {
     return <PageLoader variant="screen" label="Loading squads" />;
@@ -70,6 +73,7 @@ const PlatformSquadsPage = () => {
                 <th>Name</th>
                 <th>Slug</th>
                 <th>Status</th>
+                <th>Max players</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -83,11 +87,15 @@ const PlatformSquadsPage = () => {
                       {squad.enabled ? 'Enabled' : 'Disabled'}
                     </span>
                   </td>
+                  <td>{squad.maxPlayers ?? 'Unlimited'}</td>
                   <td>
                     <div className="flex items-center gap-2">
                       <a href={`/s/${squad.slug}`} className="btn btn-ghost btn-sm">
                         View
                       </a>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEditingSquad(squad)}>
+                        Edit
+                      </button>
                       <button className="btn btn-ghost btn-sm" onClick={() => setManagingSquad(squad)}>
                         Manage admins
                       </button>
@@ -139,6 +147,17 @@ const PlatformSquadsPage = () => {
 
         {managingSquad && (
           <SquadAdminsModal squad={managingSquad} onClose={() => setManagingSquad(null)} />
+        )}
+
+        {editingSquad && (
+          <SquadSettingsModal
+            squad={editingSquad}
+            onClose={() => setEditingSquad(null)}
+            onSaved={async () => {
+              setEditingSquad(null);
+              await mutate();
+            }}
+          />
         )}
       </div>
     </div>
@@ -218,6 +237,85 @@ const SquadAdminsModal = ({ squad, onClose }: { squad: Squad; onClose: () => voi
             Close
           </button>
         </div>
+      </div>
+    </div>
+  );
+};
+
+const SquadSettingsModal = ({
+  squad,
+  onClose,
+  onSaved,
+}: {
+  squad: Squad;
+  onClose: () => void;
+  onSaved: () => void;
+}) => {
+  const [enabled, setEnabled] = useState(squad.enabled);
+  const [maxPlayers, setMaxPlayers] = useState(squad.maxPlayers?.toString() ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/squads/${squad.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled,
+          maxPlayers: maxPlayers.trim() === '' ? null : Number(maxPlayers),
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json();
+        throw new Error(body.message || 'Failed to update squad');
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update squad');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className="relative rounded-xl bg-base-100 border border-base-300 p-6 w-full max-w-md shadow-xl">
+        <h3 className="text-lg font-semibold mb-4">{squad.name} settings</h3>
+        <form onSubmit={handleSave} className="space-y-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="toggle toggle-primary"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+            />
+            <span className="text-sm font-medium">{enabled ? 'Enabled' : 'Disabled'}</span>
+          </label>
+          <div>
+            <label className="block text-sm font-medium mb-1">Max players</label>
+            <input
+              type="number"
+              min={1}
+              className="input input-bordered w-full"
+              value={maxPlayers}
+              onChange={(e) => setMaxPlayers(e.target.value)}
+              placeholder="Leave blank for unlimited"
+            />
+          </div>
+          {error && <p className="text-sm text-error">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

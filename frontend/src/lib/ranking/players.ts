@@ -229,6 +229,14 @@ export interface NewPlayerInput {
 // response despite the narrower declared type. `previousRank` is the player's own brand-new
 // rank (not looked up from history) and `timeInHighestRank` is left unset - preserved exactly.
 export async function addPlayer(squadId: number, input: NewPlayerInput): Promise<SecurePlayerInfo> {
+  const squad = await prisma.squad.findUniqueOrThrow({ where: { id: squadId } });
+  if (squad.maxPlayers !== null) {
+    const currentCount = await prisma.player.count({ where: { squadId } });
+    if (currentCount >= squad.maxPlayers) {
+      throw new Error(`Squad is at its player limit (${squad.maxPlayers})`);
+    }
+  }
+
   // A brand-new squad has no players yet, unlike the single-squad original this was ported from
   // (which could always assume at least one existing player) - guard the empty case explicitly.
   const activePlayers = await prisma.player.findMany({ where: { squadId, playerStatus: 'ACTIVE' } });

@@ -117,6 +117,10 @@ model Squad {
   name      String
   slug      String   @unique
   enabled   Boolean  @default(true)
+  // Roster size cap. Nullable = unlimited (the default, so this can't retroactively put an
+  // already-over-the-cap squad in an invalid state) - visible to that squad's own admins, but
+  // only a platform superadmin can change it (see requireSuperAdmin in the squad-settings API).
+  maxPlayers Int?    @map("max_players")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
