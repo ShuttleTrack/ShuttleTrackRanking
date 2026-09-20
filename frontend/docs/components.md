@@ -145,6 +145,22 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ---
 
+### Ranking history
+
+**Page:** `src/pages/player-ranking-history.tsx` → `RankingHistoryView.tsx`
+
+**Purpose:** Player-first view of standing (rank) over time — one focus player at a time instead of an all-player line chart.
+
+**Composes:** Dark page shell (`max-w-7xl`, `px-4 sm:px-8`, `font-headline` title + orange rule). `PlayerPicker` — Headless UI `Listbox` (full-width on mobile and desktop), rank-sorted options with color dot from `colorHex`, selection synced to `?player=`; **Match history** link beside the Player label → `/player/{id}/encounters`. `RankTrajectoryChart` (Recharts): **mobile** single selected line (~220px); **md+** other players at ~12% opacity; reversed Y-axis; tap/click date for dark tooltip (rank + day-over-day delta). `RankChangeList` — newest-first game days with `#old → #new` and `TrendIndicator`; row tap highlights chart date.
+
+**Data:** `useRankingHistory` + `usePlayers`; helpers in `src/utils/rankHistory.ts`. Default player: `?player=` if valid, else signed-in `session.user.playerId`, else current #1.
+
+**Loading/error:** `PageLoader` (`compact`) and red banner as `RankingsComponent`.
+
+**Legacy:** `RankingsHistoryComponent.client.tsx` re-exports `RankingHistoryView` for compatibility.
+
+---
+
 ### Admin Dashboard
 
 **Files:** `src/pages/admin/dashboard.tsx`, `src/components/dashboard/Header.tsx`
@@ -262,6 +278,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 | Highest rank column | Player subtitle |
 | DaisyUI table/stats on player encounters | `StatCard` + `EncounterCard` |
 | `PlayerEncounterComponent` mobile table | `EncounterCard` mobile scoreboard layout |
+| Multi-player Recharts line chart on ranking history | `RankingHistoryView` player picker + single-line chart + change list |
 
 ---
 
@@ -273,7 +290,6 @@ Keep existing DaisyUI patterns until a dedicated restyle:
 - Manage players
 - Modals and password gates on other admin routes (score keeper and user management score entry restyled; logic unchanged)
 - `ActionCard`
-- History charts (`RankingsHistoryComponent`, Recharts), ranking history page chrome
 - Login page styling
 - `LoadingSpinner` (login) and `PageLoader` / `GameLoader` elsewhere — see `GameLoader.tsx` and `design.md` Loading
 
