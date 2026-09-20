@@ -9,6 +9,7 @@ export interface SquadSettings {
   enabled: boolean;
   maxPlayers: number | null;
   playerCount: number;
+  isPublic: boolean;
   isRecurring: boolean;
   scheduleDayOfWeek: DayOfWeek | null;
   scheduleStartTime: string | null;
@@ -21,8 +22,9 @@ export interface SquadSettings {
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 // enabled/maxPlayers are read-only for a squad admin (only a platform superadmin can change
-// them - see pages/api/squads/[squadId]/index.ts and platform/squads.tsx). The schedule fields
-// ARE editable by a squad's own admins - see pages/api/squads/[squadId]/schedule.ts.
+// them - see pages/api/squads/[squadId]/index.ts and platform/squads.tsx). isPublic and the
+// schedule fields ARE editable by a squad's own admins - see
+// pages/api/squads/[squadId]/{visibility,schedule}.ts.
 export function useSquadSettings() {
   const { id: squadId } = useSquad();
   const { data, error, isLoading, mutate } = useSWR<SquadSettings>(`/api/squads/${squadId}`, fetcher);
