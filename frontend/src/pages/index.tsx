@@ -1,12 +1,8 @@
 import React from 'react';
-import RankingsComponent from '@/components/RankingsComponent.client';
+import PublicRankingsComponent from '@/components/PublicRankingsComponent.client';
 
 const Home = () => {
-  return (
-    <div className="min-h-screen">
-      <RankingsComponent />
-    </div>
-  );
+  return <PublicRankingsComponent />;
 };
 
 export default Home;

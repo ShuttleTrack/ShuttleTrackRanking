@@ -6,6 +6,7 @@ import type { LiveGame } from '@/hooks/useLiveGames';
 import { GameLoader } from '@/components/common/GameLoader';
 import { classNames, menuPanelClass, menuTransitionProps } from './navUtils';
 import { LiveGameMenuItems } from './LiveGameProgressList';
+import { useOptionalSquad } from '@/contexts/SquadContext';
 
 const liveChipClass =
   'inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 font-label text-xs uppercase tracking-wider text-red-400';
@@ -34,7 +35,10 @@ interface LiveGamesControlProps {
 }
 
 export function LiveGamesControl({ liveGames, isLoading, onNavigate }: LiveGamesControlProps) {
-  if (isLoading || liveGames.length === 0) {
+  const squad = useOptionalSquad();
+  // liveGames is only ever non-empty once useLiveGames() has a squad in context, but guard
+  // explicitly anyway rather than asserting squad is non-null here.
+  if (isLoading || liveGames.length === 0 || !squad) {
     return null;
   }
 
@@ -42,7 +46,7 @@ export function LiveGamesControl({ liveGames, isLoading, onNavigate }: LiveGames
     const game = liveGames[0];
     return (
       <Link
-        href={`/game-viewer?gameId=${game.id}`}
+        href={`/s/${squad.slug}/game-viewer?gameId=${game.id}`}
         className={liveChipClass}
         aria-label={`Watch live game ${game.id.slice(-4)}`}
         onClick={onNavigate}
@@ -78,14 +82,15 @@ export function LiveGamesControlDesktop({
   liveGames: LiveGame[];
   isLoading: boolean;
 }) {
-  if (isLoading || liveGames.length === 0) {
+  const squad = useOptionalSquad();
+  if (isLoading || liveGames.length === 0 || !squad) {
     return null;
   }
 
   if (liveGames.length === 1) {
     const game = liveGames[0];
     return (
-      <Link href={`/game-viewer?gameId=${game.id}`} className={liveChipClass} aria-label="Live">
+      <Link href={`/s/${squad.slug}/game-viewer?gameId=${game.id}`} className={liveChipClass} aria-label="Live">
         <LiveChipLabel />
       </Link>
     );

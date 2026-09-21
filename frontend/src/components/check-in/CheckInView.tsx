@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { useOptionalSquad } from '@/contexts/SquadContext';
 import {
   formatSessionTimeRange,
   formatSessionTitle,
@@ -20,8 +21,11 @@ export function ProfileBackLink({
   children?: string;
   className?: string;
 }) {
+  const squad = useOptionalSquad();
+  const href = squad ? `/s/${squad.slug}/user/profile` : '/squads';
+
   return (
-    <Link href="/user/profile" className={`${profileBackLinkClass} ${className}`.trim()}>
+    <Link href={href} className={`${profileBackLinkClass} ${className}`.trim()}>
       <ArrowLeftIcon className="h-4 w-4" aria-hidden />
       {children}
     </Link>

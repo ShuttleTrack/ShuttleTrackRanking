@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSquad } from '@/contexts/SquadContext';
 import {
   formatSessionTimeRange,
   formatSessionTitle,
@@ -25,6 +26,7 @@ interface UpcomingSessionsListProps {
 }
 
 export function UpcomingSessionsList({ playerId }: UpcomingSessionsListProps) {
+  const { slug } = useSquad();
   const [now, setNow] = useState(() => new Date());
   const sessions = useMemo(() => upcomingSessions(now), [now]);
   const [votes, setVotes] = useState<Record<string, CheckInVote | null>>({});
@@ -71,7 +73,7 @@ export function UpcomingSessionsList({ playerId }: UpcomingSessionsListProps) {
               className="rounded-xl border border-gray-600 bg-surface-container/90 p-4 transition-colors hover:border-primary/30"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <Link href={`/game-day/${session.id}`} className="min-w-0 flex-1 group">
+                <Link href={`/s/${slug}/game-day/${session.id}`} className="min-w-0 flex-1 group">
                   <p className="font-headline font-semibold text-on-surface group-hover:text-primary transition-colors">
                     {formatSessionTitle(session)}
                   </p>
@@ -85,7 +87,7 @@ export function UpcomingSessionsList({ playerId }: UpcomingSessionsListProps) {
                   </span>
                 </Link>
                 <Link
-                  href={`/game-day/${session.id}`}
+                  href={`/s/${slug}/game-day/${session.id}`}
                   className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl bg-primary px-5 py-2.5 font-headline text-sm font-bold text-black transition-opacity hover:opacity-90"
                 >
                   Check in

@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 import type { Encounter } from '@/types/encounter';
+import { useSquad } from '@/contexts/SquadContext';
 
 interface EncountersResponse {
   stats: {
@@ -15,8 +16,9 @@ interface EncountersResponse {
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
 export function usePlayerEncounters(playerId: string | string[] | undefined) {
+  const { id: squadId } = useSquad();
   const { data, error, isLoading } = useSWR<EncountersResponse>(
-    playerId ? `/api/players/${playerId}/encounters` : null,
+    playerId ? `/api/squads/${squadId}/players/${playerId}/encounters` : null,
     fetcher
   );
 
@@ -25,4 +27,4 @@ export function usePlayerEncounters(playerId: string | string[] | undefined) {
     isLoading,
     error
   };
-} 
+}

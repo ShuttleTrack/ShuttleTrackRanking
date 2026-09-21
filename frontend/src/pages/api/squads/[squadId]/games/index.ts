@@ -1,0 +1,64 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import prisma from '@/lib/prisma';
+import { requireSquadAdmin } from '@/lib/auth';
+import { parseSquadId } from '@/lib/api/squadParam';
+import { findScorelessPlayersInGroups } from '@/lib/ranking/players';
+import { isValidationError } from '@/lib/api/validationError';
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const squadId = parseSquadId(req, res);
+  if (squadId === null) return;
+
+  if (!(await requireSquadAdmin(req, res, squadId))) {
+    return;
+  }
+
+  if (req.method === 'POST') {
+    try {
+      const { groups } = req.body;
+      // OPEN_SLOT_PLAYERS_PLAN.md "Null-rankScore safety" item 2: a scoreless player must never
+      // reach the Elo calculation - this is the authoritative gate, not the planner's client-side
+      // bulk-assign panel.
+      const scoreless = await findScorelessPlayersInGroups(squadId, groups ?? {});
+      if (scoreless.length > 0) {
+        return res.status(400).json({
+          message: `These players need a rank score before a game day can be created: ${scoreless.map((p) => p.name).join(', ')}`,
+          scorelessPlayers: scoreless,
+        });
+      }
+      const game = await prisma.game.create({
+        data: {
+          squadId,
+          groups,
+          scores: {},
+          status: 'DRAFT'
+        }
+      });
+      res.status(201).json(game);
+    } catch (error) {
+      // A player id that is not in this squad is a bad request, not a server fault.
+      if (isValidationError(error)) {
+        return res.status(400).json({ message: error.message });
+      }
+      console.error('Create Game API Error:', error);
+      res.status(500).json({ message: 'Failed to create game' });
+    }
+  } else if (req.method === 'GET') {
+    try {
+      const games = await prisma.game.findMany({
+        where: { squadId },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+      res.status(200).json(games);
+    } catch (error) {
+      res.status(500).json({ message: 'Failed to fetch games' });
+    }
+  } else {
+    res.status(405).json({ message: 'Method not allowed' });
+  }
+}

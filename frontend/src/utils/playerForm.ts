@@ -85,3 +85,41 @@ export function buildFormStatsByPlayerId(
   }
   return map;
 }
+
+/** Career form across multiple player ids (e.g. one person in several public squads). */
+export function computeCombinedFormStats(
+  playerIds: number[],
+  encounters: RawEncounter[]
+): PlayerFormStats {
+  const idSet = new Set(playerIds);
+  const playerEncounters = encounters
+    .filter((e) => e.processed)
+    .map((e) => {
+      const team1Ids = parseTeamIds(e.team1);
+      const team2Ids = parseTeamIds(e.team2);
+      const participatingId = [...team1Ids, ...team2Ids].find((id) => idSet.has(id));
+      if (participatingId === undefined) {
+        return null;
+      }
+      const win = isPlayerWin(e, participatingId);
+      if (win === null) {
+        return null;
+      }
+      return { encounter: e, win };
+    })
+    .filter((entry): entry is { encounter: RawEncounter; win: boolean } => entry !== null)
+    .sort((a, b) => compareEncounters(a.encounter, b.encounter));
+
+  const totalGames = playerEncounters.length;
+  const wins = playerEncounters.filter((e) => e.win).length;
+  const winRate = totalGames > 0 ? (wins / totalGames) * 100 : 0;
+  const lastFiveChronological = playerEncounters
+    .slice(-5)
+    .map((e) => (e.win ? 'W' : 'L') as FormResult);
+
+  return {
+    lastFive: lastFiveChronological,
+    winRate,
+    totalGames,
+  };
+}

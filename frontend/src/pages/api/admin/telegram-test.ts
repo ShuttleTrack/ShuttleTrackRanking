@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requireAuth } from '@/lib/auth';
+import { requireSuperAdmin } from '@/lib/auth';
 
 // Manual test-send for the two Telegram group configs used by the Phase 6 scheduler
 // (frontend/src/lib/telegram/scheduleConfig.ts) - lets an admin confirm each bot token/chat id
@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const session = await requireAuth(req, res);
+  const session = await requireSuperAdmin(req, res);
   if (!session) return;
 
   const { group } = req.body ?? {};

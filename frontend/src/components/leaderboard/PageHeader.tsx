@@ -1,10 +1,13 @@
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
+  className?: string;
 }
 
-const PageHeader = ({ title, subtitle }: PageHeaderProps) => (
-  <section className="max-w-7xl mx-auto px-8 sm:px-16 mt-6 sm:mt-8 mb-4 sm:mb-6">
+const PageHeader = ({ title, subtitle, className }: PageHeaderProps) => (
+  <section
+    className={`max-w-7xl mx-auto px-8 sm:px-16 mt-6 sm:mt-8 mb-4 sm:mb-6${className ? ` ${className}` : ''}`}
+  >
     <div>
       <h1 className="font-headline text-2xl sm:text-3xl font-extrabold tracking-tight text-on-surface">
         {title}

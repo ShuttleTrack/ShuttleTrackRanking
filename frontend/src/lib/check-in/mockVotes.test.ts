@@ -2,40 +2,23 @@ import { describe, it, expect } from 'vitest';
 import type { Player } from '@/types/player';
 import { buildCheckInRoster } from './mockVotes';
 
-const players: Player[] = [
-  {
-    id: 1,
-    name: 'alpha',
-    rankScore: 1100,
-    playerRank: 1,
-    previousRank: 1,
-    colorHex: 'ff0000',
-    highestRank: 1,
+function player(partial: Pick<Player, 'id' | 'name' | 'rankScore' | 'playerRank' | 'colorHex'>): Player {
+  return {
+    previousRank: partial.playerRank,
+    highestRank: partial.playerRank,
     timeInHighestRank: '1d',
     active: true,
-  },
-  {
-    id: 2,
-    name: 'bravo',
-    rankScore: 1050,
-    playerRank: 2,
-    previousRank: 2,
-    colorHex: '00ff00',
-    highestRank: 2,
-    timeInHighestRank: '2d',
-    active: true,
-  },
-  {
-    id: 3,
-    name: 'charlie',
-    rankScore: 1000,
-    playerRank: 3,
-    previousRank: 3,
-    colorHex: '0000ff',
-    highestRank: 3,
-    timeInHighestRank: '3d',
-    active: true,
-  },
+    playerType: 'FULLTIME',
+    status: 'ACTIVE',
+    hasScore: true,
+    ...partial,
+  };
+}
+
+const players: Player[] = [
+  player({ id: 1, name: 'alpha', rankScore: 1100, playerRank: 1, colorHex: 'ff0000' }),
+  player({ id: 2, name: 'bravo', rankScore: 1050, playerRank: 2, colorHex: '00ff00' }),
+  player({ id: 3, name: 'charlie', rankScore: 1000, playerRank: 3, colorHex: '0000ff' }),
 ];
 
 describe('buildCheckInRoster', () => {

@@ -1,6 +1,7 @@
 import useSWR from 'swr';
 import type { Encounter } from '@/types/encounter';
 import { buildEncounterHistoryUrl, type EncounterTeamQuery } from '@/utils/encounterHistory';
+import { useSquad } from '@/contexts/SquadContext';
 
 async function encounterHistoryFetcher(url: string): Promise<Encounter[]> {
   const res = await fetch(url);
@@ -19,7 +20,8 @@ async function encounterHistoryFetcher(url: string): Promise<Encounter[]> {
 }
 
 export function useEncounterHistory(slots: EncounterTeamQuery, enabled: boolean) {
-  const key = enabled ? buildEncounterHistoryUrl(slots) : null;
+  const { id: squadId } = useSquad();
+  const key = enabled ? buildEncounterHistoryUrl(squadId, slots) : null;
 
   const { data, error, isLoading } = useSWR<Encounter[]>(key, encounterHistoryFetcher, {
     revalidateOnFocus: false,

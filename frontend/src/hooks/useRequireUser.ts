@@ -2,9 +2,12 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 
-export function useRequireUser() {
+// Multi-squad tenancy (SQUAD_TENANCY_PLAN.md): "is a user (of this squad)" is no longer on the
+// session - it's resolved server-side per squad (getSquadAccess) and passed in as a prop from
+// the page's getServerSideProps.
+export function useRequireUser(isUser: boolean) {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { status } = useSession();
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -14,12 +17,10 @@ export function useRequireUser() {
           ? '/login'
           : `/login?callbackUrl=${encodeURIComponent(returnPath)}`;
       router.push(loginUrl);
-    } else if (session?.user && !session.user.accessLevel?.includes('USER')) {
+    } else if (status === 'authenticated' && !isUser) {
       router.push('/');
     }
-  }, [status, session, router]);
+  }, [status, isUser, router]);
 
-  const isUser = Boolean(session?.user?.accessLevel?.includes('USER'));
-
-  return { session, status, isUser };
+  return { status, isUser };
 }

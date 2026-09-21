@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { PlayerType } from '@prisma/client';
 import type { Player as PrismaPlayer, ScoreHistory as PrismaScoreHistory } from '@prisma/client';
 import { toPlayerInfo, toSecurePlayerInfo, buildPlayerHistory, toRawPlayerJson } from './players';
 
 function player(overrides: Partial<PrismaPlayer> = {}): PrismaPlayer {
   return {
     id: 1,
+    squadId: 1,
     name: 'chathura',
     rankScore: 858.48,
     playerRank: 1,
@@ -14,6 +16,7 @@ function player(overrides: Partial<PrismaPlayer> = {}): PrismaPlayer {
     disabled: false,
     email: 'chathura@example.com',
     playerStatus: 'ACTIVE',
+    playerType: PlayerType.FULLTIME,
     ...overrides,
   };
 }

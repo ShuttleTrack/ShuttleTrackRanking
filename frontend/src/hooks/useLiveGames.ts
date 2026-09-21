@@ -1,4 +1,5 @@
 import useSWR from 'swr';
+import { useOptionalSquad } from '@/contexts/SquadContext';
 
 export interface LiveGame {
   id: string;
@@ -13,8 +14,11 @@ const fetcher = async (url: string) => {
 };
 
 export function useLiveGames(refreshInterval = 30000) {
+  // Nav-shared hook: renders on non-squad-scoped pages too (squad picker, login, platform
+  // admin), where there's simply nothing to show.
+  const squad = useOptionalSquad();
   const { data, error, isLoading } = useSWR<LiveGame[]>(
-    '/api/games/in-progress',
+    squad ? `/api/squads/${squad.id}/games/in-progress` : null,
     fetcher,
     {
       refreshInterval,
@@ -28,4 +32,4 @@ export function useLiveGames(refreshInterval = 30000) {
     isLoading,
     isError: error
   };
-} 
+}

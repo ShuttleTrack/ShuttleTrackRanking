@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useOptionalSquad } from '@/contexts/SquadContext';
 import {
   CalendarDaysIcon,
   PencilSquareIcon,
@@ -25,11 +25,10 @@ function tabClass(active: boolean): string {
 
 export function UserTabBar() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const squad = useOptionalSquad();
   const [now, setNow] = useState(() => new Date());
 
-  const showBar =
-    isUserTabBarRoute(router.pathname) && session?.user?.accessLevel?.includes('USER');
+  const showBar = isUserTabBarRoute(router.pathname) && Boolean(squad?.isPlayerHere);
 
   useEffect(() => {
     if (!showBar) return;
@@ -37,17 +36,18 @@ export function UserTabBar() {
     return () => window.clearInterval(id);
   }, [showBar]);
 
+  const slug = squad?.slug;
   const checkInHref = useMemo(() => {
     const sessionDay = nextUpcomingSession(now);
-    return `/game-day/${sessionDay.id}`;
-  }, [now]);
+    return slug ? `/s/${slug}/game-day/${sessionDay.id}` : '/squads';
+  }, [now, slug]);
 
-  if (!showBar) return null;
+  if (!showBar || !slug) return null;
 
   const activeTab: TabId =
-    router.pathname === '/user/profile'
+    router.pathname === '/s/[squad]/user/profile'
       ? 'profile'
-      : router.pathname === '/user/matches'
+      : router.pathname === '/s/[squad]/user/matches'
         ? 'matches'
         : 'checkin';
 
@@ -61,7 +61,7 @@ export function UserTabBar() {
     {
       id: 'profile',
       label: 'Profile',
-      href: '/user/profile',
+      href: `/s/${slug}/user/profile`,
       Icon: UserCircleIcon,
       IconActive: UserCircleIconSolid,
     },
@@ -75,7 +75,7 @@ export function UserTabBar() {
     {
       id: 'matches',
       label: 'Matches',
-      href: '/user/matches',
+      href: `/s/${slug}/user/matches`,
       Icon: PencilSquareIcon,
       IconActive: PencilSquareIconSolid,
     },

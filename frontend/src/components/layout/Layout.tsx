@@ -2,10 +2,10 @@
 
 import Image from 'next/image';
 import { useRouter } from 'next/router';
-import { useSession } from 'next-auth/react';
 import NavigationComponent from '../NavigationComponent';
 import { UserTabBar } from '../nav/UserTabBar';
 import SiteFooter from './SiteFooter';
+import { useOptionalSquad } from '@/contexts/SquadContext';
 import { isUserTabBarRoute } from '@/utils/userTabBar';
 
 const BUILD_IDENTIFIER = process.env.NEXT_PUBLIC_BUILD_IDENTIFIER ?? 'local';
@@ -16,9 +16,8 @@ interface LayoutProps {
 
 const Layout = ({ children }: LayoutProps) => {
   const router = useRouter();
-  const { data: session } = useSession();
-  const showUserTabBar =
-    isUserTabBarRoute(router.pathname) && session?.user?.accessLevel?.includes('USER');
+  const squad = useOptionalSquad();
+  const showUserTabBar = isUserTabBarRoute(router.pathname) && Boolean(squad?.isPlayerHere);
 
   return (
     <div className="relative min-h-screen flex flex-col bg-background">

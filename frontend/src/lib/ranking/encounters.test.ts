@@ -5,6 +5,7 @@ import { playerSide, playerTeamBreakdown, toRawEncounter } from './encounters';
 function encounter(overrides: Partial<PrismaEncounter> = {}): PrismaEncounter {
   return {
     id: 1,
+    squadId: 1,
     team1: '3:7',
     team2: '4:8',
     encounterDate: new Date(Date.UTC(2026, 8, 2)),

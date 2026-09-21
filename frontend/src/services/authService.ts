@@ -6,11 +6,9 @@ import { validateUserAccessLocal } from '@/lib/auth/validateUserAccess';
 // lib/auth/validateUserAccess.ts for the ported logic itself.
 
 interface AuthResponse {
-  accessLevel: string[];
-  isAdmin: boolean;
-  isAllowed: boolean;
   email: string;
-  playerId?: number;
+  isSuperAdmin: boolean;
+  isAllowed: boolean;
 }
 
 export const validateUserAccess = async (token: string): Promise<AuthResponse | null> => {

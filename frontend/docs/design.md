@@ -68,6 +68,20 @@ Use Tailwind theme keys (see `tailwind.config.ts`), not raw hex in components wh
 - Main offset: **`pt-16`** mobile, **`md:pt-20`** desktop
 - Row cards: `rounded-xl`, `px-8 py-4`, vertical stack `space-y-3`
 
+### Squad scoping
+
+Multi-squad tenancy uses URL prefixes (see `squad-tenancy.md` for auth and data model):
+
+- **`/`** — public aggregate leaderboard (all players on squads with `isPublic`).
+- **`/squads`** — signed-in squad picker (auto-redirect when the user has exactly one squad).
+- **`/s/[squad]/**`** — squad-scoped rankings, history, encounters, admin, and user routes.
+- **`/platform/squads`** — platform superadmin squad CRUD (not squad-scoped).
+
+**Selector band** (`SelectorBand` in `SquadBoardSelector.tsx`): full-bleed strip `border-y border-white/5 bg-black/30` with `.form-strip` overlay; inner `max-w-7xl` row; bottom kinetic-gradient hairline separates the band from the title/list below.
+
+- **Signed-in with squads** (`SquadBoardSelector` on `/` and `/s/{slug}`): **split control** — **Squad** cap + Listbox value (Public or current squad); centered on mobile, left-aligned on `md+` under the logo. Squad ranking pages omit the band when signed out.
+- **Signed-out / no squads** (`PublicRankingsCallout` on `/` only): optional radial scrim over `.form-strip` for legibility; centered single-row lock tile + one-line muted caption (no in-band CTA — nav **Sign in** only). While session/squad list loads, empty band chrome only (no message flash).
+
 ## Leaderboard grid (desktop)
 
 7-column CSS grid (`LEADERBOARD_DESKTOP_GRID` in `leaderboardGrid.ts`), shared by header and rows with no column gap:
@@ -102,8 +116,8 @@ Large loaders show a spinning racket (`motion="spin"`), orbiting shuttlecock, da
 
 ## Do
 
-- Dark-only public chrome; single visual system on rankings, player encounter history (`/player/{id}/encounters`), cross-player encounter search (`/encounter-history`), and shared nav/footer.
-- Link player names to `/player/{id}/encounters`.
+- Dark-only public chrome; single visual system on rankings, player encounter history (`/s/{slug}/player/{id}/encounters`), cross-player encounter search (`/s/{slug}/encounter-history`), public aggregate board (`/`), and shared nav/footer.
+- Link squad leaderboard player names to `/s/{slug}/player/{id}/encounters` (public aggregate rows are not links).
 - Use Heroicons for crown, medal, trend (no Material Symbols dependency required).
 
 ## Don’t

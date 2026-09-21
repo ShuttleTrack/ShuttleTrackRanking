@@ -108,8 +108,8 @@ export function toRawEncounter(e: PrismaEncounter): RawEncounter {
 }
 
 // GET /encounters
-export async function getAllEncounters(): Promise<RawEncounter[]> {
-  const encounters = await prisma.encounter.findMany();
+export async function getAllEncounters(squadId: number): Promise<RawEncounter[]> {
+  const encounters = await prisma.encounter.findMany({ where: { squadId } });
   return encounters.map(toRawEncounter);
 }
 
@@ -120,16 +120,18 @@ function playerRef(player: PrismaPlayer | null, playerId: number): PlayerRef | n
   return player ? { playerName: player.name, playerId } : null;
 }
 
-// EncounterService.getPlayerEncounterHistory(int playerId).
-export async function getPlayerEncounterHistory(playerId: number): Promise<PlayerEncounterHistory | null> {
+// EncounterService.getPlayerEncounterHistory(int playerId). squadId is required so a
+// squad-scoped route can't be used to pull another squad's player history by guessing a player
+// id - player ids are a shared, globally-unique sequence across all squads.
+export async function getPlayerEncounterHistory(squadId: number, playerId: number): Promise<PlayerEncounterHistory | null> {
   const currentPlayer = await prisma.player.findUnique({ where: { id: playerId } });
-  if (!currentPlayer) return null;
+  if (!currentPlayer || currentPlayer.squadId !== squadId) return null;
 
   const scoreHistoryRows = await prisma.scoreHistory.findMany({ where: { playerId } });
   const encounterIds = scoreHistoryRows.map((h) => h.encounterId);
   // findAllByIdIn against synthetic negative ids (absentee/-1, deactivate/-2, activate/-3)
   // simply matches nothing - same as the original.
-  const encounters = await prisma.encounter.findMany({ where: { id: { in: encounterIds } } });
+  const encounters = await prisma.encounter.findMany({ where: { squadId, id: { in: encounterIds } } });
 
   // Comparator.comparing(encounterDate).thenComparing(id).reversed() -> both descending.
   encounters.sort((a, b) => {
@@ -184,6 +186,7 @@ export async function getPlayerEncounterHistory(playerId: number): Promise<Playe
 // EncounterService.getPlayerEncounterHistory(teamAp1, teamAp2, teamBp1, teamBp2) - cross-player
 // lookup used by /encounters-for-players.
 export async function getCrossPlayerEncounterHistory(
+  squadId: number,
   teamAp1: number,
   teamAp2: number | null,
   teamBp1: number | null,
@@ -191,7 +194,7 @@ export async function getCrossPlayerEncounterHistory(
 ): Promise<PlayerEncounterHistoryRecord[]> {
   if (!teamAp1) return [];
 
-  const base = await getPlayerEncounterHistory(teamAp1);
+  const base = await getPlayerEncounterHistory(squadId, teamAp1);
   // Original calls .getEncounterHistory() on the result without a null check - throws if
   // teamAp1 doesn't exist, same as here.
   if (!base) throw new Error(`Player not found: ${teamAp1}`);

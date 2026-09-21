@@ -101,8 +101,8 @@ export function formatEncounterGroupDate(dateKey: string): string {
   return parsed.toLocaleDateString();
 }
 
-export function buildEncounterHistoryUrl(slots: EncounterTeamQuery): string | null {
+export function buildEncounterHistoryUrl(squadId: number, slots: EncounterTeamQuery): string | null {
   if (!slots.teamA1) return null;
   const { teamA1, teamA2, teamB1, teamB2 } = slots;
-  return `/api/encounters/history?teamA1=${teamA1}&teamA2=${teamA2}&teamB1=${teamB1}&teamB2=${teamB2}`;
+  return `/api/squads/${squadId}/encounters/history?teamA1=${teamA1}&teamA2=${teamA2}&teamB1=${teamB1}&teamB2=${teamB2}`;
 }

@@ -7,13 +7,14 @@ import type { Player } from '@/types/player';
 import { NavPlayerSearch } from './NavPlayerSearch';
 import {
   classNames,
-  historyLinks,
+  buildHistoryLinks,
   isEncountersRoute,
   isHistoryRoute,
   menuPanelClass,
   menuTransitionProps,
   scoreboardSegmentClass,
 } from './navUtils';
+import { useOptionalSquad } from '@/contexts/SquadContext';
 
 interface ScoreboardNavProps {
   players: Player[];
@@ -22,9 +23,16 @@ interface ScoreboardNavProps {
 
 export function ScoreboardNav({ players, playersLoading }: ScoreboardNavProps) {
   const router = useRouter();
-  const rankingsActive = router.pathname === '/';
+  const squad = useOptionalSquad();
   const encountersActive = isEncountersRoute(router.pathname);
   const historyActive = isHistoryRoute(router.pathname);
+
+  // Rankings/Encounters/History are all squad-specific boards - nothing to show without one
+  // (the squad picker, login, and platform-admin pages render no SquadProvider).
+  if (!squad) return null;
+
+  const rankingsActive = router.pathname === '/s/[squad]';
+  const historyLinks = buildHistoryLinks(squad.slug);
 
   return (
     <div
@@ -33,7 +41,7 @@ export function ScoreboardNav({ players, playersLoading }: ScoreboardNavProps) {
       aria-label="Primary"
     >
       <Link
-        href="/"
+        href={`/s/${squad.slug}`}
         className={scoreboardSegmentClass(rankingsActive)}
         aria-current={rankingsActive ? 'page' : undefined}
       >
@@ -87,7 +95,7 @@ export function ScoreboardNav({ players, playersLoading }: ScoreboardNavProps) {
                       'block rounded-lg px-3 py-2.5 transition-colors',
                       active ? 'bg-white/10' : 'hover:bg-white/5'
                     )}
-                    aria-current={router.pathname === link.href ? 'page' : undefined}
+                    aria-current={router.asPath === link.href ? 'page' : undefined}
                   >
                     <span className="block font-headline text-sm font-semibold text-on-surface">
                       {link.name}
