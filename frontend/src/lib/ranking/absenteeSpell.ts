@@ -36,6 +36,19 @@ async function distinctSquadGameDaysAfter(squadId: number, afterExclusive: Date,
   return groups.length;
 }
 
+// The exclusive lower bound of the spell: the later of "the day they last actually played" and
+// "the day before the clamp". Pure and exported so the clamp rule - the part this whole day-based
+// counter exists for - is testable without a database. null means "no bound at all", i.e. the
+// player has never played and no clamp was given.
+//
+// `notBefore` is shifted back a day because the bound is exclusive: clamping to a window's
+// startDate has to *include* that start date's own game day in the count.
+export function effectiveSpellStart(lastPlayed: Date | null, notBefore?: Date): Date | null {
+  const clampFrom = notBefore ? addUtcDays(notBefore, -1) : null;
+  if (lastPlayed && clampFrom) return lastPlayed > clampFrom ? lastPlayed : clampFrom;
+  return lastPlayed ?? clampFrom;
+}
+
 // The general form: consecutive missed game days in `(max(lastRealPlayDate, the game day before
 // notBefore), asOf]`. With no `notBefore` this is exactly "game days since last play". With
 // `notBefore` set (a replacement window's startDate) it answers "how many game days of this
@@ -49,10 +62,7 @@ export async function absenteeSpellDays(
   notBefore?: Date
 ): Promise<number | null> {
   const lastPlayed = await lastRealPlayDate(playerId);
-  const clampFrom = notBefore ? addUtcDays(notBefore, -1) : null;
-
-  const effectiveAfter =
-    lastPlayed && clampFrom ? (lastPlayed > clampFrom ? lastPlayed : clampFrom) : (lastPlayed ?? clampFrom);
+  const effectiveAfter = effectiveSpellStart(lastPlayed, notBefore);
 
   if (!effectiveAfter) return null;
   return distinctSquadGameDaysAfter(squadId, effectiveAfter, asOf);

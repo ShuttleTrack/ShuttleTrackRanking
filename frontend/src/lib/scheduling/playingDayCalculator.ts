@@ -33,7 +33,9 @@ export function isPlayingDay(schedule: SquadScheduleData, date: Date): boolean {
   const dayString = dateOnlyString(day);
   if (schedule.startDate && dayString < schedule.startDate) return false;
   if (schedule.endDate && dayString > schedule.endDate) return false;
-  if (schedule.skipDates.includes(dayString)) return false;
+  // Squad.schedule is a raw JSON blob read back with a cast, not a validated shape - a row
+  // written before skipDates existed has no such key, and `undefined.includes` would throw.
+  if ((schedule.skipDates ?? []).includes(dayString)) return false;
   return true;
 }
 

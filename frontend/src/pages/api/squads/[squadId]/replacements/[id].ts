@@ -1,11 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
-import { cancelSlotReplacement } from '@/lib/replacements';
+import { cancelSlotReplacement, shortenSlotReplacement } from '@/lib/replacements';
 import { parseSquadId } from '@/lib/api/squadParam';
 
-// PATCH cancels a replacement early - only the nominating fulltime player can do it (self-service
-// mirrors self-service creation; no admin override in this first cut).
+// PATCH ends a replacement early - either outright (no body, or `{ cancel: true }`) or by pulling
+// its end date in (`{ endDate }`). Only the nominating fulltime player can do either
+// (self-service mirrors self-service creation; no admin override in this first cut).
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const squadId = parseSquadId(req, res);
   if (squadId === null) return;
@@ -25,8 +26,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ message: 'Invalid replacement id' });
   }
 
+  const newEndDate = req.body?.endDate;
+  if (newEndDate !== undefined && typeof newEndDate !== 'string') {
+    return res.status(400).json({ message: 'endDate must be a YYYY-MM-DD string' });
+  }
+
   try {
-    const replacement = await cancelSlotReplacement(squadId, replacementId, session.user.email);
+    const replacement = newEndDate
+      ? await shortenSlotReplacement(squadId, replacementId, session.user.email, newEndDate)
+      : await cancelSlotReplacement(squadId, replacementId, session.user.email);
     res.status(200).json(replacement);
   } catch (error) {
     console.error('Cancel Replacement API Error:', error);

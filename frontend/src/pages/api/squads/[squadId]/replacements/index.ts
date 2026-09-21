@@ -9,10 +9,14 @@ import {
 } from '@/lib/replacements';
 import { parseSquadId } from '@/lib/api/squadParam';
 
-// GET: a squad admin sees every replacement in the squad (oversight); a regular player sees only
-// the ones they nominated themselves. POST: self-service creation - no admin approval, just the
-// guardrails in lib/replacements.ts (own slot only, nominee must be open-slot, schedule
-// configured, >= 3 playing days, no overlap).
+// GET: returns the caller's *own* nominations by default, whoever they are. `?scope=squad` asks
+// for every replacement in the squad (read-only admin oversight) and is rejected for anyone who
+// isn't a squad admin. The scope is explicit rather than inferred from the caller's role on
+// purpose: the player-facing page renders this list as "Your replacements" with a Cancel button
+// per row, and a squad admin who is also a player would otherwise be shown - and invited to
+// cancel - every other member's nomination, which `cancelSlotReplacement` then refuses.
+// POST: self-service creation - no admin approval, just the guardrails in lib/replacements.ts
+// (own slot only, nominee must be open-slot, schedule configured, >= 3 playing days, no overlap).
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const squadId = parseSquadId(req, res);
   if (squadId === null) return;
@@ -28,8 +32,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'GET') {
+    const wantsSquadScope = req.query.scope === 'squad';
+    if (wantsSquadScope && !isAdmin) {
+      return res.status(403).json({ message: 'Only a squad admin can list the whole squad\'s replacements' });
+    }
+    if (!wantsSquadScope && !player) {
+      // A superadmin with no Player row in this squad has no "own" list to return.
+      return res.status(200).json([]);
+    }
+
     try {
-      const replacements = isAdmin
+      const replacements = wantsSquadScope
         ? await listSlotReplacementsForSquad(squadId)
         : await listSlotReplacementsForFulltimePlayer(squadId, player!.id);
       res.status(200).json(replacements);

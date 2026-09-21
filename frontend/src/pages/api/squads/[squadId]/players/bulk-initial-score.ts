@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { assignInitialScores } from '@/lib/ranking/players';
 import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
+import { isValidationError } from '@/lib/api/validationError';
 
 interface AssignmentBody {
   playerId: number;
@@ -38,8 +39,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(200).json({ message: 'Scores assigned' });
   } catch (error) {
     console.error('Bulk Initial Score API Error:', error);
-    res.status(500).json({
-      message: error instanceof Error ? error.message : 'Failed to assign scores',
-    });
+    // A rejected score or an id from another squad is the caller's mistake, not ours - both used
+    // to come back as a 500 alongside genuine database faults.
+    if (isValidationError(error)) {
+      return res.status(400).json({ message: error.message });
+    }
+    res.status(500).json({ message: 'Failed to assign scores' });
   }
 }

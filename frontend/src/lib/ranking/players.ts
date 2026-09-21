@@ -5,6 +5,7 @@ import { derivePlayerStatus, filterPlayersByStatusParam, isActive, RawPlayerStat
 import { timeInHighestRankLabel } from './period';
 import { getRankedPlayers } from './playerUtil';
 import { filterBoardVisible } from './boardVisibility';
+import { ValidationError } from '@/lib/api/validationError';
 
 // Ported from backend PlayerService.java + ScoreHistoryService.java (MIGRATION_PLAN.md Phase 2).
 // Field names match the real Java DTOs (PlayerInfo / SecurePlayerInfo / PlayerRankHistory /
@@ -24,6 +25,12 @@ export interface PlayerInfo {
   timeInHighestRank: string | null;
   status: RawPlayerStatus;
   playerType: PlayerType;
+  // Whether the player has a rankScore *at all*, read straight off the row. Distinct from
+  // `rankScore !== null` on this DTO: the field above is deliberately nulled for any non-ACTIVE
+  // player (see toPlayerInfo), so it can't tell "hasn't played recently" apart from "has never
+  // been given a starting score" - which the admin roster has to show differently, since only
+  // the second one is something an admin can act on (OPEN_SLOT_PLAYERS_PLAN.md).
+  hasScore: boolean;
 }
 
 export interface SecurePlayerInfo extends PlayerInfo {
@@ -89,6 +96,7 @@ export function toPlayerInfo(player: PrismaPlayer, mostRecentScoreHistory: Prism
     timeInHighestRank: timeInHighestRankLabel(player.rankSince),
     status: derivePlayerStatus(player),
     playerType: player.playerType,
+    hasScore: player.rankScore !== null,
   };
 }
 
@@ -298,6 +306,7 @@ export async function addPlayer(squadId: number, input: NewPlayerInput): Promise
     status: derivePlayerStatus(player),
     email: player.email,
     playerType: player.playerType,
+    hasScore: player.rankScore !== null,
   };
 }
 
@@ -319,11 +328,11 @@ export async function assignInitialScores(squadId: number, assignments: InitialS
   if (players.length !== ids.length) {
     const found = new Set(players.map((p) => p.id));
     const missing = ids.filter((id) => !found.has(id));
-    throw new Error(`Player(s) not found in this squad: ${missing.join(', ')}`);
+    throw new ValidationError(`Player(s) not found in this squad: ${missing.join(', ')}`);
   }
   for (const a of assignments) {
     if (a.rankScore <= 0) {
-      throw new Error(`Invalid rank score for player ${a.playerId}: must be greater than 0`);
+      throw new ValidationError(`Invalid rank score for player ${a.playerId}: must be greater than 0`);
     }
   }
 
@@ -385,6 +394,7 @@ export async function updatePlayer(squadId: number, input: UpdatePlayerInput): P
     timeInHighestRank: '0 day(s)',
     status: derivePlayerStatus(player),
     playerType: player.playerType,
+    hasScore: player.rankScore !== null,
   };
 }
 
@@ -437,6 +447,14 @@ export async function findScorelessPlayersInGroups(
     where: { id: { in: ids }, squadId },
     select: { id: true, name: true, rankScore: true },
   });
+  // An id that isn't in this squad comes back as "not found", which would otherwise read as
+  // "not scoreless" and sail through the gate - the one case where a missing row must not be
+  // treated as a pass. assignInitialScores already rejects the same case; this matches it.
+  if (players.length !== ids.length) {
+    const found = new Set(players.map((p) => p.id));
+    const missing = ids.filter((id) => !found.has(id));
+    throw new ValidationError(`Player(s) not found in this squad: ${missing.join(', ')}`);
+  }
   return players.filter((p) => p.rankScore === null).map((p) => ({ id: p.id, name: p.name }));
 }
 

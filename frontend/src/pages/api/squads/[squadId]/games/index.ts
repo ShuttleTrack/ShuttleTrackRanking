@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
 import { findScorelessPlayersInGroups } from '@/lib/ranking/players';
+import { isValidationError } from '@/lib/api/validationError';
 
 export default async function handler(
   req: NextApiRequest,
@@ -38,6 +39,11 @@ export default async function handler(
       });
       res.status(201).json(game);
     } catch (error) {
+      // A player id that is not in this squad is a bad request, not a server fault.
+      if (isValidationError(error)) {
+        return res.status(400).json({ message: error.message });
+      }
+      console.error('Create Game API Error:', error);
       res.status(500).json({ message: 'Failed to create game' });
     }
   } else if (req.method === 'GET') {
