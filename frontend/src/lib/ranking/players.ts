@@ -327,7 +327,7 @@ export async function getAvailablePlayersForGame(squadId: number): Promise<GameP
 export interface RawPlayerJson {
   id: number;
   name: string;
-  rankScore: number;
+  rankScore: number | null;
   playerRank: number | null;
   colorHex: string;
   highestRank: number | null;

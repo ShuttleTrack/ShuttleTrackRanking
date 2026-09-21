@@ -24,3 +24,14 @@ export function decideAbsenteeAction(priorAbsencesInLast5: number): AbsenteeActi
   const multiplier = priorAbsencesInLast5 === 0 ? 1 : priorAbsencesInLast5 === 1 ? 2 : 3;
   return { action: 'demerit', points: multiplier * DEMERIT_POINTS_ABSENTEE };
 }
+
+// Open-slot / replacement players (OPEN_SLOT_PLAYERS_PLAN.md): a separate, day-based escalation
+// used instead of decideAbsenteeAction's row-based one, so the legacy fulltime ladder above stays
+// completely untouched. Same familiar -10/-20/-30 amounts, 1x at 1 missed game day, 2x at 2, 3x
+// at 3 or more - but the caller decides whether/when to stop calling this (grace cutoff for plain
+// open-slot, no cutoff for an active replacement window); this function never says "deactivate".
+export function absenteeMultiplierForSpell(spellDays: number): number {
+  if (spellDays <= 1) return 1;
+  if (spellDays === 2) return 2;
+  return 3;
+}
