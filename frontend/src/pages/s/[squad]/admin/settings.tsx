@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { GetServerSideProps } from 'next';
+import { LockClosedIcon } from '@heroicons/react/24/outline';
 import type { DayOfWeek } from '@/lib/squadSchedule';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
@@ -14,12 +15,46 @@ const primaryBtn =
   'inline-flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
 const outlineBtn =
   'inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/10 bg-surface-container-high/50 px-4 py-2 font-medium text-on-surface transition-colors hover:border-primary/40';
+const readOnlyChipClass =
+  'inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant';
+const statusFactTileClass =
+  'rounded-lg border border-white/5 bg-surface-container-high/40 px-2.5 py-2 sm:px-4 sm:py-3';
+const statusFactLabelClass =
+  'font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60';
+const modalBoxClass =
+  'relative w-full max-w-lg rounded-xl border border-gray-600 bg-surface-container-high p-6 shadow-xl';
+const modalActionsClass = 'mt-6 flex flex-wrap justify-end gap-3';
+const scheduleFieldLabelClass =
+  'mb-1 block font-label text-xs font-bold uppercase tracking-widest text-on-surface-variant/60';
 
 const DAYS: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+
+function visibilityConfirmCopy(pendingPublic: boolean) {
+  if (pendingPublic) {
+    return {
+      title: 'Make squad public',
+      message:
+        'This squad will appear on the site-root leaderboard. Players in more than one public squad have their points added together there.',
+      confirmLabel: 'Make public',
+    };
+  }
+  return {
+    title: 'Make squad private',
+    message:
+      'This squad will stay reachable by link but will no longer appear on the site-root leaderboard.',
+    confirmLabel: 'Make private',
+  };
+}
 
 function toDateInputValue(value: string | null): string {
   if (!value) return '';
   return value.slice(0, 10);
+}
+
+function formatScheduleDateDisplay(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  if (!y || !m || !d) return isoDate;
+  return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
 }
 
 const SquadSettingsPage = () => {
@@ -29,7 +64,7 @@ const SquadSettingsPage = () => {
   const [isPublic, setIsPublic] = useState(true);
   const [visibilityError, setVisibilityError] = useState<string | null>(null);
   const [isSavingVisibility, setIsSavingVisibility] = useState(false);
-  const [visibilitySaved, setVisibilitySaved] = useState(false);
+  const [pendingPublic, setPendingPublic] = useState<boolean | null>(null);
 
   const [isRecurring, setIsRecurring] = useState(false);
   const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>('WEDNESDAY');
@@ -77,29 +112,36 @@ const SquadSettingsPage = () => {
     setSkipDates(skipDates.filter((d) => d !== date));
   };
 
-  const handleSaveVisibility = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const closeVisibilityModal = () => {
+    if (isSavingVisibility) return;
+    setPendingPublic(null);
+    setVisibilityError(null);
+  };
+
+  const handleConfirmVisibility = async () => {
+    if (pendingPublic === null) return;
     setIsSavingVisibility(true);
     setVisibilityError(null);
-    setVisibilitySaved(false);
     try {
       const response = await fetch(`/api/squads/${squadId}/visibility`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPublic }),
+        body: JSON.stringify({ isPublic: pendingPublic }),
       });
       if (!response.ok) {
         const body = await response.json();
         throw new Error(body.message || 'Failed to save visibility');
       }
       await mutate();
-      setVisibilitySaved(true);
+      setPendingPublic(null);
     } catch (err) {
       setVisibilityError(err instanceof Error ? err.message : 'Failed to save visibility');
     } finally {
       setIsSavingVisibility(false);
     }
   };
+
+  const visibilityToggleDisabled = pendingPublic !== null || isSavingVisibility;
 
   const handleSaveOpenSlot = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,52 +209,111 @@ const SquadSettingsPage = () => {
       </section>
 
       <div className={`${cardClass} mb-6`}>
-        <h2 className={sectionTitleClass}>Status</h2>
-        <p className="text-sm text-on-surface-variant">
-          These are set by a platform admin, not here - shown for reference.
+        <div className="mb-1 flex items-start justify-between gap-3">
+          <h2 className="font-headline text-base sm:text-lg font-semibold text-on-surface">Status</h2>
+          <span className={readOnlyChipClass}>
+            <LockClosedIcon className="h-3 w-3 shrink-0" aria-hidden />
+            Read only
+          </span>
+        </div>
+        <p className="mb-2 text-xs text-on-surface-variant sm:mb-3 sm:text-sm">
+          Managed by platform admin
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
-          <span
-            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-label font-bold uppercase tracking-wide ${
-              settings.enabled
-                ? 'bg-primary/20 text-primary border border-primary/40'
-                : 'bg-red-950/30 text-red-400 border border-red-500/40'
-            }`}
-          >
-            {settings.enabled ? 'Enabled' : 'Disabled'}
-          </span>
-          <span>
-            {settings.playerCount}
-            {settings.maxPlayers !== null ? ` / ${settings.maxPlayers}` : ''} players
-            {settings.maxPlayers === null && ' (no limit)'}
-          </span>
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <div className={statusFactTileClass}>
+            <p className="text-xs leading-snug sm:text-sm">
+              <span className={statusFactLabelClass}>Squad </span>
+              <span
+                className={`font-medium ${settings.enabled ? 'text-primary' : 'text-red-400'}`}
+              >
+                {settings.enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </p>
+          </div>
+          <div className={statusFactTileClass}>
+            <p className="font-numeric text-xs leading-snug tabular-nums sm:text-sm">
+              <span className={statusFactLabelClass}>Roster </span>
+              <span className="font-medium text-on-surface">
+                {settings.maxPlayers !== null
+                  ? `${settings.playerCount}/${settings.maxPlayers}`
+                  : `${settings.playerCount} · ∞`}
+              </span>
+            </p>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSaveVisibility} className={`${cardClass} mb-6`}>
+      <div className={`${cardClass} mb-6`}>
         <h2 className={sectionTitleClass}>Visibility</h2>
         <p className="text-sm text-on-surface-variant mb-4">
           Public squads appear on the site-root leaderboard. If someone plays in more than one
           public squad, their points are added together there. Private squads stay reachable by
-          link and are not included in that sum. You can change this any time.
+          link and are not included in that sum.
         </p>
-        <label className="flex items-center gap-3 cursor-pointer mb-4">
+        <label
+          className={`flex items-center gap-3 ${visibilityToggleDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+        >
           <input
             type="checkbox"
             className="toggle toggle-primary"
             checked={isPublic}
-            onChange={(e) => setIsPublic(e.target.checked)}
+            disabled={visibilityToggleDisabled}
+            onChange={() => {
+              setVisibilityError(null);
+              setPendingPublic(!isPublic);
+            }}
           />
           <span className="text-sm font-medium text-on-surface">
             {isPublic ? 'Public' : 'Private'}
           </span>
         </label>
-        {visibilityError && <p className="text-sm text-red-400 mb-4">{visibilityError}</p>}
-        {visibilitySaved && !visibilityError && <p className="text-sm text-primary mb-4">Saved.</p>}
-        <button type="submit" className={primaryBtn} disabled={isSavingVisibility}>
-          {isSavingVisibility ? 'Saving…' : 'Save visibility'}
-        </button>
-      </form>
+      </div>
+
+      {pendingPublic !== null && (() => {
+        const { title, message, confirmLabel } = visibilityConfirmCopy(pendingPublic);
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="visibility-confirm-title"
+            onClick={closeVisibilityModal}
+          >
+            <div className={modalBoxClass} onClick={(e) => e.stopPropagation()}>
+              <h3
+                id="visibility-confirm-title"
+                className="mb-4 font-headline text-lg font-semibold text-on-surface"
+              >
+                {title}
+              </h3>
+              <p className="text-sm text-on-surface-variant">{message}</p>
+              {visibilityError && (
+                <div className="mt-4 rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3">
+                  <p className="text-sm text-red-400">{visibilityError}</p>
+                </div>
+              )}
+              <div className={modalActionsClass}>
+                <button
+                  type="button"
+                  className={outlineBtn}
+                  disabled={isSavingVisibility}
+                  onClick={closeVisibilityModal}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={primaryBtn}
+                  disabled={isSavingVisibility}
+                  onClick={() => void handleConfirmVisibility()}
+                >
+                  {isSavingVisibility ? 'Saving…' : confirmLabel}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <form onSubmit={handleSaveOpenSlot} className={`${cardClass} mb-6`}>
         <h2 className={sectionTitleClass}>Open-slot players</h2>
@@ -266,7 +367,7 @@ const SquadSettingsPage = () => {
       <form onSubmit={handleSave} className={cardClass}>
         <h2 className={sectionTitleClass}>Play schedule</h2>
 
-        <label className="flex items-center gap-3 cursor-pointer mb-4">
+        <label className="mb-3 flex cursor-pointer items-center gap-3">
           <input
             type="checkbox"
             className="toggle toggle-primary"
@@ -278,11 +379,15 @@ const SquadSettingsPage = () => {
           </span>
         </label>
 
+        {!isRecurring && (
+          <p className="mb-3 text-sm text-on-surface-variant">No weekly play day.</p>
+        )}
+
         {isRecurring && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-on-surface-variant mb-1">Day of week</label>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className={scheduleFieldLabelClass}>Day</label>
                 <select
                   className={inputFieldClass}
                   value={dayOfWeek}
@@ -296,7 +401,7 @@ const SquadSettingsPage = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-on-surface-variant mb-1">Start time</label>
+                <label className={scheduleFieldLabelClass}>Start</label>
                 <input
                   type="time"
                   className={inputFieldClass}
@@ -306,7 +411,7 @@ const SquadSettingsPage = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-on-surface-variant mb-1">End time</label>
+                <label className={scheduleFieldLabelClass}>End</label>
                 <input
                   type="time"
                   className={inputFieldClass}
@@ -317,11 +422,9 @@ const SquadSettingsPage = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-on-surface-variant mb-1">
-                  Recurrence start date
-                </label>
+                <label className={scheduleFieldLabelClass}>Starts</label>
                 <input
                   type="date"
                   className={inputFieldClass}
@@ -331,9 +434,7 @@ const SquadSettingsPage = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-on-surface-variant mb-1">
-                  Recurrence end date (optional)
-                </label>
+                <label className={scheduleFieldLabelClass}>Ends (optional)</label>
                 <input
                   type="date"
                   className={inputFieldClass}
@@ -345,35 +446,33 @@ const SquadSettingsPage = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-on-surface-variant mb-1">
-                Skip days (holidays, etc.)
-              </label>
-              <div className="flex gap-2 mb-2">
+              <label className={scheduleFieldLabelClass}>Skip days</label>
+              <div className="mb-2 flex gap-2">
                 <input
                   type="date"
                   className={inputFieldClass}
                   value={newSkipDate}
                   onChange={(e) => setNewSkipDate(e.target.value)}
                 />
-                <button type="button" className={outlineBtn} onClick={addSkipDate}>
+                <button type="button" className={`${outlineBtn} shrink-0`} onClick={addSkipDate}>
                   Add
                 </button>
               </div>
               {skipDates.length > 0 && (
-                <ul className="space-y-1.5">
+                <ul className="flex flex-wrap gap-2">
                   {skipDates.map((date) => (
-                    <li
-                      key={date}
-                      className="flex items-center justify-between rounded-lg border border-gray-600 bg-surface-container px-3 py-1.5 text-sm text-on-surface"
-                    >
-                      {date}
-                      <button
-                        type="button"
-                        className="text-red-400 hover:text-red-300"
-                        onClick={() => removeSkipDate(date)}
-                      >
-                        Remove
-                      </button>
+                    <li key={date}>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 py-0.5 pl-2.5 pr-1 font-numeric text-xs tabular-nums text-on-surface">
+                        {formatScheduleDateDisplay(date)}
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-white/10 hover:text-red-400"
+                          onClick={() => removeSkipDate(date)}
+                          aria-label={`Remove skip day ${formatScheduleDateDisplay(date)}`}
+                        >
+                          ×
+                        </button>
+                      </span>
                     </li>
                   ))}
                 </ul>

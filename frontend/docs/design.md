@@ -79,7 +79,7 @@ Multi-squad tenancy uses URL prefixes (see `squad-tenancy.md` for auth and data 
 
 **Selector band** (`SelectorBand` in `SquadBoardSelector.tsx`): full-bleed strip `border-y border-white/5 bg-black/30` with `.form-strip` overlay; inner `max-w-7xl` row; bottom kinetic-gradient hairline separates the band from the title/list below.
 
-- **Signed-in with squads** (`SquadBoardSelector` on `/` and `/s/{slug}`): centered **split control** — **Squad** cap + Listbox value (Public or current squad). Squad ranking pages omit the band when signed out.
+- **Signed-in with squads** (`SquadBoardSelector` on `/` and `/s/{slug}`): **split control** — **Squad** cap + Listbox value (Public or current squad); centered on mobile, left-aligned on `md+` under the logo. Squad ranking pages omit the band when signed out.
 - **Signed-out / no squads** (`PublicRankingsCallout` on `/` only): optional radial scrim over `.form-strip` for legibility; centered single-row lock tile + one-line muted caption (no in-band CTA — nav **Sign in** only). While session/squad list loads, empty band chrome only (no message flash).
 
 ## Leaderboard grid (desktop)

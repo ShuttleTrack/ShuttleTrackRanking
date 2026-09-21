@@ -17,7 +17,7 @@ const controlShellClass =
   'flex w-full items-stretch overflow-hidden rounded-lg border border-primary/50 bg-surface-container shadow-[inset_0_0_0_1px_rgb(238_138_51_/_0.35)] sm:inline-flex sm:w-auto';
 
 const triggerClass =
-  'relative flex min-h-[36px] min-w-0 flex-1 items-center justify-center rounded-r-lg bg-surface-container-highest py-1.5 pl-4 pr-9 text-center font-headline text-sm font-bold text-primary transition-colors hover:bg-surface-container-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset sm:min-w-[9.5rem]';
+  'relative flex min-h-[36px] min-w-0 flex-1 items-center justify-center rounded-r-lg bg-surface-container-highest py-1.5 pl-4 pr-9 text-center font-headline text-sm font-bold text-primary transition-colors hover:bg-surface-container-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset sm:min-w-[9.5rem] md:min-w-[18rem] md:justify-start md:text-left';
 
 const optionRowClass = (active: boolean, selected: boolean) =>
   classNames(
@@ -101,7 +101,7 @@ export function SquadBoardSelector({ currentSlug }: SquadBoardSelectorProps) {
 
   return (
     <SelectorBand>
-      <div className="flex min-h-[36px] w-full items-center justify-center">
+      <div className="flex min-h-[36px] w-full items-center justify-center md:justify-start">
         <Listbox value={selectedValue} onChange={handleChange}>
           <div className="relative w-[90%] sm:w-auto">
             <div className={controlShellClass}>
