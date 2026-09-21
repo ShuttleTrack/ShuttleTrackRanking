@@ -17,7 +17,10 @@ vi.mock('@/lib/prisma', () => {
 import prisma from '@/lib/prisma';
 import {
   createSlotReplacement,
-  shortenSlotReplacement,
+  requestReplacementShortening,
+  requestCancelReplacementCancellation,
+  approveCancellationRequest,
+  rejectCancellationRequest,
   previewReplacementWindow,
   searchOpenSlotPlayers,
   maxEndDateFor,
@@ -223,13 +226,15 @@ describe('createSlotReplacement DB-backed guardrails', () => {
   });
 });
 
-describe('shortenSlotReplacement', () => {
+describe('requestReplacementShortening', () => {
   const existing = {
     id: 99,
     squadId: 1,
     startDate: new Date('2026-10-07T00:00:00.000Z'),
     endDate: new Date('2026-12-02T00:00:00.000Z'),
     cancelledAt: null,
+    cancellationRequestedAt: null,
+    cancellationRequestedEndDate: null,
     fulltimePlayer: { email: OWNER_EMAIL },
   };
 
@@ -240,38 +245,186 @@ describe('shortenSlotReplacement', () => {
     );
   });
 
-  it('pulls the end date in', async () => {
-    await shortenSlotReplacement(1, 99, OWNER_EMAIL, '2026-10-21');
+  it('records a pending shorten request rather than pulling the end date in immediately', async () => {
+    await requestReplacementShortening(1, 99, OWNER_EMAIL, '2026-10-21');
     expect(mocked.slotReplacement.update).toHaveBeenCalledWith({
       where: { id: 99 },
-      data: { endDate: new Date('2026-10-21T00:00:00.000Z') },
+      data: {
+        cancellationRequestedAt: new Date(`${TODAY}T12:00:00.000Z`),
+        cancellationRequestedEndDate: new Date('2026-10-21T00:00:00.000Z'),
+      },
     });
   });
 
   it('refuses to extend', async () => {
-    await expect(shortenSlotReplacement(1, 99, OWNER_EMAIL, '2026-12-30')).rejects.toThrow(
+    await expect(requestReplacementShortening(1, 99, OWNER_EMAIL, '2026-12-30')).rejects.toThrow(
       'only be shortened, not extended'
     );
   });
 
   it('refuses an end date before the window started', async () => {
-    await expect(shortenSlotReplacement(1, 99, OWNER_EMAIL, '2026-10-01')).rejects.toThrow('cancel it instead');
+    await expect(requestReplacementShortening(1, 99, OWNER_EMAIL, '2026-10-01')).rejects.toThrow(
+      'cancel it instead'
+    );
   });
 
   it('refuses anyone but the nominating player', async () => {
-    await expect(shortenSlotReplacement(1, 99, 'someone.else@example.com', '2026-10-21')).rejects.toThrow(
+    await expect(requestReplacementShortening(1, 99, 'someone.else@example.com', '2026-10-21')).rejects.toThrow(
       'Only the nominating player'
     );
   });
 
   it('refuses an already-cancelled window', async () => {
     mocked.slotReplacement.findUnique.mockResolvedValue({ ...existing, cancelledAt: new Date() });
-    await expect(shortenSlotReplacement(1, 99, OWNER_EMAIL, '2026-10-21')).rejects.toThrow('already been cancelled');
+    await expect(requestReplacementShortening(1, 99, OWNER_EMAIL, '2026-10-21')).rejects.toThrow(
+      'already been cancelled'
+    );
   });
 
-  it('does not shorten below the 3-playing-day minimum - shortening only ever reduces a commitment', async () => {
+  it('refuses when a cancellation request is already pending', async () => {
+    mocked.slotReplacement.findUnique.mockResolvedValue({ ...existing, cancellationRequestedAt: new Date() });
+    await expect(requestReplacementShortening(1, 99, OWNER_EMAIL, '2026-10-21')).rejects.toThrow(
+      'already pending admin approval'
+    );
+  });
+
+  it('does not refuse below the 3-playing-day minimum - shortening only ever reduces a commitment', async () => {
     // Deliberate: outright cancellation is allowed, so a minimum here would be the odd rule out.
-    await expect(shortenSlotReplacement(1, 99, OWNER_EMAIL, '2026-10-07')).resolves.toBeTruthy();
+    await expect(requestReplacementShortening(1, 99, OWNER_EMAIL, '2026-10-07')).resolves.toBeTruthy();
+  });
+});
+
+describe('requestCancelReplacementCancellation', () => {
+  const existing = {
+    id: 99,
+    squadId: 1,
+    startDate: new Date('2026-10-07T00:00:00.000Z'),
+    endDate: new Date('2026-12-02T00:00:00.000Z'),
+    cancelledAt: null,
+    cancellationRequestedAt: null,
+    cancellationRequestedEndDate: null,
+    fulltimePlayer: { email: OWNER_EMAIL },
+  };
+
+  beforeEach(() => {
+    mocked.slotReplacement.findUnique.mockResolvedValue(existing);
+    mocked.slotReplacement.update.mockImplementation(({ data }: { data: unknown }) =>
+      Promise.resolve({ ...existing, ...(data as object) })
+    );
+  });
+
+  it('records a pending cancellation request rather than cancelling immediately', async () => {
+    await requestCancelReplacementCancellation(1, 99, OWNER_EMAIL);
+    expect(mocked.slotReplacement.update).toHaveBeenCalledWith({
+      where: { id: 99 },
+      data: { cancellationRequestedAt: new Date(`${TODAY}T12:00:00.000Z`), cancellationRequestedEndDate: null },
+    });
+  });
+
+  it('is a no-op on an already-cancelled window', async () => {
+    mocked.slotReplacement.findUnique.mockResolvedValue({ ...existing, cancelledAt: new Date('2026-09-01T00:00:00.000Z') });
+    const result = await requestCancelReplacementCancellation(1, 99, OWNER_EMAIL);
+    expect(result.cancelledAt).toEqual(new Date('2026-09-01T00:00:00.000Z'));
+    expect(mocked.slotReplacement.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses anyone but the nominating player', async () => {
+    await expect(requestCancelReplacementCancellation(1, 99, 'someone.else@example.com')).rejects.toThrow(
+      'Only the nominating player'
+    );
+  });
+
+  it('refuses when a cancellation request is already pending', async () => {
+    mocked.slotReplacement.findUnique.mockResolvedValue({ ...existing, cancellationRequestedAt: new Date() });
+    await expect(requestCancelReplacementCancellation(1, 99, OWNER_EMAIL)).rejects.toThrow(
+      'already pending admin approval'
+    );
+  });
+});
+
+describe('approveCancellationRequest', () => {
+  it('applies outright cancellation when no shortened end date was requested', async () => {
+    mocked.slotReplacement.findUnique.mockResolvedValue({
+      id: 99,
+      squadId: 1,
+      endDate: new Date('2026-12-02T00:00:00.000Z'),
+      cancellationRequestedAt: new Date('2026-09-20T00:00:00.000Z'),
+      cancellationRequestedEndDate: null,
+    });
+    mocked.slotReplacement.update.mockResolvedValue({});
+    await approveCancellationRequest(1, 99);
+    expect(mocked.slotReplacement.update).toHaveBeenCalledWith({
+      where: { id: 99 },
+      data: {
+        cancelledAt: new Date(`${TODAY}T12:00:00.000Z`),
+        endDate: undefined,
+        cancellationRequestedAt: null,
+        cancellationRequestedEndDate: null,
+      },
+    });
+  });
+
+  it('applies the shortened end date when one was requested', async () => {
+    mocked.slotReplacement.findUnique.mockResolvedValue({
+      id: 99,
+      squadId: 1,
+      endDate: new Date('2026-12-02T00:00:00.000Z'),
+      cancellationRequestedAt: new Date('2026-09-20T00:00:00.000Z'),
+      cancellationRequestedEndDate: new Date('2026-10-21T00:00:00.000Z'),
+    });
+    mocked.slotReplacement.update.mockResolvedValue({});
+    await approveCancellationRequest(1, 99);
+    expect(mocked.slotReplacement.update).toHaveBeenCalledWith({
+      where: { id: 99 },
+      data: {
+        cancelledAt: undefined,
+        endDate: new Date('2026-10-21T00:00:00.000Z'),
+        cancellationRequestedAt: null,
+        cancellationRequestedEndDate: null,
+      },
+    });
+  });
+
+  it('refuses when there is no pending request', async () => {
+    mocked.slotReplacement.findUnique.mockResolvedValue({
+      id: 99,
+      squadId: 1,
+      cancellationRequestedAt: null,
+      cancellationRequestedEndDate: null,
+    });
+    await expect(approveCancellationRequest(1, 99)).rejects.toThrow('no pending cancellation request');
+  });
+
+  it('refuses a replacement from another squad', async () => {
+    mocked.slotReplacement.findUnique.mockResolvedValue({
+      id: 99,
+      squadId: 2,
+      cancellationRequestedAt: new Date(),
+      cancellationRequestedEndDate: null,
+    });
+    await expect(approveCancellationRequest(1, 99)).rejects.toThrow('Replacement not found');
+  });
+});
+
+describe('rejectCancellationRequest', () => {
+  it('clears the pending request without changing the window', async () => {
+    mocked.slotReplacement.findUnique.mockResolvedValue({
+      id: 99,
+      squadId: 1,
+      cancellationRequestedAt: new Date('2026-09-20T00:00:00.000Z'),
+      cancellationRequestedEndDate: new Date('2026-10-21T00:00:00.000Z'),
+    });
+    mocked.slotReplacement.update.mockResolvedValue({});
+    await rejectCancellationRequest(1, 99);
+    expect(mocked.slotReplacement.update).toHaveBeenCalledWith({
+      where: { id: 99 },
+      data: { cancellationRequestedAt: null, cancellationRequestedEndDate: null },
+    });
+  });
+
+  it('refuses when there is no pending request', async () => {
+    mocked.slotReplacement.findUnique.mockResolvedValue({ id: 99, squadId: 1, cancellationRequestedAt: null });
+    await expect(rejectCancellationRequest(1, 99)).rejects.toThrow('no pending cancellation request');
   });
 });
 
@@ -314,7 +467,13 @@ describe('searchOpenSlotPlayers', () => {
   it('masks the email rather than handing out the real address', async () => {
     mocked.player.findMany.mockResolvedValue([{ id: 6, name: 'grace', email: 'grace@example.com' }]);
     const results = await searchOpenSlotPlayers(1, 'gr');
-    expect(results).toEqual([{ id: 6, name: 'grace', maskedEmail: 'g***@example.com' }]);
+    expect(results).toEqual([{ id: 6, name: 'grace', maskedEmail: 'grace***@example.com' }]);
+  });
+
+  it('does not mask past the @ for a local part shorter than 5 characters', async () => {
+    mocked.player.findMany.mockResolvedValue([{ id: 7, name: 'al', email: 'al@example.com' }]);
+    const results = await searchOpenSlotPlayers(1, 'al');
+    expect(results).toEqual([{ id: 7, name: 'al', maskedEmail: 'al***@example.com' }]);
   });
 
   it('still matches on the real address server-side', async () => {

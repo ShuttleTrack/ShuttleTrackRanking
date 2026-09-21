@@ -1,12 +1,13 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
-import { cancelSlotReplacement, shortenSlotReplacement } from '@/lib/replacements';
+import { requestCancelReplacementCancellation, requestReplacementShortening } from '@/lib/replacements';
 import { parseSquadId } from '@/lib/api/squadParam';
 
-// PATCH ends a replacement early - either outright (no body, or `{ cancel: true }`) or by pulling
-// its end date in (`{ endDate }`). Only the nominating fulltime player can do either
-// (self-service mirrors self-service creation; no admin override in this first cut).
+// PATCH *requests* ending a replacement early - either outright (no body, or `{ cancel: true }`)
+// or by pulling its end date in (`{ endDate }`). Only the nominating fulltime player can request
+// either; the request itself is self-service, matching self-service creation, but applying it
+// needs a squad admin to approve via PATCH .../[id]/cancellation.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const squadId = parseSquadId(req, res);
   if (squadId === null) return;
@@ -33,13 +34,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const replacement = newEndDate
-      ? await shortenSlotReplacement(squadId, replacementId, session.user.email, newEndDate)
-      : await cancelSlotReplacement(squadId, replacementId, session.user.email);
+      ? await requestReplacementShortening(squadId, replacementId, session.user.email, newEndDate)
+      : await requestCancelReplacementCancellation(squadId, replacementId, session.user.email);
     res.status(200).json(replacement);
   } catch (error) {
     console.error('Cancel Replacement API Error:', error);
     res.status(400).json({
-      message: error instanceof Error ? error.message : 'Failed to cancel replacement',
+      message: error instanceof Error ? error.message : 'Failed to request cancellation',
     });
   }
 }

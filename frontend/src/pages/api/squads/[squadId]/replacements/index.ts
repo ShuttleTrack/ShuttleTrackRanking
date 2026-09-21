@@ -14,7 +14,7 @@ import { parseSquadId } from '@/lib/api/squadParam';
 // isn't a squad admin. The scope is explicit rather than inferred from the caller's role on
 // purpose: the player-facing page renders this list as "Your replacements" with a Cancel button
 // per row, and a squad admin who is also a player would otherwise be shown - and invited to
-// cancel - every other member's nomination, which `cancelSlotReplacement` then refuses.
+// cancel - every other member's nomination, which `requestCancelReplacementCancellation` then refuses.
 // POST: self-service creation - no admin approval, just the guardrails in lib/replacements.ts
 // (own slot only, nominee must be open-slot, schedule configured, >= 3 playing days, no overlap).
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
