@@ -2,7 +2,9 @@
 
 **Status:** Proposed — not implemented. This document is up for review; the implementation follows in a separate PR once the decisions below are agreed. Same shape as `OPEN_SLOT_PLAYERS_PLAN.md` (PR #198, approved before its implementation PR #203).
 
-**Revision:** amended after a review pass. Two substantive changes and a set of gap-fixes. **Decision 2 is reversed** — squad openness is now its own `Squad.openForOpenSlot` field defaulting to `false`, not a second meaning bolted onto `isPublic`. The rest of the amendments close holes the first draft left in the caller-facing flow (`/squads` already redirects one-squad members past the page the draft put pending-request UI on; "Find a squad" needed to be in both of `SquadSwitcherLinks`' two trees; a pending request on a squad that later closes had no surface left to appear on) and on the write path (the create/withdraw signatures invited trusting a body-supplied email; approving a request whose player already exists left a permanently-`PENDING` row; `maxPlayers` was only checked at approve, never at request; the approve path never re-validated the name). One review point was checked and **rejected** — see "A rejected review point" at the end.
+**Revision:** amended after a review pass. Two substantive changes and a set of gap-fixes. **Decision 2 is reversed** — squad openness is now its own `Squad.openForOpenSlot` field defaulting to `false`, not a second meaning bolted onto `isPublic`. The rest of the amendments close holes the first draft left in the caller-facing flow (`/squads` already redirects one-squad members past the page the draft put pending-request UI on; "Find a squad" needed to be in both of `SquadSwitcherLinks`' two trees; a pending request on a squad that later closes had no surface left to appear on) and on the write path (the create/withdraw signatures invited trusting a body-supplied email; approving a request whose player already exists left a permanently-`PENDING` row; the approve path never re-validated the name). One review point was checked and **rejected** — see "A rejected review point" at the end.
+
+**Second revision:** `maxPlayers` becomes a **fulltime-only** cap — an `OPEN_SLOT` player no longer consumes a roster slot. This supersedes the previous revision's "settled: the cap stays as it is", and reverses the review-driven request-time cap check along with it (a request approved as open-slot consumes no cap, so there is nothing to check at request time and no "Squad is full" state). It is a change to behavior shipped in #203, not an addition — see "`maxPlayers` becomes a fulltime-only cap".
 
 **Scope in one line:** let a person sign in without belonging to any squad, browse the squads that are open to open-slot registration, and request to join one — and let a squad admin approve or reject those requests from the admin roster, optionally setting a starting score while approving.
 
@@ -27,7 +29,7 @@ Both `frontend/docs/squad-tenancy.md` and `OPEN_SLOT_PLAYERS_PLAN.md` list the p
 - **Rate limiting beyond one pending request per squad per email.** Anyone with a Google account can now sign in, so a determined person can create requests across every open squad. Each one still costs an admin a single click to reject. If this turns into real spam, the answer is a rate limit or an invite code, not a narrower sign-in gate.
 - **Squad-side invitations** (an admin sending someone a link). This is the pull direction only.
 - **A self-service starting score.** The admin sets it, or leaves it unset; nothing about an approved player's rank is self-declared.
-- **A waitlist for a full squad.** A squad at `maxPlayers` shows a disabled "Squad is full" CTA — see Decision 3.
+- **A ceiling on open-slot players.** `maxPlayers` caps the fulltime roster only, so nothing bounds open-slot growth structurally; admin approval is the throttle. See "What now bounds open-slot growth" and open question 1.
 
 ---
 
@@ -84,18 +86,40 @@ This falls out of the guardrails `OPEN_SLOT_PLAYERS_PLAN.md` already built, with
 
 So an approved-but-unscored self-registrant is already a safe state that the ranking math cannot reach. The admin can decide the starting score when it matters — at the first game day — rather than being forced to invent one at approval time.
 
-### `maxPlayers` interacts with this more than the first draft admitted
+### `maxPlayers` becomes a fulltime-only cap
 
-**Open-slot players are not free of the roster cap.** Both `addPlayer`'s cap check and the `playerCount` on `GET /api/squads/[squadId]` are `prisma.player.count({ where: { squadId } })` — every row, including `OPEN_SLOT` and disabled ones. So every approval consumes a slot.
+**`maxPlayers` counts `FULLTIME` players only.** An `OPEN_SLOT` player does not consume a roster slot.
 
-Consequences the implementation must handle, none of which the first draft covered:
+This is a **change to existing shipped behavior**, not an addition. `addPlayer`'s cap check is currently `prisma.player.count({ where: { squadId } })` — every row, including `OPEN_SLOT` and disabled ones — and becomes `{ where: { squadId, playerType: 'FULLTIME' } }`. Any squad that already has open-slot players and sits near its cap gains headroom the moment this ships. In practice that is a small set (open-slot players only became possible in #203), but it is a real behavioral change and should be reviewed as one rather than slipped in as a detail of a self-registration feature.
 
-- **The cap is checked at request time, not only at approve.** `createJoinRequest` rejects when the squad is already at `maxPlayers`, and the browse card renders a **disabled "Squad is full"** CTA rather than inviting a request that can only ever be refused. No waitlist (see out-of-scope).
-- **A squad at its cap cannot approve anyone, and its own admin cannot unblock it** — `maxPlayers` is superadmin-only editable. The approve modal must say that explicitly rather than surfacing a bare failure.
+**Why this is the right semantics**, and why the earlier "the cap stays as it is" answer was wrong: `OPEN_SLOT_PLAYERS_PLAN.md` defines an open-slot player as one who "fills a vacant spot rather than holding a permanent one". A cap on *permanent slots* that is consumed by people who by definition hold none is incoherent — it means a squad that fills its fulltime roster can never accept the very category of player the open-slot feature exists to support. The cap is the size of the committed squad; open-slot players are the float around it.
 
-**Settled on review: the cap stays exactly as it is.** An `OPEN_SLOT` player counts against `maxPlayers` like any other, and `maxPlayers` stays superadmin-only editable. A squad admin who needs more room asks a platform superadmin to raise it — the same path that already exists, and an acceptable one at these group sizes given raising a roster cap is a rare, deliberate act rather than day-to-day squad management.
+**Disabled fulltime players still count.** The filter is on `playerType` only, not `playerStatus`. A fulltime player's slot is theirs whether or not they are currently active — that is precisely the premise of `SlotReplacement`, where an absent fulltime player's slot gets *covered* rather than freed. Making the count status-aware would mean deactivating someone silently releases a slot, and reactivating them could push a squad over its own cap with no way to refuse.
 
-So no permission or counting change is in scope. What this does mean is that the two places a full squad surfaces — the disabled "Squad is full" browse CTA, and the approve modal — carry the *whole* explanation, including that a superadmin can raise the cap. Those strings are the entire mitigation for this, so they need to say who to ask, not just "full".
+**This reverses an amendment made one revision ago.** The review-driven "check the cap at request time, and show a disabled *Squad is full* CTA" was correct under the old all-rows counting rule and is wrong under this one: a join request is approved as `OPEN_SLOT` by default (Decision 3), which consumes no cap at all. So:
+
+- **`createJoinRequest` does not check `maxPlayers`.** A squad at its fulltime cap is still open for open-slot registration — that is the entire point.
+- **The cap is checked only at approve, and only when the admin chooses `FULLTIME`.** Approving as Open slot never touches it.
+- **There is no "Squad is full" browse CTA.** The browse card shows the fulltime count against the cap as information, not as a gate.
+- **The approve modal** explains, when Fulltime is selected on a capped squad, that the fulltime roster is full, that Open slot is still available, and that only a platform superadmin can raise the cap.
+
+**`maxPlayers` stays superadmin-only editable.** A squad admin needing more *fulltime* room asks a platform superadmin — a rare, deliberate act, not day-to-day squad management. With open-slot registration no longer blocked by the cap, this is a much narrower constraint than it was under the previous rule.
+
+### The count the UI shows must change too
+
+`GET /api/squads/[squadId]` returns `playerCount` as a total, and two screens render it directly against the cap — `settings.tsx:237` (`${settings.playerCount}/${settings.maxPlayers}`) and `dashboard.tsx:207`. Comparing a total against a fulltime-only cap is now actively misleading.
+
+Add **`fulltimePlayerCount`** to that payload (one more `count` in the existing `Promise.all`) and to `useSquadSettings`. Both screens show `fulltimePlayerCount/maxPlayers` for the cap, with the total roster size alongside it as its own figure. `platform/squads.tsx` displays and edits `maxPlayers` without a count, so it needs no change beyond its label wording.
+
+Unrelated, and not to be "fixed": the `maxPlayers` prop on `components/game-planner/ActionPanel.tsx` and the `MAX_PLAYERS` constant in `game-planner.tsx` are the **game-day selection limit** (how many players can be picked for one game), nothing to do with `Squad.maxPlayers`.
+
+### What now bounds open-slot growth
+
+Nothing, structurally — and that is worth stating plainly rather than leaving as an implication. Previously the roster cap incidentally bounded the *total* number of players; it no longer does. Combined with open sign-in and self-service requests, a squad's open-slot population has no ceiling.
+
+The throttle is that **every open-slot player still arrives through an admin approval**, so growth is admin-gated rather than requester-gated, and the existing `openSlotVisibilityGameDays` window already keeps stale open-slot players off the public board and trajectory graph. The residual exposure is admin-roster clutter and an unbounded pending queue — the latter already noted under out-of-scope rate limiting.
+
+If a ceiling is wanted, the clean shape is a separate `Squad.maxOpenSlotPlayers` (nullable = unlimited, squad-admin-editable since it is not the committed-roster cap). **Not proposed for this PR** — raised as open question 1 below.
 
 ---
 
@@ -177,7 +201,7 @@ This is worth an explicit unit test per route, not just a code-review note.
 
 Modelled on `lib/replacements.ts`: a domain module outside `lib/ranking/` (this is roster membership, not scoring), throwing `ValidationError` (`lib/api/validationError.ts`) for caller error so routes answer 400 rather than a blanket 500.
 
-- **`createJoinRequest(squadId, actorEmail, { name, message })`** — one `$transaction`: squad exists and is `enabled && openForOpenSlot`; squad is below `maxPlayers` if set; no `Player` already exists for `(squadId, actorEmail)`; no `PENDING` row already exists for `(squadId, actorEmail)`; insert. Name trimmed and required at 1–32 chars, message optional at ≤500. The length check matters: a Google display name can easily exceed 32 characters, and without it the failure surfaces as a database error at approval time, one step removed from the person who could have fixed it.
+- **`createJoinRequest(squadId, actorEmail, { name, message })`** — one `$transaction`: squad exists and is `enabled && openForOpenSlot`; no `Player` already exists for `(squadId, actorEmail)`; no `PENDING` row already exists for `(squadId, actorEmail)`; insert. Name trimmed and required at 1–32 chars, message optional at ≤500. The length check matters: a Google display name can easily exceed 32 characters, and without it the failure surfaces as a database error at approval time, one step removed from the person who could have fixed it.
 - **`listJoinRequestsForSquad(squadId, status?)`** — the admin oversight list.
 - **`listJoinRequestsForEmail(actorEmail)`** — the requester's own rows across **all** squads and **all** statuses, independent of whether those squads are still open. This is what keeps a pending request visible after a squad is flipped closed or disabled (see "My requests must not depend on the directory").
 - **`withdrawJoinRequest(id, actorEmail)`** — the row's `email` must equal `actorEmail`; `PENDING` → `WITHDRAWN`.
@@ -200,14 +224,16 @@ Belt and braces: also catch Prisma's **P2002** unique-constraint violation on `(
 
 ### `frontend/src/lib/squadDirectory.ts` (new)
 
-`listOpenSquads(actorEmail)` returns every `enabled && openForOpenSlot` squad as `{ id, name, slug, playerCount, maxPlayers, scheduleSummary }` **plus this caller's state for it** — `member` | `memberInactive` | `pending` | `full` | `none` — so the browse page renders the right call to action from one response instead of N follow-up fetches.
+`listOpenSquads(actorEmail)` returns every `enabled && openForOpenSlot` squad as `{ id, name, slug, playerCount, fulltimePlayerCount, maxPlayers, scheduleSummary }` **plus this caller's state for it** — `member` | `memberInactive` | `pending` | `none` — so the browse page renders the right call to action from one response instead of N follow-up fetches.
+
+There is deliberately no `full` state: the fulltime cap does not gate open-slot registration (Decision 3), so the counts are shown as information and every open squad is requestable.
 
 `scheduleSummary` is derived from the existing `SquadScheduleData` shape in `lib/squadSchedule.ts` and **must have an explicit empty state**: `Squad.schedule` is nullable and may carry `isRecurring: false`, so the card renders "Schedule not set" rather than a blank line or a crash.
 
 ### Two supporting edits to `lib/ranking/players.ts`
 
 - **`addPlayer` takes an optional transaction client** — `addPlayer(squadId, input, client: Prisma.TransactionClient = prisma)`, using `client.` internally — so approval can run it inside the transaction above. Default parameter, so existing callers are untouched. (This signature typechecks as written; see "A rejected review point".)
-- **The `maxPlayers` cap throws `ValidationError` instead of a bare `Error`**, so a capacity-blocked approval returns 400 with the reason. This also fixes the existing add-player route, which currently answers 500 for it.
+- **The `maxPlayers` cap counts `FULLTIME` rows only and throws `ValidationError`** instead of a bare `Error`, so a capacity-blocked fulltime add returns 400 with the reason rather than the 500 the existing add-player route answers today. The `playerType` filter is the behavior change described in Decision 3; the error type is a fix that applies to the existing route as well.
 
 `addPlayer` deliberately gains **no** name-length validation — that stays at the two entry points (`createJoinRequest` and `approveJoinRequest`), so the existing add-player path is unchanged.
 
@@ -261,7 +287,7 @@ It calls neither `useSquad()` nor `useOptionalSquad()`, so it stays safe on non-
 
 Following that template faithfully means the list shows **all** requests with status badges, not just pending ones — `ReplacementOversight` already works that way. That is the behavior wanted here too, and it is worth stating rather than leaving implied: with re-requesting after rejection allowed (open question 4), an admin needs to see that they already turned this person down. Pending rows sort first; decided rows follow, newest first.
 
-Approve opens a small modal: player type defaulting to **Open slot**, an editable name, and a starting score that is optional for Open slot and required-and-positive for Fulltime — mirroring the server rule in `api/squads/[squadId]/players/index.ts` rather than restating it differently. When the squad is at `maxPlayers`, the modal explains that the cap is full and only a platform superadmin can raise it.
+Approve opens a small modal: player type defaulting to **Open slot**, an editable name, and a starting score that is optional for Open slot and required-and-positive for Fulltime — mirroring the server rule in `api/squads/[squadId]/players/index.ts` rather than restating it differently. When the squad is at its fulltime cap **and** Fulltime is selected, the modal explains that the fulltime roster is full, that Open slot is still available, and that only a platform superadmin can raise the cap. Selecting Open slot is never blocked by the cap.
 
 **`pages/s/[squad]/admin/dashboard.tsx`** — a pending-count badge on the existing Players link, so requests don't sit unnoticed given there is no notification channel. **Data source:** add `pendingJoinRequestCount` to the `GET /api/squads/[squadId]` payload, which already returns `playerCount` behind `requireSquadAdmin` and already feeds `useSquadSettings()`. That is one extra `count` in an existing `Promise.all`, versus a second SWR hook on the dashboard.
 
@@ -273,7 +299,7 @@ Approve opens a small modal: player type defaulting to **Open slot**, an editabl
 
 **Unit tests**, using the `vi.mock('@/lib/prisma', …)` pattern from `lib/replacements.test.ts` and `lib/ranking/absenteeSpell.test.ts`:
 
-- `lib/joinRequests.test.ts` (new) — a second pending request for the same squad is rejected; an existing member (including a `DISABLED` one) is rejected; a disabled, or not-`openForOpenSlot`, squad is rejected; a squad at `maxPlayers` is rejected at *request* time; approving a non-`PENDING` row is rejected; approval creates the player *and* stamps the row; approval when the player already exists stamps `APPROVED` against the existing id without creating a duplicate; a P2002 during approve surfaces as a `ValidationError`; `FULLTIME` without a score is rejected; `OPEN_SLOT` without a score is allowed; a name over 32 characters is rejected with a message, not a database error, **on both create and approve**.
+- `lib/joinRequests.test.ts` (new) — a second pending request for the same squad is rejected; an existing member (including a `DISABLED` one) is rejected; a disabled, or not-`openForOpenSlot`, squad is rejected; a squad at its fulltime cap still **accepts** a request and still approves it as `OPEN_SLOT`, but refuses an approval as `FULLTIME`; `addPlayer`'s cap ignores `OPEN_SLOT` rows and counts disabled fulltime ones; approving a non-`PENDING` row is rejected; approval creates the player *and* stamps the row; approval when the player already exists stamps `APPROVED` against the existing id without creating a duplicate; a P2002 during approve surfaces as a `ValidationError`; `FULLTIME` without a score is rejected; `OPEN_SLOT` without a score is allowed; a name over 32 characters is rejected with a message, not a database error, **on both create and approve**.
 - Route-level tests that the create path ignores a body `email` and the withdraw path refuses a row belonging to another email — the forgery guard from "Whose email", which is the one thing here that is a security property rather than a correctness one.
 - `lib/auth/validateUserAccess.test.ts` — updated for the opened sign-in gate.
 
@@ -291,6 +317,7 @@ Approve opens a small modal: player type defaulting to **Open slot**, an editabl
 8. With a request pending, turn `openForOpenSlot` **off** for that squad; confirm the requester can still see and withdraw it on `/squads/browse`.
 9. Add a player manually by email while a request from that email is pending, then approve the request; confirm it closes as approved against the existing player with no duplicate and no stuck `PENDING` row.
 10. As an existing member of squad A, confirm squad B is still browsable and requestable.
+11. **The cap change.** Set `maxPlayers` to the squad's current *fulltime* headcount (as a superadmin). Confirm: the squad still appears on browse with no "full" gate and still accepts a request; approving it as **Open slot** succeeds; approving as **Fulltime** is refused with a 400 naming the cap; adding a fulltime player through `AddPlayerModal` is refused the same way; and the settings/dashboard cap readout shows the fulltime count, not the total. Then deactivate a fulltime player and confirm the cap does **not** free a slot.
 
 **Boundary regression check** — the part of this change most worth distrusting. With the zero-squad session from step 2, confirm each of these still refuses: `/s/<slug>/admin/dashboard` (redirect to the squad root), `/s/<slug>/user/profile` (same), `/platform/squads` (redirect to `/`), `GET /api/squads/<id>/replacements` (401), `PATCH /api/squads/<id>/open-slot-settings` (403).
 
@@ -301,7 +328,8 @@ Per the rule in `CLAUDE.md`, the implementation PR updates the living reference 
 - A new **"Self-registration & join requests"** section: the `SquadJoinRequest` model, why identity stayed on email rather than a profile table, `openForOpenSlot` and why it is separate from `isPublic`, the approve-to-`OPEN_SLOT` default with how it meets the existing scoreless-player guardrails, and the session-email-only write rule.
 - **Auth & access model** — sign-in is no longer gated on being known to a squad; a zero-squad session is a supported state, and no write may infer identity from a request body.
 - **Routing** — add `/squads/browse` and the new API routes, and note that `/squads` deliberately keeps its one-squad redirect.
-- **Explicitly out of scope so far** — remove the "browse squads / request to join" bullet, and add the deferred items from this plan's Context section (decision notifications, rate limiting, admin-sent invitations, waitlist, self-re-application after deactivation).
+- **Squad settings: enabled / maxPlayers** — rewrite the `maxPlayers` bullet: it is a **fulltime-only** cap now, not a roster-size cap. Update the same wording in `schema.prisma`'s `maxPlayers` comment ("Roster size cap"), and note it in the open-slot section since it changes what "open slot" costs a squad.
+- **Explicitly out of scope so far** — remove the "browse squads / request to join" bullet, and add the deferred items from this plan's Context section (decision notifications, rate limiting, admin-sent invitations, an open-slot ceiling, self-re-application after deactivation).
 
 ## A rejected review point
 
@@ -313,8 +341,9 @@ Recorded here so the union isn't added later as a "fix" for a problem that does 
 
 ## Open questions for review
 
-1. **Rejected requests.** Should a rejection block re-requesting for some period, or is "an admin clicks reject again, and can see the previous rejection in the table" good enough at these group sizes?
-2. **Login redirect.** `/login` → `/squads` sends one-squad members to their board and multi-squad members to the picker instead of the public aggregate at `/`. Intended improvement, or should signed-in users keep landing on `/`?
-3. **Deactivated members.** Confirmed as out of scope above: a `DISABLED` player cannot self-re-apply and sees "on the roster, currently inactive". Is a reactivation request path wanted as follow-up work, or is "contact an admin" the right permanent answer?
+1. **A ceiling on open-slot players.** With `maxPlayers` now fulltime-only, nothing structurally bounds how many open-slot players a squad accumulates; admin approval is the only throttle. Is that enough, or is a `Squad.maxOpenSlotPlayers` (nullable = unlimited, squad-admin-editable, since it is not the committed-roster cap) wanted — and if so, in this work or as follow-up?
+2. **Rejected requests.** Should a rejection block re-requesting for some period, or is "an admin clicks reject again, and can see the previous rejection in the table" good enough at these group sizes?
+3. **Login redirect.** `/login` → `/squads` sends one-squad members to their board and multi-squad members to the picker instead of the public aggregate at `/`. Intended improvement, or should signed-in users keep landing on `/`?
+4. **Deactivated members.** Confirmed as out of scope above: a `DISABLED` player cannot self-re-apply and sees "on the roster, currently inactive". Is a reactivation request path wanted as follow-up work, or is "contact an admin" the right permanent answer?
 
-**Settled:** the `maxPlayers` cap — open-slot players count against it, and raising it stays a superadmin action (see Decision 3).
+**Settled:** `maxPlayers` counts fulltime players only; disabled fulltime players still count; raising it stays a superadmin action (see Decision 3).
