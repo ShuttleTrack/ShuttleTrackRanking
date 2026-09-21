@@ -163,9 +163,10 @@ enabled/maxPlayers - this is day-to-day squad management), via
 `GET /api/squads/[squadId]` unpacks `schedule` back into the flat `isRecurring`/
 `scheduleDayOfWeek`/`scheduleStartTime`/etc. field names on the wire - the collapse to one JSON
 column is a storage-layer change only; `useSquadSettings()` and the settings page didn't need to
-change. `scripts/migrate-schedule-to-json.mjs` is the one-off, idempotent script that packed the
-original separate columns into `schedule` in every environment before they were dropped
-(rehearsed against the local dev DB with real seeded data before running anywhere else).
+change. The original separate columns were packed into `schedule` in every environment before
+they were dropped (rehearsed against the local dev DB with real seeded data). If those old
+columns still exist on a database, `prisma/migrations/20250921120000_align_live_schema` packs
+them into `schedule`.
 
 ## Production migration (history)
 
@@ -175,16 +176,15 @@ against a populated table, and the `Player.email` audit is a data-quality checkp
 squad-level features (`maxPlayers`, schedule fields) were plain additive nullable columns and
 didn't need staging - just `prisma db push`.
 
-- **Script**: `scripts/migrate-to-squads.mjs` - `stage1` (expand: run
-  `prisma/squad-migration/001_expand.sql`, create the `Squad` row, backfill `squadId` onto every
-  existing row, assign a deterministic placeholder email `player<id>@placeholder.invalid` to any
-  player with none, seed `SquadAdmin` from `ALLOWED_ADMIN_EMAILS`), `stage2` (data-quality gate:
-  reports placeholder emails informationally, blocks only on genuine duplicate emails within a
-  squad), `stage3` (contract: runs `prisma/squad-migration/002_contract.sql`, the `NOT NULL` /
-  unique / foreign-key tightening).
-- **`prisma/squad-migration/002_contract.sql`** was captured verbatim via `prisma migrate diff`
-  against a rehearsal copy of the real data, so it carries Prisma's own constraint/index names
-  rather than a hand guess.
+**Ongoing schema changes** use checked-in Prisma migrations under `frontend/prisma/migrations/`
+and `node scripts/prisma-migrate-deploy.mjs` (see **Prisma schema & migrations** in `CLAUDE.md`).
+The 2026-09-20 cutover used one-off staged SQL (`prisma/squad-migration/` +
+`scripts/migrate-to-squads.mjs`); those files were removed once Prisma history covered the same
+schema.
+
+- **Cutover (historical):** expand (`Squad`/`SquadAdmin`, nullable `squad_id`), backfill one
+  squad onto existing rows, placeholder email for any player with none, then contract (`NOT
+  NULL`, unique indexes, FKs).
 - **Rehearsed** end-to-end (twice) against a scratch copy of real production data (loaded from a
   `mysqldump` backup into a throwaway database on the local dev MySQL container) before ever
   touching production, including confirming `stage1` is safely idempotent on a second run and a

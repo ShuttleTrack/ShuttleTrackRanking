@@ -92,7 +92,7 @@ model ScoreHistory {
 
 // Not part of the backend's schema - transient game-day session state (frontend-owned).
 // Introspection (`prisma db pull`) doesn't know about this table; re-added manually per
-// MIGRATION_PLAN.md Phase 1. Run `prisma db push` after editing this model.
+// MIGRATION_PLAN.md Phase 1. Apply schema changes via Prisma migrations (see CLAUDE.md).
 model Game {
   id        String   @id @default(cuid())
   squadId   Int
