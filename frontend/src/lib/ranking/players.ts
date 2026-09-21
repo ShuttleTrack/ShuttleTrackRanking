@@ -297,6 +297,56 @@ export async function addPlayer(squadId: number, input: NewPlayerInput): Promise
   };
 }
 
+export interface InitialScoreAssignment {
+  playerId: number;
+  rankScore: number;
+}
+
+// OPEN_SLOT_PLAYERS_PLAN.md "Bulk initial rank-score assignment": gives a batch of previously
+// scoreless players (open-slot admin-add, or future self-registration) their first rankScore in
+// one action, right before the game-planner creates a game day that includes them. Mirrors what
+// addPlayer does for a brand-new fulltime player (next sequential rank among active players,
+// rankSince = now, playerStatus normalized off null) rather than introducing a second convention.
+export async function assignInitialScores(squadId: number, assignments: InitialScoreAssignment[]): Promise<void> {
+  if (assignments.length === 0) return;
+
+  const ids = assignments.map((a) => a.playerId);
+  const players = await prisma.player.findMany({ where: { id: { in: ids }, squadId } });
+  if (players.length !== ids.length) {
+    const found = new Set(players.map((p) => p.id));
+    const missing = ids.filter((id) => !found.has(id));
+    throw new Error(`Player(s) not found in this squad: ${missing.join(', ')}`);
+  }
+  for (const a of assignments) {
+    if (a.rankScore <= 0) {
+      throw new Error(`Invalid rank score for player ${a.playerId}: must be greater than 0`);
+    }
+  }
+
+  const activePlayers = await prisma.player.findMany({ where: { squadId, playerStatus: 'ACTIVE' } });
+  let nextRank =
+    activePlayers.length === 0
+      ? 1
+      : (activePlayers.reduce((max, p) => ((p.playerRank ?? -Infinity) > (max.playerRank ?? -Infinity) ? p : max))
+          .playerRank ?? 0) + 1;
+
+  const today = new Date();
+  for (const a of assignments) {
+    const player = players.find((p) => p.id === a.playerId)!;
+    const rank = player.playerRank ?? nextRank++;
+    await prisma.player.update({
+      where: { id: a.playerId },
+      data: {
+        rankScore: a.rankScore,
+        playerRank: rank,
+        highestRank: player.highestRank ?? rank,
+        rankSince: player.rankSince ?? today,
+        playerStatus: player.playerStatus ?? 'ENABLED',
+      },
+    });
+  }
+}
+
 export interface UpdatePlayerInput {
   id: number;
   name?: string;

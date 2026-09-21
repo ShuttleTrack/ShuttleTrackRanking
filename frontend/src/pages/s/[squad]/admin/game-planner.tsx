@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import type { GetServerSideProps } from 'next';
-import { useGamePlayers } from '@/hooks/useGamePlayers';
+import { PlayerType } from '@prisma/client';
+import { useGamePlayers, type GamePlannerPlayer } from '@/hooks/useGamePlayers';
 import { useGame } from '@/hooks/useGame';
 import { gameService } from '@/services/gameService';
 import { PlayerCard } from '@/components/game-planner/PlayerCard';
 import { ActionPanel } from '@/components/game-planner/ActionPanel';
+import { BulkScorePanel } from '@/components/game-planner/BulkScorePanel';
 import { isValidPlayerCount } from '@/utils/game-validation';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
@@ -87,12 +89,19 @@ export const calculateGroupDistribution = (totalPlayers: number, seed: string): 
   return distribution;
 };
 
+// OPEN_SLOT_PLAYERS_PLAN.md "Game-planner player selection UI": FULLTIME players plus any
+// OPEN_SLOT player currently covering an active replacement belong with the regular roster for
+// selection purposes; plain open-slot players (no active replacement today) are a separate pool.
+const isFulltimeRosterForToday = (player: GamePlannerPlayer): boolean =>
+  player.playerType === PlayerType.FULLTIME || player.isActiveReplacement;
+
 const GamePlannerPage = () => {
   const router = useRouter();
   const { id: squadId, slug } = useSquad();
-  const { players, isLoading: playersLoading } = useGamePlayers();
+  const { players, isLoading: playersLoading, refresh } = useGamePlayers();
   const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [scorelessSelection, setScorelessSelection] = useState<GamePlannerPlayer[] | null>(null);
   const gameId = router.query.gameId as string;
   const { game, isLoading: gameLoading } = useGame(gameId as string);
 
@@ -132,12 +141,7 @@ const GamePlannerPage = () => {
     return '';
   };
 
-  const handleCreateGameDay = async () => {
-    // Get selected players with their details
-    const selectedPlayerDetails = players
-      .filter(p => selectedPlayers.includes(p.id))
-      .sort((a, b) => a.playerRank - b.playerRank);
-
+  const createGameDayFor = async (selectedPlayerDetails: GamePlannerPlayer[]) => {
     const totalPlayers = selectedPlayerDetails.length;
 
     // Use the local calendar date as a deterministic seed so the group-size
@@ -178,8 +182,50 @@ const GamePlannerPage = () => {
     }
   };
 
+  const handleCreateGameDay = async () => {
+    const selectedPlayerDetails = players
+      .filter(p => selectedPlayers.includes(p.id))
+      .sort((a, b) => a.playerRank - b.playerRank);
+
+    // OPEN_SLOT_PLAYERS_PLAN.md "Bulk initial rank-score assignment": block on any selected
+    // player without a score rather than letting the server-side game-create gate reject the
+    // whole request after the fact.
+    const scoreless = selectedPlayerDetails.filter(p => !p.hasScore);
+    if (scoreless.length > 0) {
+      setScorelessSelection(scoreless);
+      return;
+    }
+
+    await createGameDayFor(selectedPlayerDetails);
+  };
+
+  const handleBulkScoreSubmit = async (assignments: { playerId: number; rankScore: number }[]) => {
+    const res = await fetch(`/api/squads/${squadId}/players/bulk-initial-score`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignments }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message ?? 'Failed to assign scores');
+    }
+    await refresh();
+    setScorelessSelection(null);
+  };
+
+  // Suggested default for the bulk-assign panel: the lowest score among already-scored selected
+  // players, falling back to the standard starting score when nobody selected has one yet.
+  const suggestedScore = (() => {
+    const scored = players.filter(p => p.hasScore && typeof p.rankScore === 'number');
+    if (scored.length === 0) return 1000;
+    return Math.min(...scored.map(p => p.rankScore as number));
+  })();
+
   const validationMessage = getValidationMessage(selectedPlayers.length);
   const isValid = !validationMessage;
+
+  const fulltimeRoster = players.filter(isFulltimeRosterForToday).sort((a, b) => a.playerRank - b.playerRank);
+  const openSlotRoster = players.filter(p => !isFulltimeRosterForToday(p)).sort((a, b) => a.playerRank - b.playerRank);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8 pb-32 md:pb-8">
@@ -195,10 +241,12 @@ const GamePlannerPage = () => {
         )}
       </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        {players
-          .sort((a, b) => a.playerRank - b.playerRank)
-          .map((player) => (
+      <section className="mb-6">
+        <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-on-surface-variant mb-3">
+          Full-time roster
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {fulltimeRoster.map((player) => (
             <PlayerCard
               key={player.id}
               player={player}
@@ -206,7 +254,35 @@ const GamePlannerPage = () => {
               onToggle={handlePlayerToggle}
             />
           ))}
-      </div>
+        </div>
+      </section>
+
+      {openSlotRoster.length > 0 && (
+        <section className="mb-6">
+          <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-on-surface-variant mb-3">
+            Open slot
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {openSlotRoster.map((player) => (
+              <PlayerCard
+                key={player.id}
+                player={player}
+                isSelected={selectedPlayers.includes(player.id)}
+                onToggle={handlePlayerToggle}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {scorelessSelection && (
+        <BulkScorePanel
+          players={scorelessSelection}
+          suggestedScore={suggestedScore}
+          onCancel={() => setScorelessSelection(null)}
+          onSubmit={handleBulkScoreSubmit}
+        />
+      )}
 
       <ActionPanel
         selectedCount={selectedPlayers.length}
