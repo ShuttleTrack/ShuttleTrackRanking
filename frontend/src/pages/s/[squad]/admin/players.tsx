@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { GetServerSideProps } from 'next';
+import type { PlayerType } from '@prisma/client';
 import { useAdminPlayers } from '@/hooks/useAdminPlayers';
 import { capitalizeFirstLetter } from '@/utils/string';
 import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline';
@@ -23,6 +24,7 @@ const PlayerTable = ({ players, onEdit, onDelete }: {
           <tr>
             <th>Name</th>
             <th>Email</th>
+            <th>Type</th>
             <th>Rank</th>
             <th>Score</th>
             <th>Status</th>
@@ -36,8 +38,13 @@ const PlayerTable = ({ players, onEdit, onDelete }: {
                 {capitalizeFirstLetter(player.name)}
               </td>
               <td>{player?.email}</td>
-              <td>#{player.playerRank}</td>
-              <td>{player.rankScore?.toFixed(1)}</td>
+              <td>
+                <span className={`badge ${player.playerType === 'OPEN_SLOT' ? 'badge-secondary' : 'badge-outline'}`}>
+                  {player.playerType === 'OPEN_SLOT' ? 'Open slot' : 'Fulltime'}
+                </span>
+              </td>
+              <td>{player.rankScore === null ? '—' : `#${player.playerRank}`}</td>
+              <td>{player.rankScore === null ? 'Needs a score' : player.rankScore.toFixed(1)}</td>
               <td>
                 <span className={`badge ${
                   player.active ? 'badge-success' : 'badge-error'
@@ -77,14 +84,19 @@ const PlayerTable = ({ players, onEdit, onDelete }: {
                 {player?.email}
               </div>
               <div className="text-sm text-base-content/70 mt-1">
-                Rank #{player.playerRank} • Score {player.rankScore?.toFixed(1)}
+                {player.rankScore === null
+                  ? 'Needs a score'
+                  : `Rank #${player.playerRank} • Score ${player.rankScore.toFixed(1)}`}
               </div>
             </div>
-            <span className={`badge ${
-              player.active ? 'badge-success' : 'badge-error'
-            }`}>
-              {player.active ? 'Active' : 'Inactive'}
-            </span>
+            <div className="flex flex-col items-end gap-1">
+              <span className={`badge ${player.active ? 'badge-success' : 'badge-error'}`}>
+                {player.active ? 'Active' : 'Inactive'}
+              </span>
+              <span className={`badge badge-sm ${player.playerType === 'OPEN_SLOT' ? 'badge-secondary' : 'badge-outline'}`}>
+                {player.playerType === 'OPEN_SLOT' ? 'Open slot' : 'Fulltime'}
+              </span>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-base-300">
@@ -123,7 +135,7 @@ const PlayerManagementPage = () => {
     // Implementation coming soon
   };
 
-  const handleAddPlayer = async (data: { name: string; email: string; initialScore: number }) => {
+  const handleAddPlayer = async (data: { name: string; email: string; initialScore?: number; playerType: PlayerType }) => {
     try {
       const response = await fetch(`/api/squads/${squadId}/players`, {
         method: 'POST',

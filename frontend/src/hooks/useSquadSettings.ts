@@ -17,6 +17,8 @@ export interface SquadSettings {
   scheduleStartDate: string | null;
   scheduleEndDate: string | null;
   scheduleSkipDates: string[] | null;
+  openSlotAbsenteeGraceDays: number;
+  openSlotVisibilityGameDays: number;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
