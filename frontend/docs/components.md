@@ -316,7 +316,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Purpose:** Signed-in players see identity and ranking snapshot at `/s/{slug}/user/profile`.
 
-**Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name/email, outline sign-out; four-column stats (Rank, Change, Score, Highest).
+**Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name, email, muted uppercase squad name, outline sign-out; four-column stats (Rank, Change, Score, Highest).
 
 **Loading:** `PageLoader` (`tall`) (session + rankings).
 
