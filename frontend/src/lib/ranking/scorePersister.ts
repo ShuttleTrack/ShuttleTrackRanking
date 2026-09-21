@@ -5,8 +5,8 @@ import { calculateElo } from './eloCalculator';
 import { parseTeamIds, getRankedPlayers } from './playerUtil';
 import {
   decideAbsenteeAction,
-  absenteeMultiplierForSpell,
-  DEMERIT_POINTS_ABSENTEE,
+  decideOpenSlotAbsenteeAction,
+  decideActiveReplacementAbsenteeAction,
   ABSENTEE_ENCOUNTER_ID,
   DISABLE_PLAYER_ENCOUNTER_ID,
   ACTIVATE_PLAYER_ENCOUNTER_ID,
@@ -180,12 +180,13 @@ async function applyLegacyAbsenteeLadder(player: PrismaPlayer, today: Date): Pro
   }
 }
 
-// Paths 2 & 3 (OPEN_SLOT_PLAYERS_PLAN.md): day-based counter via absenteeSpellDays, same
-// -10/-20/-30 amounts as the legacy ladder's first three steps, but never deactivates - see the
-// plan's "Why neither new path deactivates" for why that matters (DISABLED is hard to escape,
-// and would make any grace-days setting > 4 unreachable on the row-based counter anyway).
-async function applyEscalatingDemerit(player: PrismaPlayer, today: Date, spellDays: number): Promise<void> {
-  const points = absenteeMultiplierForSpell(spellDays) * DEMERIT_POINTS_ABSENTEE;
+// Paths 2 & 3 (OPEN_SLOT_PLAYERS_PLAN.md): persists a demerit decision from
+// decideOpenSlotAbsenteeAction / decideActiveReplacementAbsenteeAction - both use the same
+// -10/-20/-30 amounts as the legacy ladder's first three steps, but neither path ever
+// deactivates. See the plan's "Why neither new path deactivates" for why that matters (DISABLED
+// is hard to escape, and would make any grace-days setting > 4 unreachable on the row-based
+// counter anyway).
+async function applyEscalatingDemerit(player: PrismaPlayer, today: Date, points: number): Promise<void> {
   const newRankScore = player.rankScore! + points;
   await prisma.$transaction(async (tx) => {
     await tx.player.update({ where: { id: player.id }, data: { rankScore: newRankScore } });
@@ -238,7 +239,8 @@ export async function applyAbsenteeDeductions(playerIds: number[]): Promise<void
       // Unreachable in practice - notBefore is always given here, so absenteeSpellDays only
       // returns null when the player never played *and* no clamp was given.
       if (spellDays === null) continue;
-      await applyEscalatingDemerit(player, today, spellDays);
+      const decision = decideActiveReplacementAbsenteeAction(spellDays);
+      await applyEscalatingDemerit(player, today, decision.points);
       continue;
     }
 
@@ -250,10 +252,11 @@ export async function applyAbsenteeDeductions(playerIds: number[]): Promise<void
       where: { id: player.squadId },
       select: { openSlotAbsenteeGraceDays: true },
     });
-    if (spellDays > squad.openSlotAbsenteeGraceDays) {
+    const decision = decideOpenSlotAbsenteeAction(spellDays, squad.openSlotAbsenteeGraceDays);
+    if (decision.action === 'skip') {
       continue; // Rolling exemption - resets the moment they play again.
     }
-    await applyEscalatingDemerit(player, today, spellDays);
+    await applyEscalatingDemerit(player, today, decision.points);
   }
 }
 

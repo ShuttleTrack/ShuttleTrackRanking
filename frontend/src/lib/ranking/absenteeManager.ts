@@ -35,3 +35,22 @@ export function absenteeMultiplierForSpell(spellDays: number): number {
   if (spellDays === 2) return 2;
   return 3;
 }
+
+export type OpenSlotAbsenteeAction = { action: 'demerit'; points: number } | { action: 'skip' };
+
+// Path 3 (OPEN_SLOT_PLAYERS_PLAN.md): a plain open-slot player with no active replacement. A
+// rolling grace window, day-based rather than row-based, and never deactivates - once spellDays
+// exceeds graceDays the sweep skips them entirely (no ScoreHistory row) until they play again.
+export function decideOpenSlotAbsenteeAction(spellDays: number, graceDays: number): OpenSlotAbsenteeAction {
+  if (spellDays > graceDays) return { action: 'skip' };
+  return { action: 'demerit', points: absenteeMultiplierForSpell(spellDays) * DEMERIT_POINTS_ABSENTEE };
+}
+
+// Path 2 (OPEN_SLOT_PLAYERS_PLAN.md): an open-slot player currently filling an active
+// SlotReplacement. Same escalation, but no cutoff and never deactivates - having claimed a
+// guaranteed slot, the cost of not using it doesn't taper off. The caller is responsible for
+// clamping spellDays to the window's startDate (absenteeSpell.ts's `notBefore` parameter) before
+// calling this, so a dormancy spell from before the window can't pre-load the ramp.
+export function decideActiveReplacementAbsenteeAction(spellDays: number): { action: 'demerit'; points: number } {
+  return { action: 'demerit', points: absenteeMultiplierForSpell(spellDays) * DEMERIT_POINTS_ABSENTEE };
+}
