@@ -336,6 +336,22 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ---
 
+### Login page
+
+**File:** `src/pages/login.tsx`
+
+**Purpose:** Google SSO entry for squad members and admins. Uses the global `Layout` (nav watermark, footer) — no separate marketing shell.
+
+**Composes:** Centered club access card (`max-w-md`, `surface-container/55` + light `backdrop-blur`, kinetic hairline only), static racket mark in a primary ring (no animation), `GoogleSignInButton` (filled `bg-primary`), optional NextAuth error banner (`?error=`), `safeCallbackUrl` for `?callbackUrl=`.
+
+**Loading / redirect:** `LoadingSpinner` → `PageLoader` while session loads or after sign-in until `router.replace(callbackUrl)`.
+
+**Nav:** `AccountMenu` and mobile overlay mark **Sign In** active when `pathname === '/login'`.
+
+**Helpers:** `src/utils/loginAuth.ts` (`safeCallbackUrl`, `getLoginErrorMessage`).
+
+---
+
 ## Mapping from legacy UI
 
 | Legacy | New |
@@ -359,7 +375,5 @@ Keep existing DaisyUI patterns until a dedicated restyle:
 - Manage players
 - Modals and password gates on other admin routes (score keeper and user management score entry restyled; logic unchanged)
 - `ActionCard`
-- Login page styling
-- `LoadingSpinner` (login) and `PageLoader` / `GameLoader` elsewhere — see `GameLoader.tsx` and `design.md` Loading
 
 When restyling those pages later, reuse tokens from `design.md` and prefer new primitives over new one-off styles.
