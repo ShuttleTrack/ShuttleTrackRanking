@@ -104,8 +104,9 @@ flag:
   `/api/squads/[squadId]/schedule` (PATCH, squad-admin-editable),
   `/api/squads/[squadId]/open-slot-settings` (PATCH, squad-admin-editable),
   `/api/squads/[squadId]/players/{bulk-initial-score,open-slot}`,
-  `/api/squads/[squadId]/replacements` (GET/POST) and `/replacements/[id]` (PATCH to cancel) -
-  see "Open-slot & replacement players" below for all of these.
+  `/api/squads/[squadId]/replacements` (GET own / GET `?scope=squad` squad-admin-only / POST),
+  `/replacements/preview` (GET, squad-member-readable) and `/replacements/[id]` (PATCH to cancel
+  or shorten) - see "Open-slot & replacement players" below for all of these.
 - `middleware.ts` matcher: `/s/:squad/admin/:path*`, `/s/:squad/user/:path*`, `/platform/:path*`
   (signed-in-at-all gate only - the real per-squad-admin/per-player boundary is the
   `resolveSquad*` calls above and each API route's `requireSquadAdmin`/`requireSuperAdmin`).
@@ -213,13 +214,30 @@ Full design doc: `OPEN_SLOT_PLAYERS_PLAN.md` at the repo root. Summary of what's
   a stored `playerType` - avoids a stuck flag if a revert step is ever missed. Self-service, no
   admin approval: `/s/[squad]/user/replacement` (search by name/email via
   `GET /players/open-slot`, then `POST /replacements`) lets a fulltime player nominate an
-  open-slot player for at least 3 *playing days* (validated against the squad's schedule via
-  `lib/scheduling/playingDayCalculator.ts` - the squad must have one configured and recurring, or
-  the request is rejected with a clear error); `PATCH /replacements/[id]` lets them cancel early.
+  open-slot player for at least 3 *playing days* and at most `MAX_REPLACEMENT_MONTHS` (4) calendar
+  months (validated against the squad's schedule via `lib/scheduling/playingDayCalculator.ts` -
+  the squad must have one configured and recurring, or the request is rejected with a clear
+  error). The upper bound is a hard requirement, not just a product rule: the calculator walks the
+  range a day at a time, so an unbounded `endDate` (a date input will happily submit year 9999)
+  is a multi-million-iteration block on a single-threaded server. A window that has already
+  finished is rejected too (it could never be active); one that merely *started* in the past is
+  allowed. `PATCH /replacements/[id]` lets the nominating player end a window early - outright
+  (empty body) or by pulling the end date in (`{ endDate }`, shorten-only, no re-extending).
+  Shortening is deliberately exempt from the 3-playing-day minimum, since outright cancellation
+  is already allowed. `GET /replacements/preview?startDate=&endDate=` runs the same window
+  validation for the nomination form so it can show "2 playing days selected, need 3" and the
+  resolved dates before submit; it returns failures as data rather than throwing, and is a
+  separate endpoint because `GET /api/squads/[squadId]` (which carries the schedule) is
+  squad-admin-only.
   Overlap (same slot or same nominee already covered) is checked and inserted in one transaction,
   since MySQL can't express "no overlapping ranges" as a constraint. `GET /replacements` returns
-  the caller's own nominations, or every squad nomination for a squad admin (read-only oversight,
-  no cancel button yet).
+  the caller's own nominations; `GET /replacements?scope=squad` returns every nomination in the
+  squad and is squad-admin-only (403 otherwise), surfaced as a read-only table on
+  `/s/[squad]/admin/players` for support/dispute cases - no admin cancel button, since creation
+  and cancellation are both self-service. The scope is an explicit parameter rather than being
+  inferred from the caller's role: the player-facing page labels its list "Your replacements" and
+  puts a Cancel button on each row, so role-inference would show a squad admin who is also a
+  player every other member's nomination and invite them to cancel it.
 - **Absentee sweep** (`applyAbsenteeDeductions` in `scorePersister.ts`) now has three paths:
   fulltime keeps the original row-based ladder (last-5-`ScoreHistory` escalation, auto-deactivate
   at 5) untouched; an open-slot player currently filling an active replacement ramps on a new
@@ -240,11 +258,29 @@ Full design doc: `OPEN_SLOT_PLAYERS_PLAN.md` at the repo root. Summary of what's
 - **Game-planner picker** (`pages/s/[squad]/admin/game-planner.tsx`) splits into a "Full-time
   roster" group (`FULLTIME` plus any `OPEN_SLOT` player currently covering an active replacement)
   and a separate "Open slot" group - a stopgap grouping, not a real per-day availability system.
+- **Admin roster** (`pages/s/[squad]/admin/players.tsx`) has a third list, "Not Yet Played"
+  (`?status=enabled`), alongside Active and Inactive. `filterPlayersByStatusParam` maps `active`
+  to `ACTIVE` and `inactive` to `DISABLED`, and `addPlayer` leaves `playerStatus` null, so
+  without it a newly added player appeared on no admin screen at all - a brief gap for a fulltime
+  player, but the permanent resting state for a scoreless open-slot one. The "needs a score"
+  marker reads `PlayerInfo.hasScore` (taken straight off the row) rather than `rankScore === null`
+  (which `toPlayerInfo` nulls for *every* non-`ACTIVE` player, so it can't tell "not currently
+  ranked" from "never given a starting score"), and the status badge renders the server's derived
+  three-state `status` instead of collapsing `ENABLED` and `DISABLED` into one "Inactive".
 - **Two new squad settings**, both playing-day counts, deliberately independent (`Squad`,
   squad-admin-editable via `/api/squads/[squadId]/open-slot-settings` and a section on
   `/s/[squad]/admin/settings`): `openSlotAbsenteeGraceDays` (default 3, non-nullable - a
   null-means-never-exempt default would be the worst outcome, not the safest) and
   `openSlotVisibilityGameDays` (default 10).
+- **Email exposure**: `GET /players/open-slot` is open to any signed-in squad member (the
+  nomination picker needs it), so it returns a *masked* address (`a***@example.com`) rather than
+  the real one - matching on the real address still happens server-side. Unmasked emails stay
+  behind `requireSquadAdmin` via `getSecurePlayers`, as before.
+- **Validation vs. server faults**: `lib/api/validationError.ts`'s `ValidationError` lets a route
+  tell "the caller sent something invalid" apart from "something broke", so
+  `bulk-initial-score` and the game create/update routes answer 400 with the reason instead of a
+  blanket 500. `findScorelessPlayersInGroups` throws it for an id that isn't in this squad -
+  a missing row must not read as "not scoreless" and slip through the gate.
 - **Not built yet** (see "Explicitly out of scope so far"): the public "browse squads / request to
   join as open-slot" self-service flow, and migrating the fulltime pool's deactivation logic onto
   the day-based playing-day calculator instead of its current row-based counter.
