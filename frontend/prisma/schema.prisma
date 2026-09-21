@@ -78,15 +78,17 @@ model Player {
 // not stored, since MySQL can't express "no overlapping ranges" as a constraint; the overlap
 // check has to happen application-side inside the same transaction as the insert.
 model SlotReplacement {
-  id                  Int       @id @default(autoincrement())
-  squadId             Int       @map("squad_id")
-  fulltimePlayerId    Int       @map("fulltime_player_id")
-  replacementPlayerId Int       @map("replacement_player_id")
-  startDate           DateTime  @map("start_date") @db.Date
-  endDate             DateTime  @map("end_date") @db.Date
-  createdByEmail      String    @map("created_by_email")
-  cancelledAt         DateTime? @map("cancelled_at")
-  createdAt           DateTime  @default(now()) @map("created_at")
+  id                            Int       @id @default(autoincrement())
+  squadId                       Int       @map("squad_id")
+  fulltimePlayerId              Int       @map("fulltime_player_id")
+  replacementPlayerId           Int       @map("replacement_player_id")
+  startDate                     DateTime  @map("start_date") @db.Date
+  endDate                       DateTime  @map("end_date") @db.Date
+  createdByEmail                String    @map("created_by_email")
+  cancelledAt                   DateTime? @map("cancelled_at")
+  createdAt                     DateTime  @default(now()) @map("created_at")
+  cancellationRequestedAt       DateTime? @map("cancellation_requested_at")
+  cancellationRequestedEndDate  DateTime? @map("cancellation_requested_end_date") @db.Date
 
   squad             Squad  @relation(fields: [squadId], references: [id])
   fulltimePlayer    Player @relation("SlotOwner", fields: [fulltimePlayerId], references: [id])

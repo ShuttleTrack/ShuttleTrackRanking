@@ -19,6 +19,8 @@ interface ReplacementRow {
   startDate: string;
   endDate: string;
   cancelledAt: string | null;
+  cancellationRequestedAt: string | null;
+  cancellationRequestedEndDate: string | null;
   replacementPlayer: { id: number; name: string };
 }
 
@@ -149,7 +151,7 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
       }
       await refreshReplacements();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to cancel replacement');
+      setError(e instanceof Error ? e.message : 'Failed to request cancellation');
     }
   };
 
@@ -177,8 +179,8 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
         </h1>
         <div className="mt-3 h-0.5 w-10 rounded-full bg-primary" aria-hidden />
         <p className="text-on-surface-variant mt-2">
-          Give your slot to an open-slot player for a date range - at least 3 playing days, at most 4 months. No admin approval
-          needed.
+          Give your slot to an open-slot player for a date range - at least 3 playing days, at most 4 months. No admin
+          approval needed to nominate. Ending one early does need admin approval.
         </p>
       </header>
 
@@ -297,8 +299,16 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
                     {r.startDate.slice(0, 10)} to {r.endDate.slice(0, 10)}
                     {r.cancelledAt ? ' - cancelled' : ''}
                   </div>
+                  {!r.cancelledAt && r.cancellationRequestedAt && (
+                    <div className="text-xs text-warning mt-1">
+                      {r.cancellationRequestedEndDate
+                        ? `Shortening to ${r.cancellationRequestedEndDate.slice(0, 10)} requested`
+                        : 'Cancellation requested'}{' '}
+                      - awaiting admin approval
+                    </div>
+                  )}
                 </div>
-                {!r.cancelledAt && (
+                {!r.cancelledAt && !r.cancellationRequestedAt && (
                   <button type="button" className={ghostBtn} onClick={() => handleCancel(r.id)}>
                     Cancel
                   </button>

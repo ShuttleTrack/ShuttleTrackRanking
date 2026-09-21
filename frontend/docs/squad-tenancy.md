@@ -105,8 +105,10 @@ flag:
   `/api/squads/[squadId]/open-slot-settings` (PATCH, squad-admin-editable),
   `/api/squads/[squadId]/players/{bulk-initial-score,open-slot}`,
   `/api/squads/[squadId]/replacements` (GET own / GET `?scope=squad` squad-admin-only / POST),
-  `/replacements/preview` (GET, squad-member-readable) and `/replacements/[id]` (PATCH to cancel
-  or shorten) - see "Open-slot & replacement players" below for all of these.
+  `/replacements/preview` (GET, squad-member-readable), `/replacements/[id]` (PATCH to request
+  cancelling or shortening) and `/replacements/[id]/cancellation` (PATCH to approve/reject a
+  pending request, squad-admin-only) - see "Open-slot & replacement players" below for all of
+  these.
 - `middleware.ts` matcher: `/s/:squad/admin/:path*`, `/s/:squad/user/:path*`, `/platform/:path*`
   (signed-in-at-all gate only - the real per-squad-admin/per-player boundary is the
   `resolveSquad*` calls above and each API route's `requireSquadAdmin`/`requireSuperAdmin`).
@@ -221,10 +223,20 @@ Full design doc: `OPEN_SLOT_PLAYERS_PLAN.md` at the repo root. Summary of what's
   range a day at a time, so an unbounded `endDate` (a date input will happily submit year 9999)
   is a multi-million-iteration block on a single-threaded server. A window that has already
   finished is rejected too (it could never be active); one that merely *started* in the past is
-  allowed. `PATCH /replacements/[id]` lets the nominating player end a window early - outright
-  (empty body) or by pulling the end date in (`{ endDate }`, shorten-only, no re-extending).
-  Shortening is deliberately exempt from the 3-playing-day minimum, since outright cancellation
-  is already allowed. `GET /replacements/preview?startDate=&endDate=` runs the same window
+  allowed. Nominating stays fully self-service, but *ending a window early no longer applies
+  immediately* - it needs admin approval. `PATCH /replacements/[id]` lets the nominating player
+  request ending a window early - outright (empty body) or by pulling the end date in
+  (`{ endDate }`, shorten-only, no re-extending) - which stamps `cancellationRequestedAt` (and
+  `cancellationRequestedEndDate` for a shorten request) on the row rather than touching
+  `cancelledAt`/`endDate`; a second request while one is already pending is rejected. Shortening
+  is deliberately exempt from the 3-playing-day minimum, since outright cancellation is already
+  allowed. A squad admin then decides it via `PATCH /replacements/[id]/cancellation` (body
+  `{ decision: 'approve' | 'reject' }`, admin-only, 403 otherwise): approving applies whatever was
+  requested (sets `cancelledAt`, or pulls `endDate` in) and clears the pending-request fields;
+  rejecting just clears them, leaving the window on its original terms. `lib/replacements.ts`'s
+  `requestCancelReplacementCancellation`/`requestReplacementShortening` record the request,
+  `approveCancellationRequest`/`rejectCancellationRequest` decide it.
+  `GET /replacements/preview?startDate=&endDate=` runs the same window
   validation for the nomination form so it can show "2 playing days selected, need 3" and the
   resolved dates before submit; it returns failures as data rather than throwing, and is a
   separate endpoint because `GET /api/squads/[squadId]` (which carries the schedule) is
@@ -232,12 +244,13 @@ Full design doc: `OPEN_SLOT_PLAYERS_PLAN.md` at the repo root. Summary of what's
   Overlap (same slot or same nominee already covered) is checked and inserted in one transaction,
   since MySQL can't express "no overlapping ranges" as a constraint. `GET /replacements` returns
   the caller's own nominations; `GET /replacements?scope=squad` returns every nomination in the
-  squad and is squad-admin-only (403 otherwise), surfaced as a read-only table on
-  `/s/[squad]/admin/players` for support/dispute cases - no admin cancel button, since creation
-  and cancellation are both self-service. The scope is an explicit parameter rather than being
-  inferred from the caller's role: the player-facing page labels its list "Your replacements" and
-  puts a Cancel button on each row, so role-inference would show a squad admin who is also a
-  player every other member's nomination and invite them to cancel it.
+  squad and is squad-admin-only (403 otherwise), surfaced as a table on `/s/[squad]/admin/players`
+  for support/dispute cases *and* as the approve/reject surface for pending cancellation requests
+  (rows outside that state render no actions - creation is self-service and there's nothing to
+  decide). The scope is an explicit parameter rather than being inferred from the caller's role:
+  the player-facing page labels its list "Your replacements" and puts a Cancel button on each row,
+  so role-inference would show a squad admin who is also a player every other member's nomination
+  and invite them to cancel it.
 - **Absentee sweep** (`applyAbsenteeDeductions` in `scorePersister.ts`) now has three paths:
   fulltime keeps the original row-based ladder (last-5-`ScoreHistory` escalation, auto-deactivate
   at 5) untouched; an open-slot player currently filling an active replacement ramps on a new

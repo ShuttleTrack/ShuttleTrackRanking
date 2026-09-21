@@ -235,9 +235,9 @@ export async function createSlotReplacement(
   });
 }
 
-// Only the nominating fulltime player can cancel/shorten their own nomination early - matches
-// "self-service, no admin approval" for creation; admins get a read-only view (see the admin
-// players page), not a cancel button, in this first cut.
+// Only the nominating fulltime player can request to end their own nomination early - creation
+// stays self-service, but ending one early now needs admin approval (see request/approve/reject
+// below), so admins get an actionable view (the admin players page) rather than a read-only one.
 async function ownReplacementOrThrow(squadId: number, id: number, requestedByEmail: string) {
   const replacement = await prisma.slotReplacement.findUnique({
     where: { id },
@@ -252,7 +252,16 @@ async function ownReplacementOrThrow(squadId: number, id: number, requestedByEma
   return replacement;
 }
 
-export async function cancelSlotReplacement(
+function requireNoPendingCancellationRequest(replacement: SlotReplacement) {
+  if (replacement.cancellationRequestedAt) {
+    throw new Error('A cancellation request is already pending admin approval for this replacement');
+  }
+}
+
+// Requests outright early cancellation - no longer applied immediately. An admin has to approve
+// it (approveCancellationRequest) before cancelledAt is actually set; see
+// docs/squad-tenancy.md's "Open-slot & replacement players".
+export async function requestCancelReplacementCancellation(
   squadId: number,
   id: number,
   requestedByEmail: string
@@ -261,15 +270,20 @@ export async function cancelSlotReplacement(
   if (replacement.cancelledAt) {
     return replacement;
   }
-  return prisma.slotReplacement.update({ where: { id }, data: { cancelledAt: new Date() } });
+  requireNoPendingCancellationRequest(replacement);
+  return prisma.slotReplacement.update({
+    where: { id },
+    data: { cancellationRequestedAt: new Date(), cancellationRequestedEndDate: null },
+  });
 }
 
-// The other half of "cancel/shorten early" (OPEN_SLOT_PLAYERS_PLAN.md): pull the end date in
-// without ending the window outright. Deliberately *not* subject to the 3-playing-day minimum -
-// that rule exists to stop someone claiming a slot for a token period, and shortening can only
-// ever reduce a commitment that already cleared it. Outright cancellation is allowed too, so
-// requiring 3 days here would be the odd rule out.
-export async function shortenSlotReplacement(
+// The other half of "cancel/shorten early" (OPEN_SLOT_PLAYERS_PLAN.md): request pulling the end
+// date in without ending the window outright. Deliberately *not* subject to the 3-playing-day
+// minimum - that rule exists to stop someone claiming a slot for a token period, and shortening
+// can only ever reduce a commitment that already cleared it. Outright cancellation is allowed
+// too, so requiring 3 days here would be the odd rule out. Like cancellation, this now only
+// records a *request*; approveCancellationRequest applies it.
+export async function requestReplacementShortening(
   squadId: number,
   id: number,
   requestedByEmail: string,
@@ -279,6 +293,7 @@ export async function shortenSlotReplacement(
   if (replacement.cancelledAt) {
     throw new Error('This replacement has already been cancelled');
   }
+  requireNoPendingCancellationRequest(replacement);
 
   const newEndDate = parseDateOnly(newEndDateString);
   if (Number.isNaN(newEndDate.getTime())) {
@@ -291,7 +306,48 @@ export async function shortenSlotReplacement(
     throw new Error('The new end date is before the window started - cancel it instead');
   }
 
-  return prisma.slotReplacement.update({ where: { id }, data: { endDate: newEndDate } });
+  return prisma.slotReplacement.update({
+    where: { id },
+    data: { cancellationRequestedAt: new Date(), cancellationRequestedEndDate: newEndDate },
+  });
+}
+
+async function pendingRequestOrThrow(squadId: number, id: number) {
+  const replacement = await prisma.slotReplacement.findUnique({ where: { id } });
+  if (!replacement || replacement.squadId !== squadId) {
+    throw new Error('Replacement not found');
+  }
+  if (!replacement.cancellationRequestedAt) {
+    throw new Error('This replacement has no pending cancellation request');
+  }
+  return replacement;
+}
+
+// Admin-only (enforced by the API route, not here - matches the rest of this module leaving
+// authorization to the caller). Applies the player's pending request: outright cancellation if
+// no shortened end date was requested, otherwise pulls the end date in.
+export async function approveCancellationRequest(squadId: number, id: number): Promise<SlotReplacement> {
+  const replacement = await pendingRequestOrThrow(squadId, id);
+  const isShortenRequest = replacement.cancellationRequestedEndDate !== null;
+  return prisma.slotReplacement.update({
+    where: { id },
+    data: {
+      cancelledAt: isShortenRequest ? undefined : new Date(),
+      endDate: isShortenRequest ? replacement.cancellationRequestedEndDate! : undefined,
+      cancellationRequestedAt: null,
+      cancellationRequestedEndDate: null,
+    },
+  });
+}
+
+// Admin-only. Declines the player's pending request - the replacement continues on its original
+// terms, nothing else changes.
+export async function rejectCancellationRequest(squadId: number, id: number): Promise<SlotReplacement> {
+  await pendingRequestOrThrow(squadId, id);
+  return prisma.slotReplacement.update({
+    where: { id },
+    data: { cancellationRequestedAt: null, cancellationRequestedEndDate: null },
+  });
 }
 
 export interface SlotReplacementWithNames extends SlotReplacement {
@@ -333,13 +389,15 @@ export interface OpenSlotPlayerOption {
   maskedEmail: string;
 }
 
-// "ada@example.com" -> "a***@example.com". The local part is what identifies a person, so that
-// is what gets hidden; the domain stays because it is usually the disambiguating part in a
-// friend group (personal vs work address).
+// "amanda@example.com" -> "amand***@example.com". The local part is what identifies a person, so
+// that is what gets hidden (beyond a 5-character prefix - enough to disambiguate similarly-named
+// players without handing out the full address); the domain stays because it is usually the
+// disambiguating part in a friend group (personal vs work address).
 function maskEmail(email: string): string {
   const atIndex = email.lastIndexOf('@');
   if (atIndex <= 0) return '***';
-  return `${email[0]}***${email.slice(atIndex)}`;
+  const visible = email.slice(0, Math.min(5, atIndex));
+  return `${visible}***${email.slice(atIndex)}`;
 }
 
 // Name-or-email search for the nomination UI's player picker. Matching still runs against the
