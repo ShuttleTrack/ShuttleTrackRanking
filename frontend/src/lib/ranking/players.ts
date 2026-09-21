@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { derivePlayerStatus, filterPlayersByStatusParam, isActive, RawPlayerStatus } from './playerStatus';
 import { timeInHighestRankLabel } from './period';
 import { getRankedPlayers } from './playerUtil';
+import { filterBoardVisible } from './boardVisibility';
 
 // Ported from backend PlayerService.java + ScoreHistoryService.java (MIGRATION_PLAN.md Phase 2).
 // Field names match the real Java DTOs (PlayerInfo / SecurePlayerInfo / PlayerRankHistory /
@@ -194,8 +195,11 @@ function dedupeByKey<T>(items: T[], keyOf: (item: T) => string): T[] {
 export async function getAllPlayersHistory(squadId: number, type: HistoryType = 'RANK') {
   const allPlayers = await prisma.player.findMany({ where: { squadId } });
   const activePlayers = allPlayers.filter(isActive);
+  // OPEN_SLOT_PLAYERS_PLAN.md: keep sporadic open-slot activity off the trajectory graph and its
+  // player picker, layered on top of the existing isActive gate above (unchanged for FULLTIME).
+  const visiblePlayers = await filterBoardVisible(squadId, activePlayers);
   return Promise.all(
-    activePlayers.map(async (player) => {
+    visiblePlayers.map(async (player) => {
       const rows = await prisma.scoreHistory.findMany({ where: { playerId: player.id } });
       return buildPlayerHistory(player.name, player.id, rows, type);
     })
