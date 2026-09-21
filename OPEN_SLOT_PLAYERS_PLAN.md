@@ -2,14 +2,14 @@
 
 **Status:** Proposed — pending review/approval. No implementation yet; this document is the design to be reviewed before any code changes land.
 
-**Revision:** amended 2026-09-21 after a review pass against the actual implementation. The amendments are: the null-`rankScore` safety section (new, and the reason the nullable-column decision is no longer "low-risk additive"), the grace window suppressing auto-deactivation rather than sitting in front of it, splitting the backward-looking day count off the schedule calculator, moving the scoreless-player gate server-side, a rewritten "why not separate tables" rationale, and a corrected testing section. Points flagged **OPEN QUESTION** below still need sign-off before implementation starts.
+**Revision:** amended 2026-09-21 after a review pass against the actual implementation, then again to rework the replacement player's absentee treatment. The amendments are: the null-`rankScore` safety section (new, and the reason the nullable-column decision is no longer "low-risk additive"); the absentee sweep restructured into three explicit paths, with the two new ones on a day-based spell counter instead of the legacy row-based one and neither able to auto-deactivate; the replacement path given no grace cutoff but clamped so pre-window absences don't count; splitting the backward-looking day count off the schedule calculator; moving the scoreless-player gate server-side; a rewritten "why not separate tables" rationale; and a corrected testing section. Points flagged **OPEN QUESTION** below still need sign-off before implementation starts.
 
 ## Context
 
 Today every `Player` row is implicitly a "fulltime" member: one flat roster per squad, ranked and absentee-swept identically. In practice two more player categories exist in real play:
 
 - **Open-slot players** — fill a vacant spot when a fulltime player is absent. They get ranked normally when they play, but since they're not expected to show up every session, they should only accrue absentee demerits for a configurable grace period before the sweep stops penalizing them.
-- **Replacement players** — an open-slot player a fulltime player has nominated to take over their slot for a date range (self-service, min. 3 playing days). During that window the replacement is fully absentee-liable like a fulltime player; outside it, they revert to open-slot behavior. The nominating fulltime player's own treatment is unchanged by this — the nomination's only purpose is to guarantee the replacement a slot instead of leaving it to opportunistic day-of vacancy.
+- **Replacement players** — an open-slot player a fulltime player has nominated to take over their slot for a date range (self-service, min. 3 playing days). During that window they're swept on the same escalating ladder as everyone else but with **no grace cutoff**: missing a playing day keeps costing them for as long as the window runs, which is the point of having claimed a guaranteed slot. They are never auto-deactivated, absences from before the window never count toward the ramp, and once the window closes they revert to plain open-slot behavior. The nominating fulltime player's own treatment is unchanged by this — the nomination's only purpose is to guarantee the replacement a slot instead of leaving it to opportunistic day-of vacancy.
 
 This plan adds both categories, keeps everything in the existing `Player` table (evaluated separate tables — rejected, see below), and builds a schedule-derived "playing day" calculator as a reusable primitive for *forward-looking* date-range questions (the replacement's minimum-duration validation; a later, separate effort can migrate the main/fulltime deactivation logic — currently game-count-based — onto the same calculator with its own threshold).
 
@@ -36,7 +36,7 @@ The deciding factor is that **an open-slot player is the same entity with the sa
   - The *column* change is additive and safe (every existing row already has a non-null value). The **code** change is not: several ranking paths currently assume a non-null `Float` and break in non-obvious ways on null. Those guards are mandatory prerequisites, not follow-ups — see "Null-`rankScore` safety" below. Do not land the schema change without them.
 
 **`Squad`**: add two admin-configurable per-squad settings (same settings surface as `maxPlayers`/`schedule` today, in `pages/s/[squad]/admin/settings.tsx` + `pages/api/squads/[squadId]/schedule.ts`-adjacent route) — kept as two separate fields since they answer different questions ("when do we stop penalizing?" vs "when do we stop displaying?") and there's no reason an admin would need them locked together:
-- `openSlotAbsenteeGraceDays Int @default(3) @map("open_slot_absentee_grace_days")` — game days since an open-slot player's last game after which the absentee sweep stops demeriting them (see below). **Non-nullable with a real default**, changed from the first draft's `Int?`-meaning-disabled: a `null`-means-never-exempt default is the *worst* outcome for the feature, not the safest one — an admin who adds open-slot players without discovering the setting would get them demerited and auto-deactivated exactly as if the feature didn't exist. `3` is chosen because the escalation ladder in `decideAbsenteeAction` reaches its 3× maximum at the third absence, so the default gives one full escalation cycle and then stops. Existing squads are unaffected either way: every existing player is `FULLTIME`, and this setting is only read on the `OPEN_SLOT` branch.
+- `openSlotAbsenteeGraceDays Int @default(3) @map("open_slot_absentee_grace_days")` — game days since an open-slot player's last game after which the absentee sweep stops demeriting them (see below). **Non-nullable with a real default**, changed from the first draft's `Int?`-meaning-disabled: a `null`-means-never-exempt default is the *worst* outcome for the feature, not the safest one — an admin who adds open-slot players without discovering the setting would get them demerited and auto-deactivated exactly as if the feature didn't exist. `3` is chosen because the ramp reaches its 3× maximum on the third missed day, so the default gives one full escalation cycle and then stops — a −60 ceiling per absence spell. Existing squads are unaffected either way: every existing player is `FULLTIME`, and this setting is only read on Path 3 of the sweep. Note this setting has **no effect on a replacement inside an active window** — Path 2 has no cutoff by design.
 - `openSlotVisibilityGameDays Int @default(10) @map("open_slot_visibility_game_days")` — game days since an open-slot player's last game after which they drop off the public leaderboard/trajectory graph (see below). Defaults to 10, deliberately longer than the grace window: we stop penalizing well before we stop displaying, so a sporadic regular stays on the board without bleeding points.
 
 **New model `SlotReplacement`** (real FK relations to `Player` are fine here — unlike `ScoreHistory`/`Encounter`, this is new code with no legacy anti-pattern to preserve, and player deletion isn't implemented):
@@ -110,30 +110,67 @@ Squads currently support only one playing day/week — the calculator is written
 
 Both the absentee grace check and the board-visibility rule need "how many game days since this player last actually played." The ground truth for that is already in the database and needs no schedule: **the count of distinct `Encounter.encounterDate` values for the squad that fall after the player's last participation date.** That matches the absentee sweep's own clock exactly (one sweep per processed encounter date), works for squads with no schedule, and can't drift.
 
-New function `gameDaysSinceLastPlay(squadId, playerId, asOf): number | null` in the ranking layer — finds the player's most recent actual encounter participation (their most recent `ScoreHistory` row with a real `encounterId > 0`, i.e. excluding the `-1`/`-2`/`-3` absentee/deactivate/activate sentinels), then counts distinct squad encounter dates strictly after it and up to `asOf`. Returns `null` if they've never played, so callers can distinguish "never played" from "played long ago". One implementation, two call sites with two different configured thresholds.
+New function `gameDaysSinceLastPlay(squadId, playerId, asOf): number | null` in the ranking layer — finds the player's most recent actual encounter participation (their most recent `ScoreHistory` row with a real `encounterId > 0`, i.e. excluding the `-1`/`-2`/`-3` absentee/deactivate/activate sentinels), then counts distinct squad encounter dates strictly after it and up to `asOf`. Returns `null` if they've never played, so callers can distinguish "never played" from "played long ago".
+
+The absentee sweep needs one variant of this, so implement it as the general form and let `gameDaysSinceLastPlay` be the no-argument case:
+
+`absenteeSpellDays(squadId, playerId, asOf, notBefore?): number | null` — the count of distinct squad game days in `(max(lastRealPlayDate, the game day before notBefore), asOf]`. In words: **consecutive missed game days, optionally clamped so that nothing before `notBefore` counts.** With no `notBefore` it is exactly `gameDaysSinceLastPlay`. With `notBefore = window.startDate` it answers "how many game days of this replacement window have they missed in a row," ignoring however long they were dormant beforehand. Returns `null` only when the player has never played *and* no clamp was given.
+
+Three call sites, one implementation: the open-slot grace check (unclamped), the replacement ramp (clamped to the window start), and the board-visibility rule (unclamped).
 
 ## Absentee sweep changes
 
-`processEncountersForDate` (`frontend/src/lib/ranking/processEncounters.ts`) keeps building `absentPlayerIds` exactly as today (every squad player not in one of the day's encounters). The only change is inside `applyAbsenteeDeductions` (`scorePersister.ts`): for each absent id, after the null-`rankScore` skip from the section above, branch on player type + replacement status *before* deciding whether/how to deduct:
+`processEncountersForDate` (`frontend/src/lib/ranking/processEncounters.ts`) keeps building `absentPlayerIds` exactly as today (every squad player not in one of the day's encounters). The change is inside `applyAbsenteeDeductions` (`scorePersister.ts`): after the null-`rankScore` skip from the section above, each absent player takes one of **three** paths.
 
-- `playerType === FULLTIME`, or `playerType === OPEN_SLOT` with an **active** `SlotReplacement` covering today → unchanged existing path: `decideAbsenteeAction` (last-5 escalation, auto-deactivate at 5). Byte-identical to current behavior for all pre-existing data — new branch, not new math.
-- `playerType === OPEN_SLOT` with no active replacement → new day-based check via `gameDaysSinceLastPlay`:
-  - Never played (`null`) → **skip**. No deduction, no `ScoreHistory` row.
-  - Count exceeds `squad.openSlotAbsenteeGraceDays` → **skip**. Same rolling exemption as before: it resets the moment they play again, since "last played" moves forward — matching "by design they do not join every day" (ongoing sporadic attendance, not just an onboarding window).
-  - Otherwise → the same escalating demerit as fulltime, **but with the auto-deactivation arm suppressed**: if `decideAbsenteeAction` returns `deactivate`, substitute the 3× demerit (its maximum) instead. An open-slot player is never auto-deactivated by the sweep; deactivating them is an admin action only.
+### Two counters, deliberately different
 
-**Why the deactivation arm has to be suppressed** (this was a real hole in the first draft, not a refinement): `decideAbsenteeAction` deactivates at 5 prior absences within the last 5 `ScoreHistory` rows, so an open-slot player who stops showing up hits `DISABLED`, `playerRank: -1` on their **6th** missed game day regardless of the grace setting:
+The existing `decideAbsenteeAction` counts absentee rows among a player's **last 5 `ScoreHistory` rows**. That counter is row-based, which makes it distorted in two ways: a single game day writes 3–4 rows per player (one per match — 3 in a group of 4, 4 in a group of 5), so playing once floods the window and all but resets the count; and because a skipped sweep writes no row, stale absentee rows from a dormancy spell months earlier stay in the window and pre-load the ramp. Both are acceptable for fulltime players only because that is the behavior running in production today and it must not change.
 
-| game days since last game | priorAbsences | outcome |
-|---|---|---|
-| 1 | 0 | −10 |
-| 2 | 1 | −20 |
-| 3 | 2 | −30 |
-| 4 | 3 | −30 |
-| 5 | 4 | −30 |
-| 6 | 5 | **deactivate** |
+Neither new path inherits those distortions: they use the **day-based** `absenteeSpellDays` helper defined above, with the multiplier derived from it — `1` at 1 day, `2` at 2, `3` at 3 or more, times `DEMERIT_POINTS_ABSENTEE` (−10). Same familiar −10/−20/−30 amounts, deterministic counter. Extract that as a pure `absenteeMultiplierForSpell(spellDays)` alongside `decideAbsenteeAction` rather than reusing the latter, so the legacy row-based function is left completely untouched.
 
-With the grace check merely sitting *in front of* that ladder, any `openSlotAbsenteeGraceDays > 4` would never fire — the stated goal ("deliberately not auto-deactivated just for going quiet") would be silently false for every setting an admin is likely to pick. Worse, the resulting state is hard to escape: a deactivated open-slot player drops out of `getAvailablePlayersForGame` (which excludes `DISABLED`), and `players/[id]/activate.ts` always calls `activatePlayer(squadId, id, null)`, whose auto-score path throws outright when there's no prior active game.
+### Path 1 — `FULLTIME`: unchanged
+
+`decideAbsenteeAction` on the row-based counter: escalating 1×/2×/3×, auto-deactivate at 5 prior absences. Byte-identical to production for all pre-existing data — this is a new branch beside it, not a rewrite of it.
+
+### Path 2 — `OPEN_SLOT` under an active `SlotReplacement` covering today
+
+Escalating demerit from `absenteeSpellDays(squadId, playerId, today, window.startDate)`, with **no cutoff** and **no deactivation**: it reaches 3× on the third consecutive missed playing day and stays at −30 for every remaining playing day of the window. Having claimed a guaranteed slot, the cost of not using it doesn't taper off.
+
+Two consequences of the `startDate` clamp, both intended:
+- **Absences before the window never count.** The ramp always starts at 1× on the first missed day of the window, however long the player was dormant beforehand. Without the clamp a long-dormant nominee would arrive with a window full of frozen absentee rows, start at 3× on day one, and hit the fulltime deactivation threshold by day three of their own window — an outcome driven entirely by where their *previous* dormancy spell happened to land in a 5-row buffer.
+- **Playing inside the window resets the ramp.** Their last real play moves forward, so the next miss starts at 1× again. Not gameable in any useful way: showing up beats a −10 demerit regardless.
+
+### Path 3 — `OPEN_SLOT` with no active replacement
+
+`absenteeSpellDays` unclamped (i.e. `gameDaysSinceLastPlay`):
+- Never played (`null`) → **skip**. No deduction, no `ScoreHistory` row.
+- Greater than `squad.openSlotAbsenteeGraceDays` → **skip**. A rolling exemption, not a one-time onboarding grace: it resets the moment they play again, matching "by design they do not join every day."
+- Otherwise → the escalating demerit, **no deactivation**.
+
+### Side by side
+
+Consecutive missed playing days, starting from a day the player last played, at the default `openSlotAbsenteeGraceDays = 3`:
+
+| missed game day | Path 1 · fulltime | Path 2 · active window | Path 3 · open slot |
+|---|---|---|---|
+| 1 | −10 | −10 | −10 |
+| 2 | −20 | −20 | −20 |
+| 3 | −30 | −30 | −30 |
+| 4 | −30 | −30 | skip |
+| 5 | −30 | −30 | skip |
+| 6 | **DISABLED** | −30 | skip |
+| 7+ | — | −30, to `endDate` | skip |
+| net | −140, then deactivated | −30/day for the window's length | −60, then frozen |
+
+When a window closes, the player falls to Path 3. If they no-showed the whole window their last real play is far behind, so `absenteeSpellDays > graceDays` and the penalty stops immediately — they're left with the accumulated loss and a frozen score rather than a deactivation. This is the "punishes absentee more, but only for the window" shape: a no-show replacement pays roughly a fulltime player's rate for as long as they held the slot, and nothing after.
+
+(Path 1's row for day 7+ is left blank because the player is already `DISABLED` by then. For completeness: the sweep keeps running on them, the `-2` DISABLE row displaces one absentee row from the 5-row window, pinning `priorAbsences` at 4, so a deactivated fulltime player bleeds −30 indefinitely. Pre-existing, invisible — they're off the board and out of the planner — and untouched by this plan.)
+
+### Why neither new path deactivates
+
+An open-slot player who stops showing up must not end up `DISABLED`: that state is hard to escape here. They drop out of `getAvailablePlayersForGame` (which excludes `DISABLED`), and `players/[id]/activate.ts` always calls `activatePlayer(squadId, id, null)`, whose auto-score path throws outright when there is no prior active game. Deactivating an open-slot player stays an explicit admin action. It follows that neither Path 2 nor Path 3 may route through `decideAbsenteeAction`'s deactivate arm — which, note, is also why the day-based counter isn't merely a tidiness preference: on the row-based counter any `openSlotAbsenteeGraceDays > 4` would have been unreachable, because deactivation fires on the 6th missed day before the grace cutoff ever gets evaluated.
+
+The day-based `absenteeSpellDays` is also the natural primitive for the already-out-of-scope follow-up that migrates fulltime deactivation off the game-count ladder — one more reason to land it in this shape now.
 
 No changes needed to `eloCalculator.ts` or `updatePlayerRanking` — they stay type-agnostic exactly as today. (`getRankedPlayers` *does* change, but for null-safety, not for player type — see above.)
 
@@ -155,9 +192,9 @@ Any player (open-slot admin-added without a score, or future self-registered) ca
 - New API `PATCH/DELETE /api/squads/[squadId]/replacements/[id]` for the nominating player to cancel/shorten early (`cancelledAt`/adjusted `endDate`), same identity check.
 - Admin visibility: add a read-only list of active/past `SlotReplacement`s to the admin players page (or a new small admin sub-view) so admins can see/cancel these too — useful for support/dispute cases even though creation itself is self-service.
 
-**Scoreless nominee**: a nominee who has never played has `rankScore === null`, and an active replacement window makes them *fully absentee-liable* — which is exactly the combination that the null-`rankScore` skip in `applyAbsenteeDeductions` catches. So the effective rule is: a replacement who has never played accrues nothing until their first game. That is the right outcome (there's no score to deduct from), but it means the window's liability only really starts once they play. Worth stating in the nomination UI.
+**Scoreless nominee**: a nominee who has never played has `rankScore === null`, so the null-`rankScore` skip in `applyAbsenteeDeductions` fires before the replacement path is ever reached. The effective rule is therefore: a replacement who has never played accrues nothing until their first game. That is the right outcome — there's no score to deduct from — but it means the window's teeth only come out once they've played once. Worth stating in the nomination UI.
 
-**OPEN QUESTION — double liability for one slot.** As specified, the nominating fulltime player's own absentee treatment is unchanged while their replacement is active, and the replacement is fully liable. So a game day that *neither* attends costs the squad two absentee demerits for one physical slot, and the nominating player is penalized for an absence they arranged cover for. Nothing prevents the owner from playing during their own replacement window either, in which case both are counted that day too. The first draft stated the "owner unchanged" rule deliberately, so it is preserved here as written — but the consequence should be signed off explicitly, since the alternative (exempt the owner for the duration of a window they created) is a one-line change to the same branch and arguably the intuitive reading of "someone is covering my slot."
+**OPEN QUESTION — double liability for one slot.** As specified, the nominating fulltime player's own absentee treatment is unchanged while their replacement is active (Path 1), and the replacement is swept on Path 2. So a game day that *neither* attends costs the squad two absentee demerits for one physical slot, and the nominating player is penalized for an absence they arranged cover for. Nothing prevents the owner from playing during their own replacement window either, in which case both are counted that day too. The first draft stated the "owner unchanged" rule deliberately, so it is preserved here as written — but the consequence should be signed off explicitly, since the alternative (exempt the owner for the duration of a window they created) is a one-line change to the same branch and arguably the intuitive reading of "someone is covering my slot."
 
 ## Game-planner player selection UI
 
@@ -200,9 +237,14 @@ Per `CLAUDE.md`, this is a squad-level Player-model change and must be documente
 
 - `npx prisma generate` after schema changes; `npx prisma db push` to apply (no migration history per existing convention).
 - **Correction to the first draft: `characterization.test.ts` is not a safety net for this change.** It must of course still pass unmodified, but it only exercises the *pure* functions `calculateElo`, `decideAbsenteeAction` and `computeActivationScore` — the fixtures contain no player rows and the test never calls `applyAbsenteeDeductions`, which is the function actually being modified. It will pass regardless of what the new branch does. The real gate is the new tests below.
-- **New tests for `applyAbsenteeDeductions` itself** (the function has no test coverage today — this is the coverage the change depends on): a fulltime player's path is unchanged across all five escalation steps including deactivation at 5; a scoreless player is skipped with no `ScoreHistory` row written and no score mutation; an open-slot player inside the grace window gets the escalating demerit but is **never** deactivated at step 6; an open-slot player past the grace window is skipped; the exemption resets after they play; a replacement is fully liable (including deactivation) during an active window and reverts to open-slot rules outside it.
+- **New tests for `applyAbsenteeDeductions` itself** (the function has no test coverage today — this is the coverage the change depends on), one per path:
+  - *Path 1*: a fulltime player's path is unchanged across all five escalation steps including deactivation at 5.
+  - *Null guard*: a scoreless player is skipped with no `ScoreHistory` row written and no score mutation, and the sweep completes for the rest of the roster.
+  - *Path 3*: an open-slot player inside the grace window gets the escalating demerit and is **never** deactivated at step 6; past the grace window they're skipped; the exemption resets after they play; a never-played open-slot player with an assigned score is skipped.
+  - *Path 2*: a replacement inside an active window ramps −10/−20/−30 and then stays at −30 past day 6 without deactivating; a nominee carrying frozen absentee rows from an earlier dormancy spell still starts at 1× on the window's first missed day (the `startDate` clamp — this is the regression test for the pre-loading bug); playing mid-window resets the ramp; the day after `endDate` they fall to Path 3 and, having not played, are skipped.
+- New tests for `absenteeMultiplierForSpell`: pure, 1/2/3 at 1/2/3+ days, and that it produces the same amounts as the legacy ladder's first three steps.
 - New unit tests: `playingDayCalculator.test.ts` (pure logic, same style as `game-planner.logic.test.ts`) covering weekly recurrence, `skipDates`, and range boundaries.
-- New tests for `gameDaysSinceLastPlay`: never-played returns `null`, sentinel `ScoreHistory` rows (`-1`/`-2`/`-3`) are excluded when finding the last real participation, and the count matches distinct squad encounter dates after that point.
+- New tests for `absenteeSpellDays`: never-played + no clamp returns `null`, sentinel `ScoreHistory` rows (`-1`/`-2`/`-3`) are excluded when finding the last real participation, the unclamped count matches distinct squad encounter dates after that point, and a `notBefore` clamp later than the last play wins (while one earlier than it is a no-op).
 - New tests for `getRankedPlayers` null-safety: ordering with no nulls is identical to today's output, nulls sort last, and two nulls don't destabilize the sort.
 - New tests for replacement validation: <3 playing days rejected, overlap rejected, non-open-slot nominee rejected, wrong-requester-identity rejected, missing/non-recurring squad schedule rejected.
 - New test for the server-side game-create gate: `POST /games` with a scoreless player in `groups` is rejected with 400 and names the player.
