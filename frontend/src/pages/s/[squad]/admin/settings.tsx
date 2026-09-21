@@ -160,8 +160,9 @@ const SquadSettingsPage = () => {
       <form onSubmit={handleSaveVisibility} className={`${cardClass} mb-6`}>
         <h2 className={sectionTitleClass}>Visibility</h2>
         <p className="text-sm text-on-surface-variant mb-4">
-          No behavioral difference yet - reserved for a future public squad directory. You can
-          change this any time.
+          Public squads appear on the site-root leaderboard. If someone plays in more than one
+          public squad, their points are added together there. Private squads stay reachable by
+          link and are not included in that sum. You can change this any time.
         </p>
         <label className="flex items-center gap-3 cursor-pointer mb-4">
           <input

@@ -122,10 +122,10 @@ model Squad {
   // only a platform superadmin can change it (see requireSuperAdmin in the squad-settings API).
   maxPlayers Int?    @map("max_players")
 
-  // No behavioral difference yet - reserved for a future public directory/dashboard that pulls
-  // together all public squads' info. Public by default (matches today's behavior: everything is
-  // visible to whoever has the link), private is an opt-in choice. Editable by the squad's own
-  // admins, not superadmin-only - see requireSquadAdmin on the visibility PATCH endpoint.
+  // When true (default), this squad's active ranked players feed the site-root public leaderboard
+  // at `/` (scores from multiple public squads for the same email are summed). Private squads
+  // remain reachable by link at `/s/[slug]` but are excluded from that aggregate. Editable by the
+  // squad's own admins - see requireSquadAdmin on the visibility PATCH endpoint.
   isPublic Boolean @default(true) @map("is_public")
 
   // Recurrence schedule - informational only for now (nothing reads it to auto-create game days

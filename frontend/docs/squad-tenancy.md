@@ -23,8 +23,9 @@ supersedes those now that the feature is built and in production.
 ## Data model
 
 - **`Squad`** (`prisma/schema.prisma`) - the tenant. `id`, `name`, `slug` (unique, used in URLs),
-  `enabled`, `maxPlayers` (nullable = unlimited), `isPublic` (default `true`, no behavioral
-  difference yet), plus `schedule` (a single JSON blob for the recurrence schedule - see below).
+  `enabled`, `maxPlayers` (nullable = unlimited), `isPublic` (default `true` — feeds the
+  site-root public leaderboard; see below), plus `schedule` (a single JSON blob for the recurrence
+  schedule - see below).
   Frontend-owned, like `Game` - not part of the original Java backend's schema.
 - **`SquadAdmin`** - join table (`squadId`, `email`) granting admin rights scoped to one squad.
   Keyed by email (lowercased), not a numeric user id - matches how this app already resolves
@@ -78,13 +79,22 @@ flag:
 - **Admin** (signed-in + squad admin, or superadmin): `/s/[squad]/admin/{dashboard,game-day,game-planner,players,score-keeper,settings}`.
 - **Platform** (superadmin only): `/platform/squads` - create squads, manage each squad's admins,
   edit `enabled`/`maxPlayers`.
-- **`/`** - squad picker. Resolves the signed-in email's squads server-side and redirects straight
-  to `/s/{slug}` when there's exactly one (including for a superadmin, if there's only one squad
-  in the whole system) - no picker click for the common case. Shows the picker for 0 or 2+ squads,
-  a sign-in prompt when signed out.
+- **`/`** - **public aggregate leaderboard** (no login). Merges active ranked players from every
+  `enabled` + `isPublic` squad into one row per email; `rankScore` values are **summed** across
+  that person's public memberships. Narrower columns than the per-squad board (no peak tenure,
+  last-day net, or trend). Rows are **not** clickable — a callout directs visitors to sign in and
+  pick a squad for detailed rankings and encounter history. Per-squad boards at `/s/[slug]` still
+  link rows to player encounters as before.
+- **`/squads`** - signed-in squad picker (fallback). Resolves the email's squads server-side and
+  redirects straight to `/s/{slug}` when there's exactly one — no picker click for the common
+  case. Shows the picker for 0 or 2+ squads; a sign-in prompt when signed out. Signed-in users
+  with squads normally switch via the **Squads** list in the account menu / mobile menu (`GET
+  /api/squads` via `useMySquads()`); the `/squads` page remains for zero-squad users and direct
+  navigation.
 - **`/login`** - stays global, not squad-scoped.
 - **API**: everything under the old flat `/api/{players,games,encounters,rankings,user}/**` moved
-  to `/api/squads/[squadId]/**`. Plus `/api/squads` (list mine / create, superadmin-only create),
+  to `/api/squads/[squadId]/**`. Plus **`GET /api/rankings`** (public aggregate board data; no
+  auth), `/api/squads` (list mine / create, superadmin-only create),
   `/api/squads/[squadId]` (GET detail incl. schedule fields, squad-admin-readable; PATCH
   `enabled`/`maxPlayers`, superadmin-only), `/api/squads/[squadId]/admins` (superadmin-only),
   `/api/squads/[squadId]/schedule` (PATCH, squad-admin-editable).
@@ -96,7 +106,7 @@ flag:
 into `/s/[squad]/...` needs the squad's slug from `SquadContext`, and there are two ways to get
 it depending on where the component can render:
 - **`useSquad()`** (throws outside a provider) - safe for anything only ever rendered from inside
-  a squad-scoped page tree (e.g. `LeaderboardRow`, `EncounterCard`, `NavPlayerSearch` - the latter
+  a squad-scoped page tree (e.g. `EncounterCard`, `NavPlayerSearch` - the latter
   is only mounted from places already guarded by squad presence, see below).
 - **`useOptionalSquad()`** (returns `null` outside a provider) - required for anything rendered
   *unconditionally* from the global nav (`Layout` → `NavigationComponent`), since that also
@@ -139,12 +149,14 @@ squad-scoped route can't be used to touch another squad's row by guessing an id)
 
 ## Squad visibility: `isPublic`
 
-Public (default `true`) vs. private, on `Squad`. **No behavioral difference yet** - reserved for
-a future public directory/dashboard that pulls together all public squads' info; nothing reads
-this field today. Unlike `enabled`/`maxPlayers`, editable by the squad's **own admins**
-(`requireSquadAdmin`, not superadmin-only - same reasoning as the schedule fields: this is the
-squad's own call, not platform governance), via `PATCH /api/squads/[squadId]/visibility` and a
-toggle on `/s/[squad]/admin/settings`.
+Public (default `true`) vs. private, on `Squad`. When public, that squad's active ranked players
+(`playerRank > 0`) are included in the site-root leaderboard (`/`, `GET /api/rankings`). The same
+email in multiple public squads appears once there with **summed** `rankScore`; last-5 and win
+rate combine matches across those memberships. Private squads are excluded from the aggregate but
+remain link-public at `/s/[slug]` like before. Unlike `enabled`/`maxPlayers`, editable by the
+squad's **own admins** (`requireSquadAdmin`, not superadmin-only), via
+`PATCH /api/squads/[squadId]/visibility` and a toggle on `/s/[squad]/admin/settings`.
+Implementation: `lib/ranking/publicRankings.ts`.
 
 ## Squad schedule
 
