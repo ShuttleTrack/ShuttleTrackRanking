@@ -8,7 +8,12 @@ export function useRequireUser() {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/login');
+      const returnPath = router.asPath || '/';
+      const loginUrl =
+        returnPath === '/login'
+          ? '/login'
+          : `/login?callbackUrl=${encodeURIComponent(returnPath)}`;
+      router.push(loginUrl);
     } else if (session?.user && !session.user.accessLevel?.includes('USER')) {
       router.push('/');
     }

@@ -3,24 +3,29 @@ import { useRouter } from 'next/router';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { LoadingSpinner } from '@/components/auth/LoadingSpinner';
 import { useSession } from 'next-auth/react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
+import { safeCallbackUrl } from '@/utils/safeCallbackUrl';
 
 const LoginPage = () => {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const callbackUrl = useMemo(
+    () => safeCallbackUrl(router.query.callbackUrl),
+    [router.query.callbackUrl]
+  );
 
   useEffect(() => {
     if (session) {
-      router.push('/');
+      router.push(callbackUrl);
     }
-  }, [session, router]);
+  }, [session, router, callbackUrl]);
 
   if (status === 'loading') {
     return <LoadingSpinner />;
   }
 
   const handleSignIn = () => {
-    signIn('google', { callbackUrl: '/' });
+    signIn('google', { callbackUrl });
   };
 
   return (

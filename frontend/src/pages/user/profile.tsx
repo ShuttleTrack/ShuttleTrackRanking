@@ -5,6 +5,7 @@ import { useRequireUser } from '@/hooks/useRequireUser';
 import { capitalizeFirstLetter } from '@/utils/string';
 import TrendIndicator from '@/components/leaderboard/TrendIndicator';
 import { PageLoader } from '@/components/common/GameLoader';
+import { UpcomingSessionsList } from '@/components/check-in/UpcomingSessionsList';
 
 const iconOutlineBtn =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-surface-container-high/50 text-on-surface transition-colors hover:border-primary/40';
@@ -118,6 +119,8 @@ const UserProfilePage = () => {
       ) : (
         <p className="text-on-surface-variant">Unable to load your ranking data.</p>
       )}
+
+      <UpcomingSessionsList playerId={session?.user?.playerId} />
     </div>
   );
 };

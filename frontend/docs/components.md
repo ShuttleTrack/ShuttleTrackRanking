@@ -267,9 +267,29 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Purpose:** Signed-in players (`USER`) see identity and ranking snapshot at `/user/profile`.
 
-**Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name/email, outline sign-out; four-column stats (Rank, Change, Score, Highest).
+**Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name/email, outline sign-out; four-column stats (Rank, Change, Score, Highest). **Upcoming sessions** list below (`UpcomingSessionsList`): Wednesday 19:00–22:00 and Friday 20:00–23:00 (Europe/Amsterdam), vote chip from local storage, **Check in** CTA → `/game-day/{id}`.
 
 **Loading:** `PageLoader` (`tall`) (session + rankings).
+
+**Player tab bar:** `UserTabBar` in `Layout.tsx` — fixed bottom nav on `/user/profile`, `/user/matches`, and `/game-day/*` for signed-in `USER` players. Tabs: **Profile**, **Check-in** (nearest upcoming session via `nextUpcomingSession`), **Matches**. Active tab uses `text-primary` + solid Heroicons. Hides `SiteFooter` and adds bottom safe-area padding on these routes.
+
+---
+
+### Game-day check-in
+
+**Files:** `src/pages/game-day/[uid].tsx`, `src/components/check-in/*`, `src/hooks/useGameDayCheckIn.ts`, `src/lib/check-in/*`
+
+**Purpose:** Authenticated RSVP for recurring club sessions (`USER` via `useRequireUser`). Not the admin `Game` planner table. Session ids look like `wed-2026-09-23` / `fri-2026-09-25`.
+
+**Layout:** `max-w-7xl` shell; **Check in** title + orange rule. Hero card: session title, `font-numeric` time range, status chip (countdown / live / ended). Stacked **I'm in** / **I'm out** buttons on mobile (`sm+` side-by-side); orange fill for In, red tint for Out when selected.
+
+**After voting:** `CheckInRoster` reveals with `animate-slideUp` — segmented In/Out tabs on mobile, two columns on `md+`. Player rows: `colorHex` disc (Google avatar + **You** chip for self), name, rank. Other players' votes are mocked deterministically until the API exists; roster hidden until the signed-in user votes.
+
+**Auth:** Unauthenticated users redirect to `/login?callbackUrl=` (see `useRequireUser` + `login.tsx`).
+
+**Navigation:** Bottom tab bar (Profile / Check-in / Matches); no back link to profile in the page header.
+
+**Loading / not found:** `PageLoader` (`tall`); invalid uid → dark copy + **Go to profile**.
 
 ---
 

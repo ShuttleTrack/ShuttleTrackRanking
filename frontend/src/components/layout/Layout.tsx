@@ -1,6 +1,12 @@
+'use client';
+
 import Image from 'next/image';
+import { useRouter } from 'next/router';
+import { useSession } from 'next-auth/react';
 import NavigationComponent from '../NavigationComponent';
+import { UserTabBar } from '../nav/UserTabBar';
 import SiteFooter from './SiteFooter';
+import { isUserTabBarRoute } from '@/utils/userTabBar';
 
 const BUILD_IDENTIFIER = process.env.NEXT_PUBLIC_BUILD_IDENTIFIER ?? 'local';
 
@@ -9,6 +15,11 @@ interface LayoutProps {
 }
 
 const Layout = ({ children }: LayoutProps) => {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const showUserTabBar =
+    isUserTabBarRoute(router.pathname) && session?.user?.accessLevel?.includes('USER');
+
   return (
     <div className="relative min-h-screen flex flex-col bg-background">
       {/* Gray logo watermark — decorative, behind all content */}
@@ -30,14 +41,25 @@ const Layout = ({ children }: LayoutProps) => {
       {/* All real page content sits above the watermark */}
       <div className="relative z-10 flex flex-col min-h-screen">
         <NavigationComponent />
-        <main className="flex-grow pt-16 md:pt-20">{children}</main>
-        <SiteFooter />
+        <main
+          className={`flex-grow pt-16 md:pt-20 ${
+            showUserTabBar
+              ? 'pb-[calc(5rem+env(safe-area-inset-bottom))]'
+              : ''
+          }`}
+        >
+          {children}
+        </main>
+        {!showUserTabBar ? <SiteFooter /> : null}
+        <UserTabBar />
 
-        <div className="fixed bottom-2 left-2 hidden sm:block z-50">
-          <div className="text-xs text-on-surface-variant bg-surface-container px-2 py-1 rounded-md border border-white/5">
-            Build: {BUILD_IDENTIFIER}
+        {!showUserTabBar ? (
+          <div className="fixed bottom-2 left-2 hidden sm:block z-50">
+            <div className="text-xs text-on-surface-variant bg-surface-container px-2 py-1 rounded-md border border-white/5">
+              Build: {BUILD_IDENTIFIER}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
     </div>
   );
