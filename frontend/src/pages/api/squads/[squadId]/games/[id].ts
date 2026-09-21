@@ -2,6 +2,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
+import { findScorelessPlayersInGroups } from '@/lib/ranking/players';
+import { isValidationError } from '@/lib/api/validationError';
 
 export default async function handler(
   req: NextApiRequest,
@@ -32,6 +34,15 @@ export default async function handler(
   } else if (req.method === 'PUT') {
     try {
       const { groups, scores, status } = req.body;
+      if (groups) {
+        const scoreless = await findScorelessPlayersInGroups(squadId, groups);
+        if (scoreless.length > 0) {
+          return res.status(400).json({
+            message: `These players need a rank score before a game day can be created: ${scoreless.map((p) => p.name).join(', ')}`,
+            scorelessPlayers: scoreless,
+          });
+        }
+      }
       const game = await prisma.game.update({
         where: { id },
         data: {
@@ -42,6 +53,11 @@ export default async function handler(
       });
       res.status(200).json(game);
     } catch (error) {
+      // A player id that is not in this squad is a bad request, not a server fault.
+      if (isValidationError(error)) {
+        return res.status(400).json({ message: error.message });
+      }
+      console.error('Update Game API Error:', error);
       res.status(500).json({ message: 'Failed to update game' });
     }
   } else if (req.method === 'DELETE') {

@@ -1,8 +1,8 @@
-import { Player } from '@/types/player';
+import type { GamePlannerPlayer } from '@/hooks/useGamePlayers';
 import { capitalizeFirstLetter } from '@/utils/string';
 
 interface PlayerCardProps {
-  player: Player;
+  player: GamePlannerPlayer;
   isSelected: boolean;
   onToggle: (id: number) => void;
 }
@@ -24,8 +24,13 @@ export const PlayerCard = ({ player, isSelected, onToggle }: PlayerCardProps) =>
           {capitalizeFirstLetter(player.name)}
         </div>
         <div className="text-sm text-on-surface-variant mt-0.5">
-          Rank:{' '}
-          <span className="font-numeric tabular-nums">#{player.playerRank}</span>
+          {player.hasScore ? (
+            <>
+              Rank: <span className="font-numeric tabular-nums">#{player.playerRank}</span>
+            </>
+          ) : (
+            <span className="text-warning font-medium">Needs a score</span>
+          )}
         </div>
       </div>
       <div

@@ -43,6 +43,8 @@ export default async function handler(
         scheduleStartDate: schedule?.startDate ?? null,
         scheduleEndDate: schedule?.endDate ?? null,
         scheduleSkipDates: schedule?.skipDates ?? [],
+        openSlotAbsenteeGraceDays: squad.openSlotAbsenteeGraceDays,
+        openSlotVisibilityGameDays: squad.openSlotVisibilityGameDays,
       });
     } catch (error) {
       console.error('Get Squad API Error:', error);

@@ -1,6 +1,7 @@
 import { getPlayers } from '@/lib/ranking/players';
 import { getAllEncounters } from '@/lib/ranking/encounters';
 import { buildSquadRankingsResponse } from '@/lib/ranking/rankingResponse';
+import { filterBoardVisible } from '@/lib/ranking/boardVisibility';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { parseSquadId } from '@/lib/api/squadParam';
 
@@ -18,7 +19,9 @@ export default async function handler(
   if (squadId === null) return;
 
   try {
-    const [players, encounters] = await Promise.all([getPlayers(squadId), getAllEncounters(squadId)]);
+    const [allPlayers, encounters] = await Promise.all([getPlayers(squadId), getAllEncounters(squadId)]);
+    // OPEN_SLOT_PLAYERS_PLAN.md: keep sporadic open-slot activity off the public board/stats.
+    const players = await filterBoardVisible(squadId, allPlayers);
     res.status(200).json(buildSquadRankingsResponse(players, encounters));
   } catch (error) {
     console.error('Rankings API Error:', error);

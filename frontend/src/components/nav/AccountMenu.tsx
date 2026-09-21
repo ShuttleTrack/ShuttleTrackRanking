@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { Menu, Transition } from '@headlessui/react';
 import {
   ArrowRightOnRectangleIcon,
+  ArrowsRightLeftIcon,
   PencilSquareIcon,
   Squares2X2Icon,
   UserCircleIcon,
@@ -108,6 +109,14 @@ export function AccountMenu() {
                       <Link href={`/s/${squad?.slug}/user/matches`} className={accountMenuRowClass(active)}>
                         <PencilSquareIcon className="h-5 w-5 shrink-0 text-on-surface-variant" aria-hidden />
                         Matches
+                      </Link>
+                    )}
+                  </Menu.Item>
+                  <Menu.Item>
+                    {({ active }) => (
+                      <Link href={`/s/${squad?.slug}/user/replacement`} className={accountMenuRowClass(active)}>
+                        <ArrowsRightLeftIcon className="h-5 w-5 shrink-0 text-on-surface-variant" aria-hidden />
+                        Replacement
                       </Link>
                     )}
                   </Menu.Item>

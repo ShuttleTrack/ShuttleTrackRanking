@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { PlayerType } from '@prisma/client';
 import { getPlayers, addPlayer } from '@/lib/ranking/players';
 import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
@@ -15,14 +16,32 @@ export default async function handler(
     const session = await requireSquadAdmin(req, res, squadId);
     if (!session) return;
 
-    const { name, email, initialScore } = req.body;
+    const { name, email, initialScore, playerType } = req.body;
 
-    if (!name || !email || initialScore === undefined || initialScore <= 0) {
-      return res.status(400).json({ message: 'Name, email and initial score are required' });
+    if (playerType !== undefined && playerType !== PlayerType.FULLTIME && playerType !== PlayerType.OPEN_SLOT) {
+      return res.status(400).json({ message: `Invalid playerType: ${playerType}` });
+    }
+    const resolvedType: PlayerType = playerType ?? PlayerType.FULLTIME;
+
+    if (!name || !email) {
+      return res.status(400).json({ message: 'Name and email are required' });
+    }
+    // FULLTIME still always needs a score up front (unchanged); OPEN_SLOT may be added without
+    // one (OPEN_SLOT_PLAYERS_PLAN.md) and gets one later via the game-planner's bulk-assign step.
+    if (resolvedType === PlayerType.FULLTIME && (initialScore === undefined || Number(initialScore) <= 0)) {
+      return res.status(400).json({ message: 'Initial score is required for a fulltime player' });
+    }
+    if (initialScore !== undefined && Number(initialScore) <= 0) {
+      return res.status(400).json({ message: 'Initial score must be greater than 0' });
     }
 
     try {
-      const player = await addPlayer(squadId, { name, email, initialScore: Number(initialScore) });
+      const player = await addPlayer(squadId, {
+        name,
+        email,
+        playerType: resolvedType,
+        initialScore: initialScore !== undefined ? Number(initialScore) : undefined,
+      });
       res.status(201).json(player);
     } catch (error) {
       console.error('Create Player API Error:', error);

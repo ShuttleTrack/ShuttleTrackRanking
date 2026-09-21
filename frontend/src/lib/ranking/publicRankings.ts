@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { getAllEncounters } from '@/lib/ranking/encounters';
 import { getSecurePlayers } from '@/lib/ranking/players';
+import { filterBoardVisible } from '@/lib/ranking/boardVisibility';
 import type { PublicPlayerRankingData, PublicRankingsResponse } from '@/types/rankings';
 import { computeCombinedFormStats, type RawEncounter } from '@/utils/playerForm';
 
@@ -87,11 +88,14 @@ export async function getPublicRankings(): Promise<PublicRankingsResponse> {
   const encounters: RawEncounter[] = [];
 
   for (const squad of squads) {
-    const [players, squadEncounters] = await Promise.all([
+    const [allPlayers, squadEncounters] = await Promise.all([
       getSecurePlayers(squad.id),
       getAllEncounters(squad.id),
     ]);
     encounters.push(...squadEncounters);
+    // OPEN_SLOT_PLAYERS_PLAN.md: same board-visibility rule as the squad-level leaderboard,
+    // applied here too since this aggregate has the identical open-slot clutter concern.
+    const players = await filterBoardVisible(squad.id, allPlayers);
 
     for (const player of players) {
       if (player.playerRank === null || player.playerRank <= 0 || player.rankScore === null) {
