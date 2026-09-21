@@ -1,14 +1,18 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
-import type { PlayerRankingData } from '@/types/rankings';
+import type { PlayerRankingData, PublicPlayerRankingData } from '@/types/rankings';
 import { capitalizeFirstLetter } from '@/utils/string';
 import FormBars from './FormBars';
-import { LEADERBOARD_DESKTOP_GRID } from './leaderboardGrid';
+import {
+  LEADERBOARD_DESKTOP_GRID,
+  PUBLIC_LEADERBOARD_DESKTOP_GRID,
+} from './leaderboardGrid';
 import RankBadge, { type RowVariant } from './RankBadge';
 import LastGameDayNet from './LastGameDayNet';
 import TrendIndicator from './TrendIndicator';
 import PeakTenure from './PeakTenure';
-import { useSquad } from '@/contexts/SquadContext';
+import { useOptionalSquad } from '@/contexts/SquadContext';
+import type { LeaderboardVariant } from './Leaderboard';
 
 function variantForRank(rank: number): RowVariant {
   if (rank === 1) return 'gold';
@@ -80,28 +84,154 @@ const labelClass: Record<RowVariant, string> = {
   default: 'text-on-surface-variant opacity-60',
 };
 
-interface LeaderboardRowProps {
-  player: PlayerRankingData;
+function isPublicPlayer(
+  player: PlayerRankingData | PublicPlayerRankingData
+): player is PublicPlayerRankingData {
+  return 'squads' in player;
 }
 
-const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
-  const { slug } = useSquad();
-  const variant = variantForRank(player.playerRank);
-  const { style, className: rowClass } = rowStyles[variant];
+interface LeaderboardRowProps {
+  player: PlayerRankingData | PublicPlayerRankingData;
+  variant?: LeaderboardVariant;
+}
+
+const LeaderboardRow = ({ player, variant = 'squad' }: LeaderboardRowProps) => {
+  const squad = useOptionalSquad();
+  const rowVariant = variantForRank(player.playerRank);
+  const { style, className: rowClass } = rowStyles[rowVariant];
+  const squadPlayer = variant === 'squad' && !isPublicPlayer(player) ? player : null;
   const hoverBorder =
-    player.rankChange.direction === 'down' && variant === 'default'
+    squadPlayer?.rankChange.direction === 'down' && rowVariant === 'default'
       ? 'hover:border-red-500/20'
       : '';
 
-  const encountersHref = `/s/${slug}/player/${player.id}/encounters`;
-  const peakTenure = (
+  const isPublicBoard = variant === 'public';
+  const slug = isPublicPlayer(player) ? player.squadSlug : squad?.slug;
+  const encountersHref = slug ? `/s/${slug}/player/${player.id}/encounters` : '#';
+  const nameLinkClass = isPublicBoard ? '' : 'group-hover:underline';
+
+  const peakTenure = squadPlayer ? (
     <PeakTenure
-      variant={variant}
-      playerRank={player.playerRank}
-      highestRank={player.highestRank}
-      timeInHighestRank={player.timeInHighestRank}
+      variant={rowVariant}
+      playerRank={squadPlayer.playerRank}
+      highestRank={squadPlayer.highestRank}
+      timeInHighestRank={squadPlayer.timeInHighestRank}
     />
+  ) : null;
+
+  const desktopGrid =
+    variant === 'public' ? PUBLIC_LEADERBOARD_DESKTOP_GRID : LEADERBOARD_DESKTOP_GRID;
+
+  const rowContent = (
+    <>
+      {(rowVariant === 'gold' || rowVariant === 'dark') && (
+        <div className="absolute right-0 top-0 h-full w-1/3 form-strip opacity-10 pointer-events-none" />
+      )}
+
+      <div className={`${desktopGrid} relative z-10`}>
+        <div>
+          <RankBadge rank={player.playerRank} variant={rowVariant} />
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`min-w-0 truncate font-headline font-bold leading-tight ${nameLinkClass} ${nameClass[rowVariant]}`}
+          >
+            {capitalizeFirstLetter(player.name)}
+          </span>
+          {peakTenure}
+        </div>
+        <div className="flex justify-center">
+          <FormBars results={player.lastFive} variant={rowVariant} />
+        </div>
+        <div className="text-center">
+          <span className={`font-numeric tabular-nums text-lg ${metricClass[rowVariant]}`}>
+            {player.winRate.toFixed(1)}%
+          </span>
+        </div>
+        <div className="text-center">
+          <p className={`font-numeric tabular-nums text-lg ${nameClass[rowVariant]}`}>
+            {player.rankScore.toFixed(1)}
+          </p>
+        </div>
+        {variant === 'squad' && squadPlayer && (
+          <>
+            <div className="flex justify-center">
+              <LastGameDayNet value={squadPlayer.lastGameDayNet} variant={rowVariant} />
+            </div>
+            <div className="flex justify-center">
+              <TrendIndicator rankChange={squadPlayer.rankChange} variant={rowVariant} />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="md:hidden relative z-10 space-y-1">
+        <div className="flex items-center gap-2">
+          <div className="flex-shrink-0">
+            <RankBadge rank={player.playerRank} variant={rowVariant} />
+          </div>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span
+              className={`min-w-0 flex-1 truncate font-headline text-base font-bold leading-none ${nameLinkClass} ${nameClass[rowVariant]}`}
+            >
+              {capitalizeFirstLetter(player.name)}
+            </span>
+            {peakTenure}
+            {variant === 'squad' && squadPlayer && (
+              <div className="flex shrink-0">
+                <TrendIndicator rankChange={squadPlayer.rankChange} variant={rowVariant} />
+              </div>
+            )}
+          </div>
+        </div>
+        <div
+          className={`flex items-center justify-between gap-2 ${variant === 'public' ? 'pr-1' : ''}`}
+        >
+          <div className="flex flex-col gap-0.5">
+            <p className={`text-[10px] uppercase tracking-widest ${labelClass[rowVariant]}`}>
+              Last 5
+            </p>
+            <FormBars results={player.lastFive} variant={rowVariant} align="start" />
+          </div>
+          <div className="flex flex-col gap-0.5 text-right">
+            <p className={`text-[10px] uppercase tracking-widest ${labelClass[rowVariant]}`}>
+              Win rate
+            </p>
+            <span className={`font-numeric tabular-nums text-sm ${metricClass[rowVariant]}`}>
+              {player.winRate.toFixed(1)}%
+            </span>
+          </div>
+          {variant === 'squad' && squadPlayer && (
+            <div className="flex flex-col gap-0.5 text-right items-end">
+              <p className={`text-[10px] uppercase tracking-widest ${labelClass[rowVariant]}`}>
+                Last day
+              </p>
+              <LastGameDayNet value={squadPlayer.lastGameDayNet} variant={rowVariant} />
+            </div>
+          )}
+          <div className="flex flex-col gap-0.5 text-right items-end">
+            <p className={`text-[10px] uppercase tracking-widest ${labelClass[rowVariant]}`}>
+              Points
+            </p>
+            <span className={`font-numeric tabular-nums text-sm ${nameClass[rowVariant]}`}>
+              {player.rankScore.toFixed(1)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </>
   );
+
+  if (isPublicBoard || !slug) {
+    return (
+      <div
+        className={`relative overflow-hidden rounded-xl px-3 sm:px-8 py-2 md:py-4 ${rowClass}`}
+        style={style}
+      >
+        {rowContent}
+      </div>
+    );
+  }
 
   return (
     <Link
@@ -109,97 +239,7 @@ const LeaderboardRow = ({ player }: LeaderboardRowProps) => {
       className={`relative overflow-hidden group block cursor-pointer rounded-xl px-3 sm:px-8 py-2 md:py-4 ${rowClass} ${hoverBorder}`}
       style={style}
     >
-      {(variant === 'gold' || variant === 'dark') && (
-        <div className="absolute right-0 top-0 h-full w-1/3 form-strip opacity-10 pointer-events-none" />
-      )}
-
-      {/* Desktop grid */}
-      <div className={`${LEADERBOARD_DESKTOP_GRID} relative z-10`}>
-        <div>
-          <RankBadge rank={player.playerRank} variant={variant} />
-        </div>
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={`min-w-0 truncate font-headline font-bold leading-tight group-hover:underline ${nameClass[variant]}`}
-          >
-            {capitalizeFirstLetter(player.name)}
-          </span>
-          {peakTenure}
-        </div>
-        <div className="flex justify-center">
-          <FormBars results={player.lastFive} variant={variant} />
-        </div>
-        <div className="text-center">
-          <span className={`font-numeric tabular-nums text-lg ${metricClass[variant]}`}>
-            {player.winRate.toFixed(1)}%
-          </span>
-        </div>
-        <div className="text-center">
-          <p className={`font-numeric tabular-nums text-lg ${nameClass[variant]}`}>
-            {player.rankScore.toFixed(1)}
-          </p>
-        </div>
-        <div className="flex justify-center">
-          <LastGameDayNet value={player.lastGameDayNet} variant={variant} />
-        </div>
-        <div className="flex justify-center">
-          <TrendIndicator rankChange={player.rankChange} variant={variant} />
-        </div>
-      </div>
-
-      {/* Mobile compact two-row layout */}
-      <div className="md:hidden relative z-10 space-y-1">
-        {/* Row 1: rank | name+chip | trend */}
-        <div className="flex items-center gap-2">
-          <div className="flex-shrink-0">
-            <RankBadge rank={player.playerRank} variant={variant} />
-          </div>
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <span
-              className={`min-w-0 flex-1 truncate font-headline text-base font-bold leading-none group-hover:underline ${nameClass[variant]}`}
-            >
-              {capitalizeFirstLetter(player.name)}
-            </span>
-            {peakTenure}
-          </div>
-          <div className="flex-shrink-0">
-            <TrendIndicator rankChange={player.rankChange} variant={variant} />
-          </div>
-        </div>
-        {/* Row 2: last 5 | win rate | last day | points */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-col gap-0.5">
-            <p
-              className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}
-            >
-              Last 5
-            </p>
-            <FormBars results={player.lastFive} variant={variant} align="start" />
-          </div>
-          <div className="flex flex-col gap-0.5 text-right">
-            <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
-              Win rate
-            </p>
-            <span className={`font-numeric tabular-nums text-sm ${metricClass[variant]}`}>
-              {player.winRate.toFixed(1)}%
-            </span>
-          </div>
-          <div className="flex flex-col gap-0.5 text-right items-end">
-            <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
-              Last day
-            </p>
-            <LastGameDayNet value={player.lastGameDayNet} variant={variant} />
-          </div>
-          <div className="flex flex-col gap-0.5 text-right items-end">
-            <p className={`text-[10px] uppercase tracking-widest ${labelClass[variant]}`}>
-              Points
-            </p>
-            <span className={`font-numeric tabular-nums text-sm ${nameClass[variant]}`}>
-              {player.rankScore.toFixed(1)}
-            </span>
-          </div>
-        </div>
-      </div>
+      {rowContent}
     </Link>
   );
 };

@@ -1,18 +1,41 @@
-import { useState } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import type { GetServerSideProps } from 'next';
+import Link from 'next/link';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 import useSWR from 'swr';
 import type { Squad } from '@prisma/client';
 import { PageLoader } from '@/components/common/GameLoader';
 import { PlusIcon } from '@heroicons/react/24/outline';
+import PageHeader from '@/components/leaderboard/PageHeader';
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-// Platform-superadmin only: create squads, manage each squad's admins, and edit
-// enabled/maxPlayers (visible to a squad's own admins on their dashboard, but only editable
-// here). Not squad-scoped, so no SquadProvider - see lib/auth.ts's requireSuperAdmin for the
-// equivalent API-side gate.
+const cardClass = 'rounded-xl bg-surface-container/90 border border-gray-600 p-4 sm:p-6';
+const inputFieldClass =
+  'w-full rounded-xl border border-gray-600 bg-surface-container px-4 py-3 text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40';
+const primaryBtn =
+  'inline-flex min-h-[44px] items-center justify-center rounded-xl bg-primary px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
+const outlineBtn =
+  'inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/10 bg-surface-container-high/50 px-4 py-2 font-medium text-on-surface transition-colors hover:border-primary/40 disabled:opacity-50';
+const modalPanelClass =
+  'relative w-full max-w-md rounded-xl border border-white/10 bg-surface-container-high p-6 shadow-xl';
+
+function ModalShell({ children, onClose }: { children: ReactNode; onClose?: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div className={modalPanelClass} onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 const PlatformSquadsPage = () => {
   const { data: squads, isLoading, mutate } = useSWR<Squad[]>('/api/squads', fetcher);
   const [showCreate, setShowCreate] = useState(false);
@@ -27,7 +50,7 @@ const PlatformSquadsPage = () => {
     return <PageLoader variant="screen" label="Loading squads" />;
   }
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
@@ -53,96 +76,96 @@ const PlatformSquadsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-base-100">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-bold">Squads</h1>
-            <p className="text-base-content/60">Create squads and manage their admins</p>
-          </div>
-          <button className="btn btn-primary w-full sm:w-auto" onClick={() => setShowCreate(true)}>
-            <PlusIcon className="h-5 w-5 mr-2" />
+    <div className="min-h-screen pb-12">
+      <PageHeader
+        title="Squads"
+        subtitle="Create squads and manage their admins."
+        className="!mb-6"
+      />
+      <div className="max-w-7xl mx-auto px-4 sm:px-8">
+        <div className="flex flex-col sm:flex-row justify-end mb-6">
+          <button type="button" className={primaryBtn} onClick={() => setShowCreate(true)}>
+            <PlusIcon className="h-5 w-5 mr-2" aria-hidden />
             New Squad
           </button>
         </div>
 
-        <div className="bg-base-100 rounded-lg shadow-lg border border-base-200">
-          <table className="table w-full">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Slug</th>
-                <th>Status</th>
-                <th>Max players</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(squads ?? []).map((squad) => (
-                <tr key={squad.id} className="hover">
-                  <td className="font-medium">{squad.name}</td>
-                  <td>{squad.slug}</td>
-                  <td>
-                    <span className={`badge ${squad.enabled ? 'badge-success' : 'badge-error'}`}>
+        <ul className="space-y-3">
+          {(squads ?? []).map((squad) => (
+            <li key={squad.id} className={cardClass}>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <p className="font-headline text-lg font-semibold text-on-surface truncate">
+                    {squad.name}
+                  </p>
+                  <p className="font-label text-xs uppercase tracking-wider text-on-surface-variant">
+                    Slug: {squad.slug}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span
+                      className={
+                        squad.enabled
+                          ? 'inline-flex rounded-lg bg-primary/15 px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-widest text-primary'
+                          : 'inline-flex rounded-lg border border-white/10 px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant'
+                      }
+                    >
                       {squad.enabled ? 'Enabled' : 'Disabled'}
                     </span>
-                  </td>
-                  <td>{squad.maxPlayers ?? 'Unlimited'}</td>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <a href={`/s/${squad.slug}`} className="btn btn-ghost btn-sm">
-                        View
-                      </a>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setEditingSquad(squad)}>
-                        Edit
-                      </button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setManagingSquad(squad)}>
-                        Manage admins
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    <span className="text-sm text-on-surface-variant">
+                      Max players: {squad.maxPlayers ?? 'Unlimited'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link href={`/s/${squad.slug}`} className={outlineBtn}>
+                    View
+                  </Link>
+                  <button type="button" className={outlineBtn} onClick={() => setEditingSquad(squad)}>
+                    Edit
+                  </button>
+                  <button type="button" className={outlineBtn} onClick={() => setManagingSquad(squad)}>
+                    Manage admins
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
 
         {showCreate && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-            <div className="relative rounded-xl bg-base-100 border border-base-300 p-6 w-full max-w-md shadow-xl">
-              <h3 className="text-lg font-semibold mb-4">New Squad</h3>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Name</label>
-                  <input
-                    className="input input-bordered w-full"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Slug</label>
-                  <input
-                    className="input input-bordered w-full"
-                    value={slug}
-                    onChange={(e) => setSlug(e.target.value)}
-                    placeholder="e.g. main"
-                    required
-                  />
-                </div>
-                {error && <p className="text-sm text-error">{error}</p>}
-                <div className="flex justify-end gap-2">
-                  <button type="button" className="btn btn-ghost" onClick={() => setShowCreate(false)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-                    {isSubmitting ? 'Creating…' : 'Create'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+          <ModalShell onClose={() => setShowCreate(false)}>
+            <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">New Squad</h3>
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-on-surface mb-1">Name</label>
+                <input
+                  className={inputFieldClass}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-on-surface mb-1">Slug</label>
+                <input
+                  className={inputFieldClass}
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  placeholder="e.g. main"
+                  required
+                />
+              </div>
+              {error && <p className="text-sm text-red-400">{error}</p>}
+              <div className="flex justify-end gap-2">
+                <button type="button" className={outlineBtn} onClick={() => setShowCreate(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className={primaryBtn} disabled={isSubmitting}>
+                  {isSubmitting ? 'Creating…' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </ModalShell>
         )}
 
         {managingSquad && (
@@ -174,7 +197,7 @@ const SquadAdminsModal = ({ squad, onClose }: { squad: Squad; onClose: () => voi
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const addAdmin = async (e: React.FormEvent) => {
+  const addAdmin = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
@@ -204,41 +227,45 @@ const SquadAdminsModal = ({ squad, onClose }: { squad: Squad; onClose: () => voi
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="relative rounded-xl bg-base-100 border border-base-300 p-6 w-full max-w-md shadow-xl">
-        <h3 className="text-lg font-semibold mb-4">{squad.name} admins</h3>
-        <ul className="space-y-2 mb-4">
-          {(admins ?? []).map((admin) => (
-            <li key={admin.id} className="flex items-center justify-between gap-2">
-              <span className="text-sm">{admin.email}</span>
-              <button className="btn btn-ghost btn-xs text-error" onClick={() => removeAdmin(admin.email)}>
-                Remove
-              </button>
-            </li>
-          ))}
-          {admins?.length === 0 && <li className="text-sm text-base-content/60">No admins yet.</li>}
-        </ul>
-        <form onSubmit={addAdmin} className="flex gap-2">
-          <input
-            type="email"
-            className="input input-bordered input-sm flex-1"
-            placeholder="email@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <button type="submit" className="btn btn-primary btn-sm">
-            Add
-          </button>
-        </form>
-        {error && <p className="text-sm text-error mt-2">{error}</p>}
-        <div className="flex justify-end mt-4">
-          <button className="btn btn-ghost" onClick={onClose}>
-            Close
-          </button>
-        </div>
+    <ModalShell onClose={onClose}>
+      <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">{squad.name} admins</h3>
+      <ul className="space-y-2 mb-4">
+        {(admins ?? []).map((admin) => (
+          <li key={admin.id} className="flex items-center justify-between gap-2">
+            <span className="text-sm text-on-surface truncate">{admin.email}</span>
+            <button
+              type="button"
+              className="text-sm font-medium text-red-400 hover:text-red-300 shrink-0"
+              onClick={() => removeAdmin(admin.email)}
+            >
+              Remove
+            </button>
+          </li>
+        ))}
+        {admins?.length === 0 && (
+          <li className="text-sm text-on-surface-variant">No admins yet.</li>
+        )}
+      </ul>
+      <form onSubmit={addAdmin} className="flex flex-col sm:flex-row gap-2">
+        <input
+          type="email"
+          className={inputFieldClass}
+          placeholder="email@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+        <button type="submit" className={primaryBtn}>
+          Add
+        </button>
+      </form>
+      {error && <p className="text-sm text-red-400 mt-2">{error}</p>}
+      <div className="flex justify-end mt-4">
+        <button type="button" className={outlineBtn} onClick={onClose}>
+          Close
+        </button>
       </div>
-    </div>
+    </ModalShell>
   );
 };
 
@@ -256,7 +283,7 @@ const SquadSettingsModal = ({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
@@ -282,42 +309,42 @@ const SquadSettingsModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-      <div className="relative rounded-xl bg-base-100 border border-base-300 p-6 w-full max-w-md shadow-xl">
-        <h3 className="text-lg font-semibold mb-4">{squad.name} settings</h3>
-        <form onSubmit={handleSave} className="space-y-4">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              className="toggle toggle-primary"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />
-            <span className="text-sm font-medium">{enabled ? 'Enabled' : 'Disabled'}</span>
-          </label>
-          <div>
-            <label className="block text-sm font-medium mb-1">Max players</label>
-            <input
-              type="number"
-              min={1}
-              className="input input-bordered w-full"
-              value={maxPlayers}
-              onChange={(e) => setMaxPlayers(e.target.value)}
-              placeholder="Leave blank for unlimited"
-            />
-          </div>
-          {error && <p className="text-sm text-error">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isSubmitting}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <ModalShell onClose={onClose}>
+      <h3 className="font-headline text-lg font-semibold text-on-surface mb-4">{squad.name} settings</h3>
+      <form onSubmit={handleSave} className="space-y-4">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            className="toggle toggle-primary"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+          />
+          <span className="text-sm font-medium text-on-surface">
+            {enabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </label>
+        <div>
+          <label className="block text-sm font-medium text-on-surface mb-1">Max players</label>
+          <input
+            type="number"
+            min={1}
+            className={inputFieldClass}
+            value={maxPlayers}
+            onChange={(e) => setMaxPlayers(e.target.value)}
+            placeholder="Leave blank for unlimited"
+          />
+        </div>
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" className={outlineBtn} onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </button>
+          <button type="submit" className={primaryBtn} disabled={isSubmitting}>
+            {isSubmitting ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
   );
 };
 

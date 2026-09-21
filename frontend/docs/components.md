@@ -18,12 +18,13 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **Behavior:**
 
-- Encounters → searchable player list (color dot + `#` rank) → `/player/{id}/encounters`
-- History → Ranking History, Encounter History (card rows with short hints)
-- Live → game viewer links with progress (hidden when no live games)
-- Session: avatar menu → Profile, Matches (USER), Admin Dashboard (ADMIN), Sign out
+- Squad context from `SquadContext` when on `/s/[squad]/**`; rankings/history/encounters links are squad-scoped. On non-squad pages (e.g. `/`, `/squads`), squad-only nav tiles are hidden.
+- Encounters → searchable player list (color dot + `#` rank) → `/s/{slug}/player/{id}/encounters`
+- History → Ranking History, Encounter History (card rows with short hints) under `/s/{slug}/`
+- Live → `/s/{slug}/game-viewer` with progress (hidden when no live games)
+- Session: avatar menu → identity header, Profile, Matches (when player in squad), Admin Dashboard (squad admin), **Squads** switcher rows (`SquadSwitcherLinks`), Sign out
 
-**Visual:** active desktop segment uses `bg-primary/15` orange chip (`aria-current="page"`); dark dropdown surfaces (`surface-container`); kinetic gradient hairline on the nav band. **Avatar menu:** `w-56`, `mt-3` below the header; icon + label rows (`min-h-[44px]`); `ring-primary/40` on photo; divider before **Sign Out** (`text-red-400`).
+**Visual:** active desktop segment uses `bg-primary/15` orange chip (`aria-current="page"`); dark dropdown surfaces (`surface-container`); kinetic gradient hairline on the nav band. **Avatar menu:** `w-72`, identity block (avatar, name, email), icon + label rows (`min-h-[44px]`); squad switcher monogram rows + check on current; `ring-primary/40` on photo; dividers; **Sign Out** (`text-red-400`). Mobile overlay uses the same identity + switcher pattern.
 
 ---
 
@@ -43,9 +44,57 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **File:** `src/components/leaderboard/PageHeader.tsx`
 
-**Props:** `title`, `subtitle` (optional)
+**Props:** `title`, `subtitle` (optional), `className` (optional — merged onto the section for spacing overrides)
 
-**Default copy:** "Leaderboard" as a **`font-headline`** display title (`text-3xl`–`text-4xl font-extrabold`), `px-8 sm:px-16` aligns the left edge with the `RANK` column. A thin orange accent rule (`h-0.5 w-10 bg-primary`) sits below the heading. No subtitle on the homepage.
+**Default copy:** "Leaderboard" as a **`font-headline`** display title (`text-3xl`–`text-4xl font-extrabold`), `px-8 sm:px-16` aligns the left edge with the `RANK` column. A thin orange accent rule (`h-0.5 w-10 bg-primary`) sits below the heading.
+
+---
+
+### SquadBoardSelector
+
+**File:** `src/components/leaderboard/SquadBoardSelector.tsx`
+
+**Props:** `currentSlug?: string | null` — omit on `/` (Public selected); pass squad slug on `/s/{slug}`.
+
+**Purpose:** Shared selector band (see `design.md`). Split **Squad** cap + Listbox: **Public** + the user’s squads from `useMySquads`. Navigates to `/` or `/s/{slug}`. Renders nothing unless signed in with at least one squad. Uses `useOptionalSquad()` for the closed label when the page squad is not in the membership list.
+
+---
+
+### PublicRankingsCallout
+
+**File:** `src/components/leaderboard/PublicRankingsCallout.tsx`
+
+**Purpose:** On `/`, band above the public leaderboard title. While `useMySquads` is loading, renders empty `SelectorBand` chrome. Signed-in users with squads get `SquadBoardSelector`. Otherwise: `SelectorBand` with `scrim`, lock icon, and one-line caption (sign-in vs join-squad); no in-band CTA.
+
+---
+
+### Public rankings page
+
+**File:** `src/components/PublicRankingsComponent.client.tsx` — page `src/pages/index.tsx`
+
+**Composes:** `PublicRankingsCallout` → `PageHeader` ("Public Leaderboard") → `Leaderboard` with `variant="public"`. Data from `usePublicRankings` / `GET /api/rankings`.
+
+---
+
+### SquadSwitcherLinks
+
+**File:** `src/components/nav/SquadSwitcherLinks.tsx`
+
+**Props:** `squads`, `currentSlug`, `variant` (`account-menu` | `mobile`), optional `onNavigate`
+
+**Purpose:** Monogram + name rows with check on current squad; used in `AccountMenu` and `MobileScoreboardMenu`. Zero squads → link to `/squads`.
+
+**Data:** `useMySquads` → `GET /api/squads` when authenticated.
+
+---
+
+### Squad picker & platform admin
+
+**Files:** `src/pages/squads.tsx`, `src/pages/platform/squads.tsx`
+
+**`/squads`:** `PageHeader` + monogram squad rows (dark cards). Single-squad users redirect to `/s/{slug}`.
+
+**`/platform/squads`:** Superadmin only; card rows (no DaisyUI table), dark modals, status chips — same tokens as squad admin settings.
 
 ---
 
@@ -53,9 +102,9 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **File:** `src/components/leaderboard/Leaderboard.tsx`
 
-**Props:** `players: PlayerRankingData[]` (active ranks only)
+**Props:** `players`, optional `variant`: `squad` (default) | `public`
 
-**Renders:** Desktop column header row + list of `LeaderboardRow`.
+**Renders:** Desktop column header row + list of `LeaderboardRow`. **Public** variant uses a 5-column grid (no Last day / Trend); rows are not player links.
 
 ---
 
@@ -67,7 +116,7 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **Variants:** `podiumGold` | `podiumSilver` | `podiumBronze` | `podiumDark` | `default` from `playerRank`.
 
-**Behavior:** The whole row is a link to `/player/{id}/encounters`.
+**Behavior:** Squad variant: whole row links to `/s/{slug}/player/{id}/encounters`. Public variant: non-interactive `div` (no peak chip on public board).
 
 **Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name and `PeakTenure` chip inline | `TrendIndicator`; Row 2: Last 5 / Win rate / Last day / Points with `flex-col gap-0.5` captions (no divider). `LastGameDayNet` sits under the Last day caption between Win rate and Points. Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
 
@@ -125,15 +174,15 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### Rankings page shell
 
-**File:** `src/components/RankingsComponent.client.tsx`
+**File:** `src/components/RankingsComponent.client.tsx` — page `src/pages/s/[squad]/index.tsx`
 
-**Purpose:** Fetch via `useRankings`, loading/error states, compose `PageHeader` + `Leaderboard`.
+**Purpose:** Fetch via `useRankings`, loading/error states, compose `SquadBoardSelector` (`currentSlug` from `useOptionalSquad`) → `PageHeader` + `Leaderboard` (`variant="squad"` default).
 
 ---
 
 ### Player encounter history
 
-**Page:** `src/pages/player/[id]/encounters.tsx` → `PlayerEncounterCompactComponent.client.tsx`
+**Page:** `src/pages/s/[squad]/player/[id]/encounters.tsx` → `PlayerEncounterCompactComponent.client.tsx`
 
 **Purpose:** Per-player match history grouped by game day.
 
@@ -149,7 +198,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### Ranking history
 
-**Page:** `src/pages/player-ranking-history.tsx` → `RankingHistoryView.tsx`
+**Page:** `src/pages/s/[squad]/player-ranking-history.tsx` → `RankingHistoryView.tsx`
 
 **Purpose:** Player-first view of standing (rank) over time — one focus player at a time instead of an all-player line chart.
 
@@ -165,7 +214,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### Encounter history (cross-player search)
 
-**Page:** `src/pages/encounter-history.tsx` → `EncounterHistoryView.tsx`
+**Page:** `src/pages/s/[squad]/encounter-history.tsx` → `EncounterHistoryView.tsx`
 
 **Purpose:** Find matches where selected players appeared together (Team 1 Player 1 required; partner and opponents optional). Results are from Team 1 Player 1’s perspective (same as legacy Find Encounters).
 
@@ -183,7 +232,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### Admin Dashboard
 
-**Files:** `src/pages/admin/dashboard.tsx`, `src/components/dashboard/Header.tsx`
+**Files:** `src/pages/s/[squad]/admin/dashboard.tsx`, `src/components/dashboard/Header.tsx`
 
 **Purpose:** Admin home — quick links, games list, Telegram scheduler test.
 
@@ -199,7 +248,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### Game Day
 
-**Files:** `src/pages/admin/game-day.tsx`, `src/components/game-day/GroupCard.tsx`, `src/components/game-day/NavigationButtons.tsx`
+**Files:** `src/pages/s/[squad]/admin/game-day.tsx`, `src/components/game-day/GroupCard.tsx`, `src/components/game-day/NavigationButtons.tsx`
 
 **Purpose:** Review skill-tier groups after planner selection; navigate back to planner or forward to score keeper.
 
@@ -215,7 +264,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### Game Planner
 
-**Files:** `src/pages/admin/game-planner.tsx`, `src/components/game-planner/PlayerCard.tsx`, `src/components/game-planner/ActionPanel.tsx`
+**Files:** `src/pages/s/[squad]/admin/game-planner.tsx`, `src/components/game-planner/PlayerCard.tsx`, `src/components/game-planner/ActionPanel.tsx`
 
 **Purpose:** Select 4–20 players (valid group sizes), create or update a draft game, route to game-day.
 
@@ -231,7 +280,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### Score Keeper
 
-**Files:** `src/pages/admin/score-keeper.tsx`, `src/components/score-keeper/ProcessScoresModal.tsx`
+**Files:** `src/pages/s/[squad]/admin/score-keeper.tsx`, `src/components/score-keeper/ProcessScoresModal.tsx`
 
 **Purpose:** Record round-robin match scores per group; start game, submit, process rankings, or cancel.
 
@@ -249,9 +298,9 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### Game Viewer
 
-**Files:** `src/pages/game-viewer.tsx`, `src/components/matches/MatchScoreRow.tsx`
+**Files:** `src/pages/s/[squad]/game-viewer.tsx`, `src/components/matches/MatchScoreRow.tsx`
 
-**Purpose:** Public read-only live view of an in-progress game (`/game-viewer?gameId=…`). Updates via SSE (`/api/games/{id}/live`); no score entry.
+**Purpose:** Public read-only live view of an in-progress game (`/s/{slug}/game-viewer?gameId=…`). Updates via SSE; no score entry.
 
 **Layout:** Same shell as admin pages (`max-w-7xl`). **Mobile-compact:** tighter top margins, smaller title (`text-2xl` → `sm:text-4xl`), reduced progress/legend/group gaps and padding; `sm+` matches admin spacing (`pb-8`, etc.). Centered spectator header: **Game #{id}** with inline red ping-dot (`aria-label="Live"`, no text) plus orange rule (no emoji or “live updates” chip). Progress card on `surface-container` with `font-numeric` count and orange bar (4 players → 3 matches per group, 5 → 5).
 
@@ -263,9 +312,9 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### User Profile
 
-**Files:** `src/pages/user/profile.tsx`, `src/hooks/useRequireUser.ts`, `src/components/leaderboard/TrendIndicator.tsx`
+**Files:** `src/pages/s/[squad]/user/profile.tsx`, `src/hooks/useRequireUser.ts`, `src/components/leaderboard/TrendIndicator.tsx`
 
-**Purpose:** Signed-in players (`USER`) see identity and ranking snapshot at `/user/profile`.
+**Purpose:** Signed-in players see identity and ranking snapshot at `/s/{slug}/user/profile`.
 
 **Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name/email, outline sign-out; four-column stats (Rank, Change, Score, Highest).
 
@@ -275,9 +324,9 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ### User Matches
 
-**Files:** `src/pages/user/matches.tsx`, `src/hooks/useRequireUser.ts`, `src/components/matches/MatchScoreRow.tsx`, `src/components/matches/MatchResultLegend.tsx`
+**Files:** `src/pages/s/[squad]/user/matches.tsx`, `src/hooks/useRequireUser.ts`, `src/components/matches/MatchScoreRow.tsx`, `src/components/matches/MatchResultLegend.tsx`
 
-**Purpose:** Enter scores for the player’s own unplayed matches in live games (`/user/matches`).
+**Purpose:** Enter scores for the player’s own unplayed matches in live games (`/s/{slug}/user/matches`).
 
 **Layout:** **Your matches** title + orange rule; `MatchResultLegend`; `max-w-3xl` game cards (live pulse, **Game #{id}**, date). `MatchScoreRow` (`showResultChips={false}`); `interactive` only when unscored. Score modal matches Score Keeper pattern.
 

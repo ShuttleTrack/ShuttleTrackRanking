@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import Image from 'next/image';
+import { ChevronDownIcon, UserCircleIcon, PencilSquareIcon, Squares2X2Icon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 import { signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import type { Player } from '@/types/player';
@@ -9,6 +10,8 @@ import { NavPlayerSearch } from './NavPlayerSearch';
 import { LiveGameProgressCards } from './LiveGameProgressList';
 import { classNames, buildHistoryLinks } from './navUtils';
 import { useOptionalSquad } from '@/contexts/SquadContext';
+import { useMySquads } from '@/hooks/useMySquads';
+import { SquadSwitcherLinks } from './SquadSwitcherLinks';
 
 const tileClass = (active: boolean) =>
   classNames(
@@ -17,6 +20,8 @@ const tileClass = (active: boolean) =>
       ? 'border-primary/40 bg-primary/10 text-white'
       : 'border-white/10 bg-white/[0.03] text-white/90 hover:border-primary/25 hover:bg-white/[0.06]'
   );
+
+const mobileRowClass = 'block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 transition-colors hover:bg-white/5';
 
 interface MobileScoreboardMenuProps {
   players: Player[];
@@ -34,6 +39,7 @@ export function MobileScoreboardMenu({
   const router = useRouter();
   const { data: session } = useSession();
   const squad = useOptionalSquad();
+  const { squads: mySquads } = useMySquads();
   const [encountersOpen, setEncountersOpen] = useState(false);
 
   return (
@@ -68,9 +74,7 @@ export function MobileScoreboardMenu({
         </>
       )}
 
-      {/* Encounters tile — expands to reveal search. Squad-only: searching for a player's
-          encounters makes no sense without one, and NavPlayerSearch assumes a squad is in
-          context. */}
+      {/* Encounters tile */}
       {squad && (
         <div className="rounded-xl border border-white/10 overflow-hidden">
           <button
@@ -93,7 +97,6 @@ export function MobileScoreboardMenu({
               aria-hidden
             />
           </button>
-
           {encountersOpen && (
             <div className="px-3 py-3 bg-white/[0.02]">
               <NavPlayerSearch
@@ -110,7 +113,7 @@ export function MobileScoreboardMenu({
         </div>
       )}
 
-      {/* Live games (only when multiple — header chip handles single) */}
+      {/* Live games (only when multiple) */}
       {liveGames.length > 1 ? (
         <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3">
           <p className="font-label text-xs uppercase tracking-wider text-red-400 mb-2">
@@ -120,60 +123,86 @@ export function MobileScoreboardMenu({
         </div>
       ) : null}
 
-      {/* Auth */}
+      {/* Auth block */}
       {!session ? (
         <Link href="/login" className={tileClass(false)} onClick={onClose}>
           Sign In
         </Link>
       ) : (
         <div className="border-t border-white/10 pt-4 space-y-1">
-          <p className="px-1 py-1 text-xs text-on-surface-variant truncate font-label uppercase tracking-wide">
-            {session.user?.name}
-          </p>
+          {/* Identity header */}
+          <div className="flex items-center gap-3 px-3 py-2 mb-1">
+            {session.user?.image ? (
+              <Image
+                src={session.user.image}
+                alt=""
+                width={36}
+                height={36}
+                className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-primary/30"
+              />
+            ) : (
+              <UserCircleIcon className="h-9 w-9 shrink-0 text-white/60 ring-1 ring-primary/30 rounded-full" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-headline text-base font-semibold text-on-surface leading-tight">
+                {session.user?.name ?? 'Account'}
+              </p>
+              <p className="truncate text-xs text-on-surface-variant leading-tight mt-0.5">
+                {session.user?.email}
+              </p>
+            </div>
+          </div>
+
+          {/* Squad-scoped links */}
           {squad?.isPlayerHere && (
             <>
-              <Link
-                href={`/s/${squad.slug}/user/profile`}
-                className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
-                onClick={onClose}
-              >
-                Profile
+              <Link href={`/s/${squad.slug}/user/profile`} className={mobileRowClass} onClick={onClose}>
+                <span className="flex items-center gap-3">
+                  <UserCircleIcon className="h-5 w-5 text-on-surface-variant" aria-hidden />
+                  Profile
+                </span>
               </Link>
-              <Link
-                href={`/s/${squad.slug}/user/matches`}
-                className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
-                onClick={onClose}
-              >
-                Matches
+              <Link href={`/s/${squad.slug}/user/matches`} className={mobileRowClass} onClick={onClose}>
+                <span className="flex items-center gap-3">
+                  <PencilSquareIcon className="h-5 w-5 text-on-surface-variant" aria-hidden />
+                  Matches
+                </span>
               </Link>
             </>
           )}
           {squad?.isSquadAdmin && (
-            <Link
-              href={`/s/${squad.slug}/admin/dashboard`}
-              className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
-              onClick={onClose}
-            >
-              Admin Dashboard
+            <Link href={`/s/${squad.slug}/admin/dashboard`} className={mobileRowClass} onClick={onClose}>
+              <span className="flex items-center gap-3">
+                <Squares2X2Icon className="h-5 w-5 text-on-surface-variant" aria-hidden />
+                Admin Dashboard
+              </span>
             </Link>
           )}
-          <Link
-            href="/"
-            className="block px-3 py-2.5 rounded-lg font-headline text-base text-white/90 hover:bg-white/5"
-            onClick={onClose}
-          >
-            Switch Squad
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              signOut();
-              onClose();
-            }}
-            className="block w-full text-left px-3 py-2.5 rounded-lg font-headline text-base text-red-400 hover:bg-red-950/20"
-          >
-            Sign Out
-          </button>
+
+          {/* Squad switcher */}
+          <div className="pt-1 border-t border-white/10">
+            <SquadSwitcherLinks
+              squads={mySquads}
+              currentSlug={squad?.slug}
+              variant="mobile"
+              onNavigate={onClose}
+            />
+          </div>
+
+          {/* Sign out */}
+          <div className="pt-1 border-t border-white/10">
+            <button
+              type="button"
+              onClick={() => {
+                signOut();
+                onClose();
+              }}
+              className="flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-lg font-headline text-base text-red-400 hover:bg-red-950/20"
+            >
+              <ArrowRightOnRectangleIcon className="h-5 w-5 shrink-0" aria-hidden />
+              Sign Out
+            </button>
+          </div>
         </div>
       )}
     </div>

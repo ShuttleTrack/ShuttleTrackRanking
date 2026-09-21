@@ -27,6 +27,28 @@ export interface RankingsResponse {
   players: PlayerRankingData[];
 }
 
+export interface SquadChip {
+  slug: string;
+  name: string;
+}
+
+export interface PublicPlayerRankingData {
+  id: number;
+  name: string;
+  playerRank: number;
+  rankScore: number;
+  squadSlug: string;
+  squadName: string;
+  squads: SquadChip[];
+  lastFive: ('W' | 'L')[];
+  winRate: number;
+}
+
+export interface PublicRankingsResponse {
+  stats: RankingStats;
+  players: PublicPlayerRankingData[];
+}
+
 export interface RankingHistoryData {
   date: string;
   [playerName: string]: string | number | null;

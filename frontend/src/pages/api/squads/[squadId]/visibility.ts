@@ -4,8 +4,8 @@ import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
 
 // Editable by the squad's own admins (not superadmin-only, unlike enabled/maxPlayers on
-// /api/squads/[squadId]) - see the isPublic comment in schema.prisma. No behavioral difference
-// yet; reserved for a future public squad directory.
+// /api/squads/[squadId]) - see the isPublic comment in schema.prisma. Controls inclusion on
+// the site-root public leaderboard (`GET /api/rankings`, `/`).
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse

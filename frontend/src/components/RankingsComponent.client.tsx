@@ -2,9 +2,12 @@ import React from 'react';
 import { useRankings } from '@/hooks/useRankings';
 import Leaderboard from '@/components/leaderboard/Leaderboard';
 import PageHeader from '@/components/leaderboard/PageHeader';
+import { SquadBoardSelector } from '@/components/leaderboard/SquadBoardSelector';
+import { useOptionalSquad } from '@/contexts/SquadContext';
 import { PageLoader } from '@/components/common/GameLoader';
 
 const RankingsComponent = () => {
+  const squad = useOptionalSquad();
   const { rankings, error, isLoading } = useRankings();
 
   if (isLoading) {
@@ -27,6 +30,7 @@ const RankingsComponent = () => {
 
   return (
     <>
+      <SquadBoardSelector currentSlug={squad?.slug} />
       <PageHeader title="Leaderboard" />
       <Leaderboard players={activePlayers} />
     </>
