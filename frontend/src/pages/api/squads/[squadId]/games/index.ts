@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
+import { findScorelessPlayersInGroups } from '@/lib/ranking/players';
 
 export default async function handler(
   req: NextApiRequest,
@@ -17,6 +18,16 @@ export default async function handler(
   if (req.method === 'POST') {
     try {
       const { groups } = req.body;
+      // OPEN_SLOT_PLAYERS_PLAN.md "Null-rankScore safety" item 2: a scoreless player must never
+      // reach the Elo calculation - this is the authoritative gate, not the planner's client-side
+      // bulk-assign panel.
+      const scoreless = await findScorelessPlayersInGroups(squadId, groups ?? {});
+      if (scoreless.length > 0) {
+        return res.status(400).json({
+          message: `These players need a rank score before a game day can be created: ${scoreless.map((p) => p.name).join(', ')}`,
+          scorelessPlayers: scoreless,
+        });
+      }
       const game = await prisma.game.create({
         data: {
           squadId,

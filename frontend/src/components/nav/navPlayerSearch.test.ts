@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PlayerType } from '@prisma/client';
 import type { Player } from '@/types/player';
 import { filterPlayersByQuery, sortPlayersByName } from './playerNavSearchUtils';
 import { isEncountersRoute, isHistoryRoute } from './navUtils';
@@ -14,6 +15,7 @@ const samplePlayers: Player[] = [
     highestRank: 1,
     timeInHighestRank: '1 day(s)',
     active: true,
+    playerType: PlayerType.FULLTIME,
   },
   {
     id: 1,
@@ -25,6 +27,7 @@ const samplePlayers: Player[] = [
     highestRank: 1,
     timeInHighestRank: '2 day(s)',
     active: true,
+    playerType: PlayerType.FULLTIME,
   },
 ];
 

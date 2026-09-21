@@ -1,4 +1,5 @@
 import type { Player as PrismaPlayer, ScoreHistory as PrismaScoreHistory } from '@prisma/client';
+import { PlayerType } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { derivePlayerStatus, filterPlayersByStatusParam, isActive, RawPlayerStatus } from './playerStatus';
 import { timeInHighestRankLabel } from './period';
@@ -21,6 +22,7 @@ export interface PlayerInfo {
   // there), a real string everywhere else. Preserved rather than always defaulting to "".
   timeInHighestRank: string | null;
   status: RawPlayerStatus;
+  playerType: PlayerType;
 }
 
 export interface SecurePlayerInfo extends PlayerInfo {
@@ -67,6 +69,11 @@ function toDateOnlyString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function todayDateOnly(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
 // PlayerService.getPlayerInfoByStatus mapping (one player).
 export function toPlayerInfo(player: PrismaPlayer, mostRecentScoreHistory: PrismaScoreHistory | null): PlayerInfo {
   const active = isActive(player);
@@ -80,6 +87,7 @@ export function toPlayerInfo(player: PrismaPlayer, mostRecentScoreHistory: Prism
     highestRank: player.highestRank,
     timeInHighestRank: timeInHighestRankLabel(player.rankSince),
     status: derivePlayerStatus(player),
+    playerType: player.playerType,
   };
 }
 
@@ -217,10 +225,15 @@ function generateRandomColorHex(): string {
 
 export interface NewPlayerInput {
   name: string;
-  initialScore: number;
+  // Required for FULLTIME (unchanged - the add-player route still rejects a missing/non-positive
+  // score for that type). Optional for OPEN_SLOT: OPEN_SLOT_PLAYERS_PLAN.md's whole point is that
+  // an open-slot player may be added, or self-register in future, before anyone has seen them
+  // play - the game-planner's bulk-assign step is where they get a score later.
+  initialScore?: number;
   // Required going forward (SQUAD_TENANCY_PLAN.md) - email is the only link between a login and
   // a role in a squad.
   email: string;
+  playerType?: PlayerType;
 }
 
 // PlayerService.addPlayer: POST /v2/players. Note the real Java return type declares
@@ -237,23 +250,33 @@ export async function addPlayer(squadId: number, input: NewPlayerInput): Promise
     }
   }
 
+  const playerType = input.playerType ?? PlayerType.FULLTIME;
+  const hasScore = input.initialScore !== undefined && input.initialScore !== null;
+
   // A brand-new squad has no players yet, unlike the single-squad original this was ported from
   // (which could always assume at least one existing player) - guard the empty case explicitly.
-  const activePlayers = await prisma.player.findMany({ where: { squadId, playerStatus: 'ACTIVE' } });
-  const newRank =
-    activePlayers.length === 0
-      ? 1
-      : (activePlayers.reduce((max, p) => ((p.playerRank ?? -Infinity) > (max.playerRank ?? -Infinity) ? p : max))
-          .playerRank ?? 0) + 1;
+  // Only needed when this player is getting a score/rank now - a scoreless open-slot player has
+  // no meaningful rank yet, so playerRank/highestRank/rankSince stay null until the bulk-assign
+  // step (or a future self-service score) gives them one.
+  let newRank: number | null = null;
+  if (hasScore) {
+    const activePlayers = await prisma.player.findMany({ where: { squadId, playerStatus: 'ACTIVE' } });
+    newRank =
+      activePlayers.length === 0
+        ? 1
+        : (activePlayers.reduce((max, p) => ((p.playerRank ?? -Infinity) > (max.playerRank ?? -Infinity) ? p : max))
+            .playerRank ?? 0) + 1;
+  }
 
   const player = await prisma.player.create({
     data: {
       squadId,
       name: input.name,
+      playerType,
       playerRank: newRank,
       highestRank: newRank,
-      rankScore: input.initialScore,
-      rankSince: new Date(),
+      rankScore: hasScore ? input.initialScore! : null,
+      rankSince: hasScore ? new Date() : null,
       colorHex: generateRandomColorHex(),
       email: input.email.toLowerCase(),
     },
@@ -270,6 +293,7 @@ export async function addPlayer(squadId: number, input: NewPlayerInput): Promise
     timeInHighestRank: null,
     status: derivePlayerStatus(player),
     email: player.email,
+    playerType: player.playerType,
   };
 }
 
@@ -306,22 +330,60 @@ export async function updatePlayer(squadId: number, input: UpdatePlayerInput): P
     highestRank: player.highestRank,
     timeInHighestRank: '0 day(s)',
     status: derivePlayerStatus(player),
+    playerType: player.playerType,
   };
 }
 
 export interface GamePlayer {
   id: number;
   rank: number;
+  // OPEN_SLOT_PLAYERS_PLAN.md - "Game-planner player selection UI": lets the picker group
+  // FULLTIME + currently-active-replacement players together, separately from plain open-slot
+  // players, and flag scoreless rows before the admin hits the bulk-assign wall.
+  playerType: PlayerType;
+  isActiveReplacement: boolean;
+  hasScore: boolean;
 }
 
 // GameService.getAvailablePlayersForGame: GET /v2/game/players. Ranked list (by rankScore desc,
-// current playerRank asc tiebreak) of every non-disabled player, with a fresh sequential
-// game-day rank (distinct from their persisted `playerRank`).
+// current playerRank asc tiebreak, nulls sorted last per getRankedPlayers) of every non-disabled
+// player, with a fresh sequential game-day rank (distinct from their persisted `playerRank`).
 export async function getAvailablePlayersForGame(squadId: number): Promise<GamePlayer[]> {
   const allPlayers = await prisma.player.findMany({ where: { squadId } });
   const available = allPlayers.filter((p) => p.playerStatus !== 'DISABLED');
   const ranked = getRankedPlayers(available.map((p) => ({ ...p, playerRank: p.playerRank ?? 0 })));
-  return ranked.map((player, index) => ({ id: player.id, rank: index + 1 }));
+
+  const today = todayDateOnly();
+  const activeReplacements = await prisma.slotReplacement.findMany({
+    where: { squadId, cancelledAt: null, startDate: { lte: today }, endDate: { gte: today } },
+    select: { replacementPlayerId: true },
+  });
+  const activeReplacementPlayerIds = new Set(activeReplacements.map((r) => r.replacementPlayerId));
+
+  return ranked.map((player, index) => ({
+    id: player.id,
+    rank: index + 1,
+    playerType: player.playerType,
+    isActiveReplacement: activeReplacementPlayerIds.has(player.id),
+    hasScore: player.rankScore !== null,
+  }));
+}
+
+// OPEN_SLOT_PLAYERS_PLAN.md "Null-rankScore safety" item 2: the authoritative gate against a
+// scoreless player reaching the Elo math is here, not the game-planner's client-side bulk-assign
+// panel (which is just the friendly path to satisfying this). Called from the game-create/update
+// API routes before groups are persisted.
+export async function findScorelessPlayersInGroups(
+  squadId: number,
+  groups: Record<string, number[]>
+): Promise<{ id: number; name: string }[]> {
+  const ids = Array.from(new Set(Object.values(groups).flat()));
+  if (ids.length === 0) return [];
+  const players = await prisma.player.findMany({
+    where: { id: { in: ids }, squadId },
+    select: { id: true, name: true, rankScore: true },
+  });
+  return players.filter((p) => p.rankScore === null).map((p) => ({ id: p.id, name: p.name }));
 }
 
 export interface RawPlayerJson {
