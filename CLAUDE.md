@@ -41,8 +41,37 @@ npm run lint           # next lint
 npm test                # vitest (run once)
 npm run test:watch      # vitest watch mode
 npx prisma generate      # regenerate Prisma client after schema changes
-npx prisma db push        # push schema.prisma changes to the DB (no migration history for this schema - see MIGRATION_PLAN.md Phase 1)
 ```
+
+## Prisma schema & migrations
+
+Schema changes are **incremental Prisma migrations**, not ad-hoc SQL or `db push`. The live MySQL schema is the `brs` database; `prisma/schema.prisma` and `prisma/migrations/<timestamp>_<name>/migration.sql` must stay in sync.
+
+**Apply migrations** (local compose, existing production-like DBs):
+
+```bash
+node scripts/prisma-migrate-deploy.mjs   # baselines init if Game exists but init was never recorded, then migrate deploy
+```
+
+On a truly empty schema you can use `npx prisma migrate deploy` directly. Confirm no drift afterward (`--exit-code`: 0 means in sync):
+
+```bash
+npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script --exit-code
+```
+
+**Add a schema change:**
+
+1. Edit `schema.prisma`.
+2. Generate SQL: `npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --script` (requires `--shadow-database-url` pointing at a disposable empty MySQL schema, or diff against a scratch DB with ` --from-url` instead).
+3. Add `prisma/migrations/<YYYYMMDDHHMMSS>_<short_name>/migration.sql` with that SQL, adjusted for **existing data** when needed: add new columns nullable first, `UPDATE` to backfill, then `MODIFY NOT NULL` / unique indexes / foreign keys in the same file. MySQL has no `ADD COLUMN IF NOT EXISTS`; use `information_schema` checks + `PREPARE`/`EXECUTE` if the migration must be safe on DBs that already partially match (see `20250921120000_align_live_schema`).
+4. Apply with `node scripts/prisma-migrate-deploy.mjs` and re-run the drift check above.
+5. If the change is squad-related, update `frontend/docs/squad-tenancy.md` in the same PR.
+
+**Rules:**
+
+- **Always additive:** never edit or delete a migration already recorded in `_prisma_migrations`. Never squash history. New work = a new timestamped folder (`20250202125811_init` stays forever).
+- **Assume populated tables:** no `DROP TABLE` / `DROP DATABASE`. No `prisma migrate reset` except on a throwaway local scratch DB.
+- **`prisma migrate resolve --applied`** only to record history that is already true of the schema (`prisma-migrate-deploy.mjs` baselines `20250202125811_init` when `Game` or `PLAYER`/`ENCOUNTER`/`SCORE_HISTORY` exist without `_prisma_migrations`). Never use it to skip a migration that has not actually been applied.
 
 ## Testing
 
@@ -64,3 +93,6 @@ npx prisma db push        # push schema.prisma changes to the DB (no migration h
 - Don't treat the `Game` table as authoritative ranking data; it's throwaway session state.
 - Don't assume there's a separate backend to call - there isn't anymore.
 - Don't change squad data model, auth, routing, or any squad-level feature (settings, schedule, etc.) without updating `frontend/docs/squad-tenancy.md` in the same change - it's the living reference for the multi-squad model, and it goes stale (like this file periodically has) if edits don't keep it in sync.
+- Don't use `prisma db push` for schema changes (it mutates the DB without writing `_prisma_migrations`).
+- Don't run `prisma migrate dev` against shared or production databases; it can prompt to reset data.
+- Don't rewrite SQL in a migration that may already be applied.
