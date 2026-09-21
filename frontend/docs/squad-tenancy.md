@@ -43,11 +43,24 @@ supersedes those now that the feature is built and in production.
   nullable = ongoing), `scheduleSkipDates` (JSON array of `"YYYY-MM-DD"` strings, holidays etc.).
 - **`Player.playerType`** (`FULLTIME` default / `OPEN_SLOT`) and **`SlotReplacement`** - see
   "Open-slot & replacement players" below.
+- **`Squad.openForOpenSlot`** (default `false`) and **`SquadJoinRequest`** - see
+  "Self-registration & join requests" below.
 
 ## Auth & access model
 
 Google SSO itself is untouched. What changed is what "admin" means - no longer a single global
-flag:
+flag - and, later, what signing in requires at all:
+
+- **A verified Google identity is enough to hold a session**, whether or not it belongs to any
+  squad. `validateUserAccessLocal` used to also require `isKnownToAnySquad` (a `SquadAdmin` or
+  `Player` row somewhere), so a prospective member got a bare sign-in failure and could never
+  reach the "ask to join a squad" flow. That check was removed by self-registration (see below);
+  `isKnownToAnySquad` is gone. It was never the real boundary - `middleware.ts` only enforces
+  "signed in at all", and every page/API gate below re-resolves membership per request - so a
+  zero-squad session sees what a signed-out visitor sees plus the join-request surface.
+- **Corollary for any new write route**: a session no longer implies membership anywhere, so no
+  route may take the actor's identity from a request body. `lib/joinRequests.ts` takes an
+  explicit `actorEmail` for this reason.
 
 - `ALLOWED_ADMIN_EMAILS` is now the **platform-superadmin** list (`session.user.isSuperAdmin`):
   can create squads, assign/remove any squad's admins, edit `enabled`/`maxPlayers`, and is
@@ -89,6 +102,11 @@ flag:
   last-day net, or trend). Rows are **not** clickable — a callout directs visitors to sign in and
   pick a squad for detailed rankings and encounter history. Per-squad boards at `/s/[slug]` still
   link rows to player encounters as before.
+- **`/squads/browse`** - signed-in squad **directory**: squads open to join requests, the
+  caller's own pending requests, and withdraw. Deliberately a separate page from `/squads`,
+  which redirects a one-squad member straight to their board - anything placed there would be
+  invisible to exactly the people the directory serves (existing members looking for a second
+  squad). Non-squad page, so no `SquadProvider` and nothing on it may call `useSquad()`.
 - **`/squads`** - signed-in squad picker (fallback). Resolves the email's squads server-side and
   redirects straight to `/s/{slug}` when there's exactly one — no picker click for the common
   case. Shows the picker for 0 or 2+ squads; a sign-in prompt when signed out. Signed-in users
@@ -108,7 +126,12 @@ flag:
   `/replacements/preview` (GET, squad-member-readable), `/replacements/[id]` (PATCH to request
   cancelling or shortening) and `/replacements/[id]/cancellation` (PATCH to approve/reject a
   pending request, squad-admin-only) - see "Open-slot & replacement players" below for all of
-  these.
+  these. Plus, for self-registration: **`GET /api/squads/open`** (the directory + the caller's
+  standing per squad, signed-in), **`GET /api/squads/join-requests`** (the caller's own rows
+  across every squad and status, signed-in), `/api/squads/[squadId]/join-requests` (POST create
+  own / GET list this squad's, squad-admin-only) and `/api/squads/[squadId]/join-requests/[id]`
+  (PATCH decide, squad-admin-only / DELETE withdraw own). `open` and `join-requests` are static
+  segments under `api/squads/`, which Next resolves ahead of `[squadId]`.
 - `middleware.ts` matcher: `/s/:squad/admin/:path*`, `/s/:squad/user/:path*`, `/platform/:path*`
   (signed-in-at-all gate only - the real per-squad-admin/per-player boundary is the
   `resolveSquad*` calls above and each API route's `requireSquadAdmin`/`requireSuperAdmin`).
@@ -156,8 +179,18 @@ squad-scoped route can't be used to touch another squad's row by guessing an id)
 
 - `enabled`: already existed from the original migration; pages already 404 a disabled squad
   (`resolveSquadOrNotFound`). Now actually toggleable via `/platform/squads`.
-- `maxPlayers`: nullable roster-size cap. `addPlayer` (`lib/ranking/players.ts`) rejects a new
-  player once a squad is at its cap.
+- `maxPlayers`: nullable cap on the **`FULLTIME` roster only** - an `OPEN_SLOT` player consumes
+  no slot. `addPlayer` (`lib/ranking/players.ts`) counts `{ squadId, playerType: FULLTIME }` and
+  rejects a new *fulltime* player once that count is at the cap; an open-slot add never consults
+  it. Counted by `playerType` only, **not** `playerStatus`: a fulltime slot is held whether or
+  not its holder is currently active - the same premise `SlotReplacement` runs on, where an
+  absent fulltime player's slot is *covered*, not freed. (Originally it counted every `Player`
+  row; self-registration changed it, since an open-slot player "fills a vacant spot rather than
+  holding a permanent one" and a cap on permanent slots they consume would mean a squad with a
+  full fulltime roster could never take the one category of player open slots exist for. That
+  was a change to already-shipped behavior - squads with open-slot players near their cap gained
+  headroom on deploy.) `GET /api/squads/[squadId]` returns `fulltimePlayerCount` alongside the
+  total `playerCount`, and the settings/dashboard readouts compare the cap against the former.
 - Both are **visible to a squad's own admins** (shown read-only on `/s/[squad]/admin/dashboard`
   and `/s/[squad]/admin/settings`, via `useSquadSettings()` / `GET /api/squads/[squadId]`) but
   **only editable by a platform superadmin** (`PATCH /api/squads/[squadId]`, `/platform/squads`).
@@ -294,9 +327,80 @@ Full design doc: `OPEN_SLOT_PLAYERS_PLAN.md` at the repo root. Summary of what's
   `bulk-initial-score` and the game create/update routes answer 400 with the reason instead of a
   blanket 500. `findScorelessPlayersInGroups` throws it for an id that isn't in this squad -
   a missing row must not read as "not scoreless" and slip through the gate.
-- **Not built yet** (see "Explicitly out of scope so far"): the public "browse squads / request to
-  join as open-slot" self-service flow, and migrating the fulltime pool's deactivation logic onto
-  the day-based playing-day calculator instead of its current row-based counter.
+- The public "browse squads / request to join as open-slot" self-service flow that this section
+  used to list as not-built **is built** - see "Self-registration & join requests" below. Note
+  its one change to the rules here: `maxPlayers` now caps the fulltime roster only, so an
+  open-slot player no longer consumes a roster slot.
+- **Not built yet** (see "Explicitly out of scope so far"): migrating the fulltime pool's
+  deactivation logic onto the day-based playing-day calculator instead of its current row-based
+  counter.
+
+## Self-registration & join requests
+
+Full design doc: `SELF_REGISTRATION_PLAN.md` at the repo root. What's built:
+
+- **Signing in no longer requires squad membership** - see "Auth & access model" above. This is
+  the prerequisite: the flow is "sign in first, then ask to join", which the old gate made
+  impossible.
+- **`Squad.openForOpenSlot`** (`Boolean @default(false)`, squad-admin-editable via the existing
+  `PATCH /api/squads/[squadId]/open-slot-settings` and a toggle in the "Open-slot players"
+  section of `/s/[squad]/admin/settings`). A squad is listed in the directory and accepts
+  requests iff `enabled && openForOpenSlot`. **Deliberately not folded into `isPublic`**: that
+  flag answers "does this squad's board feed the site-root aggregate leaderboard", a display
+  question, not a recruiting one. They're independent - a private squad can recruit, a public
+  one can stay closed. Default `false` so no existing squad started receiving requests without
+  its admin opting in. (The first design draft *did* reuse `isPublic`; reversed on review,
+  because it made "public board, closed roster" inexpressible and silently changed what a
+  shipped toggle did.)
+- **`SquadJoinRequest`** (`squadId`, `email`, `name`, `message`, `status`, decision stamps,
+  `createdPlayerId`). Keyed by **email**, like `SquadAdmin` - no profile/user table was added;
+  email remains the single identity key throughout this app, and a `UserProfile` would sit
+  alongside that rather than replace it. (It stays addable later as a pure lookup table without
+  touching `Player`, auth, or `lib/ranking/`.) Decided rows (`APPROVED`/`REJECTED`/`WITHDRAWN`)
+  are kept as the audit trail and to allow re-requesting after a rejection.
+  - **No unique index** enforces "at most one `PENDING` per `(squadId, email)`" - MySQL has no
+    partial unique index, so it's a check-then-insert inside one transaction, exactly like
+    `SlotReplacement`'s overlap rule.
+- **Identity on the write path** (`lib/joinRequests.ts`): every function takes an explicit
+  `actorEmail` that routes fill from `getServerSession`. `POST /join-requests` reads only `name`
+  and `message` from the body and **ignores any `email` in it**; `DELETE` decides ownership by
+  comparing the row's email to the session's, and answers "not found" rather than "forbidden"
+  for someone else's row. This is a security property now that any verified Google account can
+  sign in, and is unit-tested as one.
+- **Approval creates the `Player` row**, defaulting to `OPEN_SLOT` with **no** starting score,
+  in the same transaction that stamps the request - a created player against a still-`PENDING`
+  row would invite a duplicate second approval. The admin can override to `FULLTIME` (which,
+  unchanged, requires a score > 0). A scoreless open-slot player is already a safe state: they
+  land in the admin roster's "Not Yet Played" list marked "Needs a score", and the game-planner's
+  bulk-assign step plus the server-side gate on game create keep them out of the Elo math.
+  - **Idempotent against an existing player**: an admin can add the same email manually while a
+    request sits pending. Rather than failing and leaving the row `PENDING` forever with buttons
+    that can never succeed, approval reconciles - stamps `APPROVED` with `createdPlayerId` set to
+    the existing player. A `P2002` on the unique index is also caught and answered 400 (two
+    admins can still interleave between the check and the insert).
+  - Note the existing-player branch builds its DTO field-by-field rather than via
+    `toSecurePlayerInfo`, which calls `timeInHighestRankLabel` and **throws** on a null
+    `rankSince` - and a scoreless open-slot player, the likeliest row to land there, always has
+    one.
+- **A `DISABLED` player still counts as a member.** Any `Player` row is membership everywhere
+  here (`getSquadsForEmail`, `getSquadAccess`), so a deactivated person cannot self-re-apply.
+  Kept deliberately - reactivation is an admin action on the existing row, and a status-aware
+  member check would invite a second `Player` row the unique index forbids anyway. The directory
+  says "On the roster (inactive)" rather than "You're a member".
+- **Surfaces**: `/squads/browse` (directory, request modal, own pending requests, withdraw); a
+  "Request to join" callout on the squad's own public board `/s/[slug]` (link-public, and where
+  someone handed a share link actually lands); "Find a squad" in `SquadSwitcherLinks` - added to
+  **both** of that component's render trees, since the zero-squad early return is not the one an
+  existing member sees; `JoinRequestOversight` on `/s/[squad]/admin/players` (all statuses, not
+  just pending, so an admin can see they already declined someone); and a pending-count badge on
+  `/s/[squad]/admin/dashboard`, sourced from `pendingJoinRequestCount` on the squad detail
+  payload rather than a second SWR hook.
+- **`/login` now sends people to `/squads`**, not `/` - both the `signIn` `callbackUrl` and the
+  already-signed-in `useEffect` redirect. Not neutral for existing users: a one-squad member now
+  lands on their board (via `/squads`'s redirect) and a multi-squad member on the picker.
+- **Not built**: notifying a requester of the decision (no per-user channel exists - they see
+  status on `/squads/browse`), rate limiting beyond one pending request per squad, admin-sent
+  invitations, and any ceiling on open-slot growth (see below).
 
 ## Production migration (history)
 
@@ -340,8 +444,15 @@ schema.
   drive the Telegram poll) - schedule storage/editing is built, automation isn't.
 - Getting Pasan's real email.
 - Folding the separate `apl-aragorn-duckdns` deployment into this squad model.
-- The public "browse squads / request to join as open-slot" self-service flow (open-slot players
-  are admin-added only for now; see "Open-slot & replacement players" above).
+- **A ceiling on open-slot players.** `maxPlayers` caps the fulltime roster only, so nothing
+  structurally bounds how many open-slot players a squad accumulates - admin approval is the
+  only throttle (growth is admin-gated, not requester-gated, and `openSlotVisibilityGameDays`
+  already keeps stale open-slot players off the public board). If one is wanted, the clean shape
+  is a separate `Squad.maxOpenSlotPlayers`, nullable = unlimited and squad-admin-editable since
+  it isn't the committed-roster cap.
+- Notifying a join-request author of the decision, rate-limiting requests beyond one pending per
+  squad, admin-sent squad invitations, and a self-service reactivation path for a deactivated
+  member (see "Self-registration & join requests" above).
 - Migrating the fulltime pool's deactivation logic off its row-based counter onto the same
   day-based `playingDayCalculator`/`absenteeSpellDays` primitive the open-slot paths use.
 
@@ -367,3 +478,8 @@ schema.
    open-slot/replacement players (`OPEN_SLOT_PLAYERS_PLAN.md`).
 10. [#203](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/203) - open-slot/replacement
     players implementation (see "Open-slot & replacement players" above).
+11. [#207](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/207) - design doc for player
+    self-registration and squad join requests (`SELF_REGISTRATION_PLAN.md`).
+12. Player self-registration implementation - open sign-in, `Squad.openForOpenSlot`,
+    `SquadJoinRequest`, the `/squads/browse` directory, admin approve/reject, and the
+    fulltime-only `maxPlayers` cap (see "Self-registration & join requests" above).

@@ -1,5 +1,5 @@
 import type { Player as PrismaPlayer, ScoreHistory as PrismaScoreHistory } from '@prisma/client';
-import { PlayerType } from '@prisma/client';
+import { PlayerType, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { derivePlayerStatus, filterPlayersByStatusParam, isActive, RawPlayerStatus } from './playerStatus';
 import { timeInHighestRankLabel } from './period';
@@ -253,16 +253,39 @@ export interface NewPlayerInput {
 // Jackson serializes the *runtime* object, so `email` genuinely is present in the real
 // response despite the narrower declared type. `previousRank` is the player's own brand-new
 // rank (not looked up from history) and `timeInHighestRank` is left unset - preserved exactly.
-export async function addPlayer(squadId: number, input: NewPlayerInput): Promise<SecurePlayerInfo> {
-  const squad = await prisma.squad.findUniqueOrThrow({ where: { id: squadId } });
-  if (squad.maxPlayers !== null) {
-    const currentCount = await prisma.player.count({ where: { squadId } });
+//
+// `client` lets a caller run this inside an open transaction (join-request approval creates the
+// player and stamps the request together - see lib/joinRequests.ts). Defaults to the shared
+// client, so every existing caller is unchanged.
+export async function addPlayer(
+  squadId: number,
+  input: NewPlayerInput,
+  client: Prisma.TransactionClient = prisma
+): Promise<SecurePlayerInfo> {
+  const playerType = input.playerType ?? PlayerType.FULLTIME;
+
+  const squad = await client.squad.findUniqueOrThrow({ where: { id: squadId } });
+  // maxPlayers caps the FULLTIME roster only - an OPEN_SLOT player fills a vacant spot rather
+  // than holding a permanent one (OPEN_SLOT_PLAYERS_PLAN.md), so capping permanent slots against
+  // people who hold none would mean a squad with a full fulltime roster could never take on the
+  // one category of player that feature exists for (SELF_REGISTRATION_PLAN.md).
+  //
+  // Filtered by playerType only, NOT playerStatus: a fulltime slot is held whether or not its
+  // holder is currently active - the same premise SlotReplacement runs on, where an absent
+  // fulltime player's slot is *covered*, not freed. Counting only active players would mean
+  // deactivating someone silently frees a slot, and reactivating them could push a squad past
+  // its own cap with no way to refuse.
+  if (playerType === PlayerType.FULLTIME && squad.maxPlayers !== null) {
+    const currentCount = await client.player.count({
+      where: { squadId, playerType: PlayerType.FULLTIME },
+    });
     if (currentCount >= squad.maxPlayers) {
-      throw new Error(`Squad is at its player limit (${squad.maxPlayers})`);
+      throw new ValidationError(
+        `This squad's full-time roster is full (${currentCount}/${squad.maxPlayers}). An open-slot player can still be added; raising the cap is a platform admin action.`
+      );
     }
   }
 
-  const playerType = input.playerType ?? PlayerType.FULLTIME;
   const hasScore = input.initialScore !== undefined && input.initialScore !== null;
 
   // A brand-new squad has no players yet, unlike the single-squad original this was ported from
@@ -272,7 +295,7 @@ export async function addPlayer(squadId: number, input: NewPlayerInput): Promise
   // step (or a future self-service score) gives them one.
   let newRank: number | null = null;
   if (hasScore) {
-    const activePlayers = await prisma.player.findMany({ where: { squadId, playerStatus: 'ACTIVE' } });
+    const activePlayers = await client.player.findMany({ where: { squadId, playerStatus: 'ACTIVE' } });
     newRank =
       activePlayers.length === 0
         ? 1
@@ -280,7 +303,7 @@ export async function addPlayer(squadId: number, input: NewPlayerInput): Promise
             .playerRank ?? 0) + 1;
   }
 
-  const player = await prisma.player.create({
+  const player = await client.player.create({
     data: {
       squadId,
       name: input.name,

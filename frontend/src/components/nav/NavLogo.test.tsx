@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { NavLogo } from './NavLogo';
 import { SquadProvider } from '@/contexts/SquadContext';
 
-const squad = { id: 1, slug: 'main', name: 'Main Squad', isSquadAdmin: false, isPlayerHere: false };
+const squad = { id: 1, slug: 'main', name: 'Main Squad', isSquadAdmin: false, isPlayerHere: false, openForOpenSlot: false };
 
 describe('NavLogo', () => {
   it('links to squad rankings when squad is in context', () => {

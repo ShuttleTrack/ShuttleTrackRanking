@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { LiveGamesControl } from './LiveGamesControl';
 import { SquadProvider } from '@/contexts/SquadContext';
 
-const squad = { id: 1, slug: 'main', name: 'Main Squad', isSquadAdmin: false, isPlayerHere: false };
+const squad = { id: 1, slug: 'main', name: 'Main Squad', isSquadAdmin: false, isPlayerHere: false, openForOpenSlot: false };
 
 describe('LiveGamesControl', () => {
   it('renders nothing when there are no live games', () => {

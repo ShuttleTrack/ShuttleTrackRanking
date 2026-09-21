@@ -8,9 +8,11 @@ import type { Player } from '@/types/player';
 import { AddPlayerModal } from '@/components/player-management/AddPlayerModal';
 import { EditPlayerModal } from '@/components/player-management/EditPlayerModal';
 import { ReplacementOversight } from '@/components/player-management/ReplacementOversight';
+import { JoinRequestOversight } from '@/components/player-management/JoinRequestOversight';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
 import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
+import { useSquadSettings } from '@/hooks/useSquadSettings';
 
 // The server's derived status, rendered as-is rather than collapsed to the `active` boolean the
 // list was fetched under: an ENABLED player (on the roster, yet to play their first game) is not
@@ -132,6 +134,7 @@ const PlayerTable = ({ players, onEdit, onDelete }: {
 
 const PlayerManagementPage = () => {
   const { id: squadId } = useSquad();
+  const { settings, mutate: mutateSettings } = useSquadSettings();
   const { players: activePlayers, isLoading: activeLoading, mutate: mutateActive } = useAdminPlayers('active');
   const { players: inactivePlayers, isLoading: inactiveLoading, mutate: mutateInactive } = useAdminPlayers('inactive');
   // Everyone who is neither ACTIVE nor DISABLED. Without this list a freshly added player is on
@@ -264,6 +267,18 @@ const PlayerManagementPage = () => {
               />
             </div>
           </div>
+
+          <JoinRequestOversight
+            squadId={squadId}
+            fulltimePlayerCount={settings?.fulltimePlayerCount}
+            maxPlayers={settings?.maxPlayers}
+            onApproved={() => {
+              // An approval adds a roster row, so the lists above and the cap readout both go
+              // stale. Refreshing settings is what keeps the approve modal's "full-time roster
+              // is full" warning honest after the approval that fills it.
+              void Promise.all([mutateActive(), mutateInactive(), mutatePending(), mutateSettings()]);
+            }}
+          />
 
           <ReplacementOversight squadId={squadId} />
         </div>

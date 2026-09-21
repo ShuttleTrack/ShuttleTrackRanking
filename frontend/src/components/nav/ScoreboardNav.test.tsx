@@ -13,7 +13,7 @@ vi.mock('next/router', () => ({
   }),
 }));
 
-const squad = { id: 1, slug: 'main', name: 'Main Squad', isSquadAdmin: false, isPlayerHere: false };
+const squad = { id: 1, slug: 'main', name: 'Main Squad', isSquadAdmin: false, isPlayerHere: false, openForOpenSlot: false };
 
 describe('ScoreboardNav', () => {
   it('marks Rankings as the current page on home', () => {
