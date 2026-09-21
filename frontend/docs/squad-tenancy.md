@@ -41,6 +41,8 @@ supersedes those now that the feature is built and in production.
   `isRecurring`, `scheduleDayOfWeek` (`DayOfWeek` enum), `scheduleStartTime`/`scheduleEndTime`
   (`"HH:mm"` strings), `scheduleStartDate`/`scheduleEndDate` (recurrence validity window, end
   nullable = ongoing), `scheduleSkipDates` (JSON array of `"YYYY-MM-DD"` strings, holidays etc.).
+- **`Player.playerType`** (`FULLTIME` default / `OPEN_SLOT`) and **`SlotReplacement`** - see
+  "Open-slot & replacement players" below.
 
 ## Auth & access model
 
@@ -76,6 +78,8 @@ flag:
 
 - **Public** (no login): `/s/[squad]/{index,encounter-history,game-viewer,player-ranking-history,player/[id]/encounters}`.
 - **User** (signed-in + registered player in that squad): `/s/[squad]/user/{profile,matches,management}`.
+- **User**, continued: `/s/[squad]/user/replacement` - self-service replacement nomination (see
+  "Open-slot & replacement players" below).
 - **Admin** (signed-in + squad admin, or superadmin): `/s/[squad]/admin/{dashboard,game-day,game-planner,players,score-keeper,settings}`.
 - **Platform** (superadmin only): `/platform/squads` - create squads, manage each squad's admins,
   edit `enabled`/`maxPlayers`.
@@ -97,7 +101,11 @@ flag:
   auth), `/api/squads` (list mine / create, superadmin-only create),
   `/api/squads/[squadId]` (GET detail incl. schedule fields, squad-admin-readable; PATCH
   `enabled`/`maxPlayers`, superadmin-only), `/api/squads/[squadId]/admins` (superadmin-only),
-  `/api/squads/[squadId]/schedule` (PATCH, squad-admin-editable).
+  `/api/squads/[squadId]/schedule` (PATCH, squad-admin-editable),
+  `/api/squads/[squadId]/open-slot-settings` (PATCH, squad-admin-editable),
+  `/api/squads/[squadId]/players/{bulk-initial-score,open-slot}`,
+  `/api/squads/[squadId]/replacements` (GET/POST) and `/replacements/[id]` (PATCH to cancel) -
+  see "Open-slot & replacement players" below for all of these.
 - `middleware.ts` matcher: `/s/:squad/admin/:path*`, `/s/:squad/user/:path*`, `/platform/:path*`
   (signed-in-at-all gate only - the real per-squad-admin/per-player boundary is the
   `resolveSquad*` calls above and each API route's `requireSquadAdmin`/`requireSuperAdmin`).
@@ -132,7 +140,11 @@ Untouched (already squad-agnostic pure functions, operate on whatever they're ha
 
 `squadId`-threaded (every function that used to do an unscoped `findMany`/`findFirst` against
 `Player`/`Encounter`/`Game` now takes/filters by it): `lib/ranking/players.ts`,
-`lib/ranking/encounters.ts`, `lib/ranking/processEncounters.ts`, `lib/ranking/scorePersister.ts`.
+`lib/ranking/encounters.ts`, `lib/ranking/processEncounters.ts`, `lib/ranking/scorePersister.ts`,
+and the open-slot/replacement additions - `lib/ranking/absenteeSpell.ts`,
+`lib/ranking/boardVisibility.ts`, `lib/replacements.ts` (see "Open-slot & replacement players"
+below). `lib/scheduling/playingDayCalculator.ts` is the one exception among the new files: it
+takes a schedule object, not a `squadId`, and stays pure like the bucket above.
 Functions that look up a single player/encounter by id also verify it belongs to the given
 `squadId` before acting (ids are a shared, globally-unique sequence across all squads, so a
 squad-scoped route can't be used to touch another squad's row by guessing an id).
@@ -180,6 +192,63 @@ they were dropped (rehearsed against the local dev DB with real seeded data). If
 columns still exist on a database, `prisma/migrations/20250921120000_align_live_schema` packs
 them into `schedule`.
 
+## Open-slot & replacement players
+
+Full design doc: `OPEN_SLOT_PLAYERS_PLAN.md` at the repo root. Summary of what's actually built:
+
+- **`Player.playerType`**: `FULLTIME` (default, unchanged behavior) or `OPEN_SLOT` - fills a
+  vacant spot rather than holding a permanent one, still gets ranked normally when they play. Set
+  once at creation, never changed afterward - kept in the same `Player` table rather than split
+  out (Elo needs one ranked pool; see the plan doc's "Why not separate tables").
+- **`Player.rankScore` is nullable**: an open-slot player (admin-added now; self-registered in a
+  later phase) may have no score yet. They stay selectable in the game-planner, but a scoreless
+  player can never reach the Elo/absentee math - `POST/PUT` on
+  `/api/squads/[squadId]/games{,/[id]}` reject any group containing one (400, names them), and
+  `applyAbsenteeDeductions`/`calculateAndPersistElo` skip/throw on one respectively as a second
+  line of defense. The friendly path is the game-planner's bulk-assign panel (blocks "Create Game
+  Day" on any selected scoreless player, one action for the whole batch) backed by
+  `assignInitialScores` / `POST /players/bulk-initial-score`.
+- **`SlotReplacement`**: a fulltime player's slot filled by a named open-slot player over
+  `[startDate, endDate]`. "Replacement" is a *derived* state (an active row covering today), never
+  a stored `playerType` - avoids a stuck flag if a revert step is ever missed. Self-service, no
+  admin approval: `/s/[squad]/user/replacement` (search by name/email via
+  `GET /players/open-slot`, then `POST /replacements`) lets a fulltime player nominate an
+  open-slot player for at least 3 *playing days* (validated against the squad's schedule via
+  `lib/scheduling/playingDayCalculator.ts` - the squad must have one configured and recurring, or
+  the request is rejected with a clear error); `PATCH /replacements/[id]` lets them cancel early.
+  Overlap (same slot or same nominee already covered) is checked and inserted in one transaction,
+  since MySQL can't express "no overlapping ranges" as a constraint. `GET /replacements` returns
+  the caller's own nominations, or every squad nomination for a squad admin (read-only oversight,
+  no cancel button yet).
+- **Absentee sweep** (`applyAbsenteeDeductions` in `scorePersister.ts`) now has three paths:
+  fulltime keeps the original row-based ladder (last-5-`ScoreHistory` escalation, auto-deactivate
+  at 5) untouched; an open-slot player currently filling an active replacement ramps on a new
+  **day-based** counter (`lib/ranking/absenteeSpell.ts`'s `absenteeSpellDays`, counting distinct
+  processed squad game days since their last real play) with no cutoff and no deactivation; a
+  plain open-slot player ramps on the same day-based counter but stops once it exceeds the
+  squad's `Squad.openSlotAbsenteeGraceDays` (default 3, admin-editable) - a rolling exemption that
+  resets the moment they play again, not a one-time onboarding grace. Neither new path can
+  deactivate a player (that stays a manual admin action for open-slot players).
+- **Leaderboard/graph visibility** (`lib/ranking/boardVisibility.ts`'s `filterBoardVisible`,
+  layered on top of each surface's existing active-status filtering): fulltime and
+  currently-active-replacement players are always shown; a plain open-slot player is shown only
+  within `Squad.openSlotVisibilityGameDays` (default 10, admin-editable, deliberately longer than
+  the absentee grace) game days of their last game. Applied to the squad rankings endpoint, the
+  ranking-history trajectory graph/picker, and the cross-squad public rankings aggregate. They
+  remain fully visible on the admin roster and their own profile/encounter-history pages
+  regardless.
+- **Game-planner picker** (`pages/s/[squad]/admin/game-planner.tsx`) splits into a "Full-time
+  roster" group (`FULLTIME` plus any `OPEN_SLOT` player currently covering an active replacement)
+  and a separate "Open slot" group - a stopgap grouping, not a real per-day availability system.
+- **Two new squad settings**, both playing-day counts, deliberately independent (`Squad`,
+  squad-admin-editable via `/api/squads/[squadId]/open-slot-settings` and a section on
+  `/s/[squad]/admin/settings`): `openSlotAbsenteeGraceDays` (default 3, non-nullable - a
+  null-means-never-exempt default would be the worst outcome, not the safest) and
+  `openSlotVisibilityGameDays` (default 10).
+- **Not built yet** (see "Explicitly out of scope so far"): the public "browse squads / request to
+  join as open-slot" self-service flow, and migrating the fulltime pool's deactivation logic onto
+  the day-based playing-day calculator instead of its current row-based counter.
+
 ## Production migration (history)
 
 Squad tenancy needed a real data migration (existing single-squad data → one `Squad`), done in
@@ -222,6 +291,10 @@ schema.
   drive the Telegram poll) - schedule storage/editing is built, automation isn't.
 - Getting Pasan's real email.
 - Folding the separate `apl-aragorn-duckdns` deployment into this squad model.
+- The public "browse squads / request to join as open-slot" self-service flow (open-slot players
+  are admin-added only for now; see "Open-slot & replacement players" above).
+- Migrating the fulltime pool's deactivation logic off its row-based counter onto the same
+  day-based `playingDayCalculator`/`absenteeSpellDays` primitive the open-slot paths use.
 
 ## PRs
 
