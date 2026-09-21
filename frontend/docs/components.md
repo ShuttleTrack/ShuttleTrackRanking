@@ -82,7 +82,7 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **Props:** `squads`, `currentSlug`, `variant` (`account-menu` | `mobile`), optional `onNavigate`
 
-**Purpose:** Monogram + name rows with check on current squad; used in `AccountMenu` and `MobileScoreboardMenu`. Zero squads → link to `/squads`.
+**Purpose:** **Public** row (links to `/`, check when on `/`) plus monogram + name rows per squad with check on `currentSlug`; used in `AccountMenu` and `MobileScoreboardMenu`. Zero squads → link to `/squads`.
 
 **Data:** `useMySquads` → `GET /api/squads` when authenticated.
 

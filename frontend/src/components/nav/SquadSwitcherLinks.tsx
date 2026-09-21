@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { Fragment } from 'react';
 import { Menu } from '@headlessui/react';
 import { CheckIcon, Squares2X2Icon } from '@heroicons/react/24/outline';
@@ -53,7 +54,9 @@ export function SquadSwitcherLinks({
   variant,
   onNavigate,
 }: SquadSwitcherLinksProps) {
+  const router = useRouter();
   const isDesktop = variant === 'account-menu';
+  const isPublicCurrent = router.pathname === '/';
 
   if (squads.length === 0) {
     const rowClass = isDesktop
@@ -79,8 +82,13 @@ export function SquadSwitcherLinks({
     );
   }
 
-  const rows = squads.map((squad) => {
-    const isCurrent = squad.slug === currentSlug;
+  const renderRow = (
+    key: string,
+    href: string,
+    label: string,
+    badgeName: string,
+    isCurrent: boolean
+  ) => {
     const rowClass = classNames(
       'flex min-h-[44px] items-center gap-3 rounded-lg px-3 transition-colors',
       isDesktop ? 'font-headline text-sm' : 'font-headline text-base',
@@ -91,18 +99,18 @@ export function SquadSwitcherLinks({
 
     const inner = (
       <>
-        <MonogramBadge name={squad.name} isCurrent={isCurrent} size={isDesktop ? 'sm' : 'md'} />
-        <span className="min-w-0 flex-1 truncate">{squad.name}</span>
+        <MonogramBadge name={badgeName} isCurrent={isCurrent} size={isDesktop ? 'sm' : 'md'} />
+        <span className="min-w-0 flex-1 truncate">{label}</span>
         {isCurrent && <CheckIcon className="h-4 w-4 shrink-0 text-primary" aria-hidden />}
       </>
     );
 
     if (isDesktop) {
       return (
-        <Menu.Item key={squad.id}>
+        <Menu.Item key={key}>
           {({ active }) => (
             <Link
-              href={`/s/${squad.slug}`}
+              href={href}
               className={classNames(rowClass, active && !isCurrent ? 'bg-white/5' : '')}
               aria-current={isCurrent ? 'page' : undefined}
               onClick={onNavigate}
@@ -116,8 +124,8 @@ export function SquadSwitcherLinks({
 
     return (
       <Link
-        key={squad.id}
-        href={`/s/${squad.slug}`}
+        key={key}
+        href={href}
         className={rowClass}
         aria-current={isCurrent ? 'page' : undefined}
         onClick={onNavigate}
@@ -125,7 +133,20 @@ export function SquadSwitcherLinks({
         {inner}
       </Link>
     );
-  });
+  };
+
+  const rows = [
+    renderRow('public', '/', 'Public', 'Public', isPublicCurrent),
+    ...squads.map((squad) =>
+      renderRow(
+        String(squad.id),
+        `/s/${squad.slug}`,
+        squad.name,
+        squad.name,
+        squad.slug === currentSlug
+      )
+    ),
+  ];
 
   const wrapper = (
     <div className={isDesktop ? 'px-1.5 py-1' : 'py-1'}>
