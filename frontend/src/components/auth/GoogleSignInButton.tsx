@@ -4,10 +4,11 @@ interface GoogleSignInButtonProps {
 
 export const GoogleSignInButton = ({ onSignIn }: GoogleSignInButtonProps) => (
   <button
+    type="button"
     onClick={onSignIn}
-    className="w-full flex items-center justify-center gap-3 btn btn-outline"
+    className="inline-flex min-h-[44px] w-full items-center justify-center gap-3 rounded-xl bg-primary px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90"
   >
-    <svg className="w-5 h-5" viewBox="0 0 24 24">
+    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" aria-hidden>
       <path
         fill="currentColor"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -27,4 +28,4 @@ export const GoogleSignInButton = ({ onSignIn }: GoogleSignInButtonProps) => (
     </svg>
     Sign in with Google
   </button>
-); 
+);

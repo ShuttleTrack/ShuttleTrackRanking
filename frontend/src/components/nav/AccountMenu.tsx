@@ -10,6 +10,7 @@ import {
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
 import { signOut, useSession } from 'next-auth/react';
+import { useRouter } from 'next/router';
 import { classNames, menuTransitionProps, scoreboardSegmentClass } from './navUtils';
 import { useOptionalSquad } from '@/contexts/SquadContext';
 import { useMySquads } from '@/hooks/useMySquads';
@@ -31,13 +32,19 @@ const accountMenuSignOutClass = (active: boolean) =>
   );
 
 export function AccountMenu() {
+  const router = useRouter();
   const { data: session } = useSession();
   const squad = useOptionalSquad();
   const { squads: mySquads } = useMySquads();
+  const onLoginPage = router.pathname === '/login';
 
   if (!session) {
     return (
-      <Link href="/login" className={scoreboardSegmentClass(false)}>
+      <Link
+        href="/login"
+        className={scoreboardSegmentClass(onLoginPage)}
+        aria-current={onLoginPage ? 'page' : undefined}
+      >
         Sign In
       </Link>
     );

@@ -125,7 +125,12 @@ export function MobileScoreboardMenu({
 
       {/* Auth block */}
       {!session ? (
-        <Link href="/login" className={tileClass(false)} onClick={onClose}>
+        <Link
+          href="/login"
+          className={tileClass(router.pathname === '/login')}
+          onClick={onClose}
+          aria-current={router.pathname === '/login' ? 'page' : undefined}
+        >
           Sign In
         </Link>
       ) : (
