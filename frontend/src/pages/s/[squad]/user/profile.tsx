@@ -127,7 +127,27 @@ const UserProfilePage = ({ playerId }: UserProfilePageProps) => {
           </div>
         </section>
       ) : (
-        <p className="text-on-surface-variant">Unable to load your ranking data.</p>
+        // The rankings payload only carries ranked players (see rankingResponse.ts), so landing
+        // here is the normal state for someone who hasn't played a game day yet - not an error.
+        // It used to be one: the payload included them with a null rankScore, and the card above
+        // went straight to rankScore.toFixed(1).
+        <section className="max-w-3xl rounded-xl border border-gray-600 bg-surface-container p-4">
+          <div className="font-headline font-semibold text-on-surface">
+            {capitalizeFirstLetter(session?.user?.name ?? 'Your profile')}
+          </div>
+          <div className="text-xs text-on-surface-variant mt-0.5">{session?.user?.email}</div>
+          <p className="text-on-surface-variant text-sm mt-3">
+            You don&apos;t have a ranking yet - it appears here once you&apos;ve played a game day
+            and the scores have been processed.
+          </p>
+          <button
+            type="button"
+            className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-white/10 px-4 py-2 text-sm text-on-surface transition-colors hover:border-primary/40"
+            onClick={() => signOut({ callbackUrl: '/login' })}
+          >
+            Sign out
+          </button>
+        </section>
       )}
     </div>
   );

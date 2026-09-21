@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ChevronDownIcon, UserCircleIcon, PencilSquareIcon, Squares2X2Icon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, UserCircleIcon, PencilSquareIcon, Squares2X2Icon, ArrowRightOnRectangleIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
 import { signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import type { Player } from '@/types/player';
@@ -166,6 +166,12 @@ export function MobileScoreboardMenu({
                 <span className="flex items-center gap-3">
                   <PencilSquareIcon className="h-5 w-5 text-on-surface-variant" aria-hidden />
                   Matches
+                </span>
+              </Link>
+              <Link href={`/s/${squad.slug}/user/replacement`} className={mobileRowClass} onClick={onClose}>
+                <span className="flex items-center gap-3">
+                  <ArrowsRightLeftIcon className="h-5 w-5 text-on-surface-variant" aria-hidden />
+                  Replacement
                 </span>
               </Link>
             </>

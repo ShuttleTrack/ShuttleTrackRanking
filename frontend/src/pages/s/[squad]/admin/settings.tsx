@@ -78,6 +78,12 @@ const SquadSettingsPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  const [openSlotAbsenteeGraceDays, setOpenSlotAbsenteeGraceDays] = useState(3);
+  const [openSlotVisibilityGameDays, setOpenSlotVisibilityGameDays] = useState(10);
+  const [openSlotError, setOpenSlotError] = useState<string | null>(null);
+  const [isSavingOpenSlot, setIsSavingOpenSlot] = useState(false);
+  const [openSlotSaved, setOpenSlotSaved] = useState(false);
+
   useEffect(() => {
     if (!settings) return;
     setIsPublic(settings.isPublic);
@@ -88,6 +94,8 @@ const SquadSettingsPage = () => {
     setStartDate(toDateInputValue(settings.scheduleStartDate));
     setEndDate(toDateInputValue(settings.scheduleEndDate));
     setSkipDates(settings.scheduleSkipDates ?? []);
+    setOpenSlotAbsenteeGraceDays(settings.openSlotAbsenteeGraceDays);
+    setOpenSlotVisibilityGameDays(settings.openSlotVisibilityGameDays);
   }, [settings]);
 
   if (isLoading || !settings) {
@@ -134,6 +142,30 @@ const SquadSettingsPage = () => {
   };
 
   const visibilityToggleDisabled = pendingPublic !== null || isSavingVisibility;
+
+  const handleSaveOpenSlot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingOpenSlot(true);
+    setOpenSlotError(null);
+    setOpenSlotSaved(false);
+    try {
+      const response = await fetch(`/api/squads/${squadId}/open-slot-settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ openSlotAbsenteeGraceDays, openSlotVisibilityGameDays }),
+      });
+      if (!response.ok) {
+        const body = await response.json();
+        throw new Error(body.message || 'Failed to save open-slot settings');
+      }
+      await mutate();
+      setOpenSlotSaved(true);
+    } catch (err) {
+      setOpenSlotError(err instanceof Error ? err.message : 'Failed to save open-slot settings');
+    } finally {
+      setIsSavingOpenSlot(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -282,6 +314,55 @@ const SquadSettingsPage = () => {
           </div>
         );
       })()}
+
+      <form onSubmit={handleSaveOpenSlot} className={`${cardClass} mb-6`}>
+        <h2 className={sectionTitleClass}>Open-slot players</h2>
+        <p className="text-sm text-on-surface-variant mb-4">
+          Open-slot players fill a vacant spot rather than holding a permanent one, so their
+          absentee treatment and leaderboard visibility taper off differently from a fulltime
+          player&apos;s - both counted in playing days since their last game.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-on-surface-variant mb-1">
+              Absentee grace (playing days)
+            </label>
+            <input
+              type="number"
+              min={0}
+              className={inputFieldClass}
+              value={openSlotAbsenteeGraceDays}
+              onChange={(e) => setOpenSlotAbsenteeGraceDays(Number(e.target.value))}
+            />
+            <p className="text-xs text-on-surface-variant mt-1">
+              Stop demeriting an open-slot player after this many playing days without a game.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-on-surface-variant mb-1">
+              Visibility window (playing days)
+            </label>
+            <input
+              type="number"
+              min={0}
+              className={inputFieldClass}
+              value={openSlotVisibilityGameDays}
+              onChange={(e) => setOpenSlotVisibilityGameDays(Number(e.target.value))}
+            />
+            <p className="text-xs text-on-surface-variant mt-1">
+              Drop an open-slot player off the leaderboard/graph after this many playing days
+              without a game.
+            </p>
+          </div>
+        </div>
+        {openSlotError && <p className="text-sm text-red-400 mt-4">{openSlotError}</p>}
+        {openSlotSaved && !openSlotError && <p className="text-sm text-primary mt-4">Saved.</p>}
+        <div className="mt-4">
+          <button type="submit" className={primaryBtn} disabled={isSavingOpenSlot}>
+            {isSavingOpenSlot ? 'Saving…' : 'Save open-slot settings'}
+          </button>
+        </div>
+      </form>
 
       <form onSubmit={handleSave} className={cardClass}>
         <h2 className={sectionTitleClass}>Play schedule</h2>

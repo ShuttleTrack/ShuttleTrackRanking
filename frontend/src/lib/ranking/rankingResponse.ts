@@ -8,24 +8,30 @@ export function buildSquadRankingsResponse(
   players: PlayerInfo[],
   encounters: RawEncounter[]
 ): RankingsResponse {
-  const totalPlayers = players.length;
-  const topScore = totalPlayers > 0 ? Math.max(...players.map((p) => p.rankScore!)) : 0;
+  // `players` is expected to already be board-visibility-filtered by the caller (see
+  // filterBoardVisible in boardVisibility.ts) - this only guards against a null rankScore
+  // (an inactive player, per toPlayerInfo) slipping into the stats, rather than the old
+  // `rankScore!` assertions' implicit null-coerces-to-0 (OPEN_SLOT_PLAYERS_PLAN.md).
+  const scored = players.filter((p) => p.rankScore !== null);
+
+  const totalPlayers = scored.length;
+  const topScore = totalPlayers > 0 ? Math.max(...scored.map((p) => p.rankScore!)) : 0;
   const averageScore =
     totalPlayers > 0
-      ? players.reduce((acc, p) => acc + p.rankScore!, 0) / totalPlayers
+      ? scored.reduce((acc, p) => acc + p.rankScore!, 0) / totalPlayers
       : 0;
 
   const formByPlayer = buildFormStatsByPlayerId(
-    players.map((p) => p.id),
+    scored.map((p) => p.id),
     encounters
   );
 
   const lastDayNetByPlayer = buildLastGameDayNetByPlayerId(
-    players.map((p) => p.id),
+    scored.map((p) => p.id),
     encounters
   );
 
-  const enrichedPlayers = players
+  const enrichedPlayers = scored
     .map((player) => {
       const rankChange = player.previousRank! - player.playerRank!;
       const form = formByPlayer.get(player.id);

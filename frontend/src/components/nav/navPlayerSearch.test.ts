@@ -14,6 +14,9 @@ const samplePlayers: Player[] = [
     highestRank: 1,
     timeInHighestRank: '1 day(s)',
     active: true,
+    playerType: 'FULLTIME',
+    status: 'ACTIVE',
+    hasScore: true,
   },
   {
     id: 1,
@@ -25,6 +28,9 @@ const samplePlayers: Player[] = [
     highestRank: 1,
     timeInHighestRank: '2 day(s)',
     active: true,
+    playerType: 'FULLTIME',
+    status: 'ACTIVE',
+    hasScore: true,
   },
 ];
 

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import type { GetServerSideProps } from 'next';
-import { useGamePlayers } from '@/hooks/useGamePlayers';
+import { useGamePlayers, type GamePlannerPlayer } from '@/hooks/useGamePlayers';
 import { useGame } from '@/hooks/useGame';
 import { gameService } from '@/services/gameService';
 import { PlayerCard } from '@/components/game-planner/PlayerCard';
 import { ActionPanel } from '@/components/game-planner/ActionPanel';
+import { BulkScorePanel } from '@/components/game-planner/BulkScorePanel';
 import { isValidPlayerCount } from '@/utils/game-validation';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
@@ -87,12 +88,27 @@ export const calculateGroupDistribution = (totalPlayers: number, seed: string): 
   return distribution;
 };
 
+// OPEN_SLOT_PLAYERS_PLAN.md "Game-planner player selection UI": FULLTIME players plus any
+// OPEN_SLOT player currently covering an active replacement belong with the regular roster for
+// selection purposes; plain open-slot players (no active replacement today) are a separate pool.
+// What Player.rankScore defaulted to before OPEN_SLOT_PLAYERS_PLAN.md made the column nullable.
+const DEFAULT_STARTING_RANK_SCORE = 1000;
+
+// Compared against the string literal rather than Prisma's PlayerType object on purpose: a
+// *value* import from '@prisma/client' in a client-rendered page pulls its browser runtime -
+// every model name and field enum - into that page's JS bundle. Type-only imports are erased by
+// the compiler, so `import type { PlayerType }` stays fine (see types/player.ts).
+const isFulltimeRosterForToday = (player: GamePlannerPlayer): boolean =>
+  player.playerType === 'FULLTIME' || player.isActiveReplacement;
+
 const GamePlannerPage = () => {
   const router = useRouter();
   const { id: squadId, slug } = useSquad();
-  const { players, isLoading: playersLoading } = useGamePlayers();
+  const { players, isLoading: playersLoading, refresh } = useGamePlayers();
   const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [scorelessSelection, setScorelessSelection] = useState<GamePlannerPlayer[] | null>(null);
+  const [createError, setCreateError] = useState('');
   const gameId = router.query.gameId as string;
   const { game, isLoading: gameLoading } = useGame(gameId as string);
 
@@ -132,12 +148,11 @@ const GamePlannerPage = () => {
     return '';
   };
 
-  const handleCreateGameDay = async () => {
-    // Get selected players with their details
-    const selectedPlayerDetails = players
-      .filter(p => selectedPlayers.includes(p.id))
-      .sort((a, b) => a.playerRank - b.playerRank);
-
+  // Throws on failure so callers that chain off it (the bulk-assign panel's "Assign & continue")
+  // can surface the reason - the server-side scoreless gate in POST/PUT /games returns a 400
+  // naming the players, which used to be swallowed into console.error and left the admin
+  // staring at an unchanged screen.
+  const createGameDayFor = async (selectedPlayerDetails: GamePlannerPlayer[]) => {
     const totalPlayers = selectedPlayerDetails.length;
 
     // Use the local calendar date as a deterministic seed so the group-size
@@ -158,28 +173,96 @@ const GamePlannerPage = () => {
       playerIndex += groupSize;
     });
 
-    try {
-      const gameData = {
-        groups,
-        scores: {},
-        status: 'DRAFT' as const
-      };
+    const gameData = {
+      groups,
+      scores: {},
+      status: 'DRAFT' as const
+    };
 
-      if (isEditing && gameId) {
-        await gameService.updateGame(squadId, gameId, gameData);
-        router.push(`/s/${slug}/admin/game-day?gameId=${gameId}`);
-      } else {
-        const newGame = await gameService.createGame(squadId, gameData);
-        router.push(`/s/${slug}/admin/game-day?gameId=${newGame.id}`);
-      }
-    } catch (error) {
-      console.error('Failed to create/update game:', error);
-      // Show error toast/notification
+    if (isEditing && gameId) {
+      await gameService.updateGame(squadId, gameId, gameData);
+      router.push(`/s/${slug}/admin/game-day?gameId=${gameId}`);
+    } else {
+      const newGame = await gameService.createGame(squadId, gameData);
+      router.push(`/s/${slug}/admin/game-day?gameId=${newGame.id}`);
     }
   };
 
+  const handleCreateGameDay = async () => {
+    setCreateError('');
+    const selectedPlayerDetails = players
+      .filter(p => selectedPlayers.includes(p.id))
+      .sort((a, b) => a.playerRank - b.playerRank);
+
+    // OPEN_SLOT_PLAYERS_PLAN.md "Bulk initial rank-score assignment": block on any selected
+    // player without a score rather than letting the server-side game-create gate reject the
+    // whole request after the fact.
+    const scoreless = selectedPlayerDetails.filter(p => !p.hasScore);
+    if (scoreless.length > 0) {
+      setScorelessSelection(scoreless);
+      return;
+    }
+
+    try {
+      await createGameDayFor(selectedPlayerDetails);
+    } catch (error) {
+      console.error('Failed to create/update game:', error);
+      setCreateError(error instanceof Error ? error.message : 'Failed to create the game day');
+    }
+  };
+
+  // OPEN_SLOT_PLAYERS_PLAN.md: "once the bulk action succeeds, handleCreateGameDay re-runs with
+  // all selected players now scored and proceeds exactly as today". The re-run has to work off
+  // the *refreshed* list, not the one captured when the panel opened: assigning a score changes
+  // the newly-scored player's game-day rank (they no longer sort last), and the planner slices
+  // that rank order into skill tiers, so reusing the stale order would drop them into the bottom
+  // group whatever score the admin just gave them.
+  const handleBulkScoreSubmit = async (assignments: { playerId: number; rankScore: number }[]) => {
+    const res = await fetch(`/api/squads/${squadId}/players/bulk-initial-score`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignments }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message ?? 'Failed to assign scores');
+    }
+
+    const refreshedPlayers = await refresh();
+    const refreshedSelection = refreshedPlayers
+      .filter(p => selectedPlayers.includes(p.id))
+      .sort((a, b) => a.playerRank - b.playerRank);
+
+    // Thrown rather than reopening the panel: a second pass would assign the same scores again
+    // and land right back here, so surface it in the panel the admin is already looking at.
+    if (refreshedSelection.length !== selectedPlayers.length || refreshedSelection.some(p => !p.hasScore)) {
+      throw new Error('Scores were saved, but the roster came back inconsistent - reload the page and try again.');
+    }
+
+    setScorelessSelection(null);
+    await createGameDayFor(refreshedSelection);
+  };
+
+  // Suggested default for the bulk-assign panel: the squad's current minimum ACTIVE rank score -
+  // the same quantity scorePersister.ts's activatePlayer computes as currentMinActiveRankScore
+  // and feeds to activation.ts, so a first-timer enters at the bottom of the ladder rather than
+  // mid-table (OPEN_SLOT_PLAYERS_PLAN.md). Only ACTIVE players count: a not-yet-played or
+  // disabled player's score isn't part of the live ladder.
+  const suggestedScore = (() => {
+    const activeScores = players
+      .filter(p => p.status === 'ACTIVE' && typeof p.rankScore === 'number')
+      .map(p => p.rankScore as number);
+    // A squad whose ladder is empty (every player is a first-timer) has no minimum to sit below,
+    // so fall back to the same starting score the schema defaulted rankScore to before it
+    // became nullable.
+    return activeScores.length === 0 ? DEFAULT_STARTING_RANK_SCORE : Math.min(...activeScores);
+  })();
+
   const validationMessage = getValidationMessage(selectedPlayers.length);
   const isValid = !validationMessage;
+
+  const fulltimeRoster = players.filter(isFulltimeRosterForToday).sort((a, b) => a.playerRank - b.playerRank);
+  const openSlotRoster = players.filter(p => !isFulltimeRosterForToday(p)).sort((a, b) => a.playerRank - b.playerRank);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8 pb-32 md:pb-8">
@@ -195,10 +278,12 @@ const GamePlannerPage = () => {
         )}
       </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        {players
-          .sort((a, b) => a.playerRank - b.playerRank)
-          .map((player) => (
+      <section className="mb-6">
+        <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-on-surface-variant mb-3">
+          Full-time roster
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          {fulltimeRoster.map((player) => (
             <PlayerCard
               key={player.id}
               player={player}
@@ -206,7 +291,41 @@ const GamePlannerPage = () => {
               onToggle={handlePlayerToggle}
             />
           ))}
-      </div>
+        </div>
+      </section>
+
+      {openSlotRoster.length > 0 && (
+        <section className="mb-6">
+          <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-on-surface-variant mb-3">
+            Open slot
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {openSlotRoster.map((player) => (
+              <PlayerCard
+                key={player.id}
+                player={player}
+                isSelected={selectedPlayers.includes(player.id)}
+                onToggle={handlePlayerToggle}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {createError && (
+        <p role="alert" className="text-error text-sm mb-4">
+          {createError}
+        </p>
+      )}
+
+      {scorelessSelection && (
+        <BulkScorePanel
+          players={scorelessSelection}
+          suggestedScore={suggestedScore}
+          onCancel={() => setScorelessSelection(null)}
+          onSubmit={handleBulkScoreSubmit}
+        />
+      )}
 
       <ActionPanel
         selectedCount={selectedPlayers.length}

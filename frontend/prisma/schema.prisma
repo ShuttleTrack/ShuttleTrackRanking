@@ -14,11 +14,26 @@ datasource db {
 // Multi-squad tenancy (SQUAD_TENANCY_PLAN.md): Player/Encounter/Game are squad-scoped so
 // independent friend groups can share one deployment. A single Google email can have one
 // Player row per squad (own rankScore/playerRank/etc per squad) - see Squad/SquadAdmin below.
+// Open-slot / replacement players (OPEN_SLOT_PLAYERS_PLAN.md): a squad's roster now has two
+// kinds of Player row rather than one implicit "fulltime" kind. Kept in this same table rather
+// than split out - see "Why not separate tables" in that doc - Elo requires a single ranked pool,
+// so a second table would have to duplicate rankScore/playerRank/etc anyway.
+enum PlayerType {
+  FULLTIME
+  OPEN_SLOT
+}
+
 model Player {
   id           Int       @id @default(autoincrement())
   squadId      Int       @map("squad_id")
   name         String    @db.VarChar(32)
-  rankScore    Float     @default(1000) @map("rank_score")
+  // Nullable (OPEN_SLOT_PLAYERS_PLAN.md): an open-slot player may be added, or self-register in
+  // future, before anyone has assigned them a score. FULLTIME players still always get one at
+  // creation (players.ts:addPlayer's initialScore > 0 requirement is unchanged for FULLTIME).
+  // Every ranking-math path that reads this must treat null as "not yet eligible to be scored,
+  // ranked, or absentee-swept" rather than coercing it - see the plan's "Null-rankScore safety"
+  // section for the specific call sites this touches.
+  rankScore    Float?    @map("rank_score")
   playerRank   Int?      @map("player_rank")
   highestRank  Int?      @map("highest_rank")
   rankSince    DateTime? @map("rank_since") @db.Date
@@ -38,12 +53,49 @@ model Player {
   // (see backend Player.java isActive/isDisabled/isAvailableForGame) rather than trusting this
   // column alone.
   playerStatus String?   @map("player_status")
+  // Set once at creation, never changed afterward. "Replacement" is a temporal state derived
+  // from an active SlotReplacement row covering the current date, not stored here - see
+  // OPEN_SLOT_PLAYERS_PLAN.md's "Why not separate tables" for why a mutable REPLACEMENT type
+  // was rejected (a stuck flag from a missed revert would be silently wrong; deriving it is
+  // always correct).
+  playerType   PlayerType @default(FULLTIME) @map("player_type")
 
   squad Squad @relation(fields: [squadId], references: [id])
+  // Both sides required by Prisma for a model with two FKs to the same target (SlotReplacement
+  // below) - Player itself has no back-reference to Squad/Encounter/ScoreHistory today, so this
+  // is new, not a gap being filled in.
+  slotOwnerReplacements  SlotReplacement[] @relation("SlotOwner")
+  slotFillerReplacements SlotReplacement[] @relation("SlotFiller")
 
   @@unique([squadId, email])
   @@index([squadId])
   @@map("PLAYER")
+}
+
+// A fulltime player's slot temporarily filled by an open-slot player over a date range
+// (OPEN_SLOT_PLAYERS_PLAN.md). Self-service: the fulltime player nominates, no admin approval.
+// "Active on date D" = startDate <= D <= endDate && cancelledAt === null - computed by callers,
+// not stored, since MySQL can't express "no overlapping ranges" as a constraint; the overlap
+// check has to happen application-side inside the same transaction as the insert.
+model SlotReplacement {
+  id                  Int       @id @default(autoincrement())
+  squadId             Int       @map("squad_id")
+  fulltimePlayerId    Int       @map("fulltime_player_id")
+  replacementPlayerId Int       @map("replacement_player_id")
+  startDate           DateTime  @map("start_date") @db.Date
+  endDate             DateTime  @map("end_date") @db.Date
+  createdByEmail      String    @map("created_by_email")
+  cancelledAt         DateTime? @map("cancelled_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  squad             Squad  @relation(fields: [squadId], references: [id])
+  fulltimePlayer    Player @relation("SlotOwner", fields: [fulltimePlayerId], references: [id])
+  replacementPlayer Player @relation("SlotFiller", fields: [replacementPlayerId], references: [id])
+
+  @@index([squadId])
+  @@index([fulltimePlayerId])
+  @@index([replacementPlayerId])
+  @@map("SLOT_REPLACEMENT")
 }
 
 model Encounter {
@@ -140,13 +192,30 @@ model Squad {
   // configured (treated as one-off/no recurrence, same as isRecurring: false inside the JSON).
   schedule Json?
 
+  // Open-slot absentee/visibility windows (OPEN_SLOT_PLAYERS_PLAN.md), both counted in game days
+  // (distinct processed Encounter.encounterDate values), not calendar days - see the plan's
+  // "Backward-looking helper" section for why. Kept as two separate settings since they answer
+  // different questions ("stop penalizing" vs "stop displaying").
+  //
+  // Non-nullable with a real default (3): a null-means-never-exempt default would be the worst
+  // outcome for the feature, not the safest one - an admin who adds open-slot players without
+  // finding this setting would get them demerited/deactivated exactly as if the feature didn't
+  // exist. 3 gives one full escalation cycle (-10/-20/-30) before the sweep stops, a -60 ceiling
+  // per absence spell. Only read on the OPEN_SLOT-no-active-replacement sweep path, so existing
+  // squads (all-FULLTIME rosters) are unaffected regardless of this default.
+  openSlotAbsenteeGraceDays   Int @default(3) @map("open_slot_absentee_grace_days")
+  // Deliberately longer than the grace window above - stop penalizing well before we stop
+  // displaying, so a sporadic regular stays on the leaderboard/graph without bleeding points.
+  openSlotVisibilityGameDays  Int @default(10) @map("open_slot_visibility_game_days")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  admins     SquadAdmin[]
-  players    Player[]
-  encounters Encounter[]
-  games      Game[]
+  admins           SquadAdmin[]
+  players          Player[]
+  encounters       Encounter[]
+  games            Game[]
+  slotReplacements SlotReplacement[]
 }
 
 // Per-squad admin membership (squad + email), replacing the old flat ALLOWED_ADMIN_EMAILS env

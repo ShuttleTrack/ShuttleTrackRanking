@@ -1,14 +1,25 @@
 import { useState } from 'react';
 import type { GetServerSideProps } from 'next';
+import type { PlayerType } from '@prisma/client';
 import { useAdminPlayers } from '@/hooks/useAdminPlayers';
 import { capitalizeFirstLetter } from '@/utils/string';
 import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline';
 import type { Player } from '@/types/player';
 import { AddPlayerModal } from '@/components/player-management/AddPlayerModal';
 import { EditPlayerModal } from '@/components/player-management/EditPlayerModal';
+import { ReplacementOversight } from '@/components/player-management/ReplacementOversight';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
 import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
+
+// The server's derived status, rendered as-is rather than collapsed to the `active` boolean the
+// list was fetched under: an ENABLED player (on the roster, yet to play their first game) is not
+// the same thing as a DISABLED one, and showing both as "Inactive" hid the difference.
+const statusLabel = (status: Player['status']): string =>
+  status === 'ACTIVE' ? 'Active' : status === 'DISABLED' ? 'Disabled' : 'Not yet played';
+
+const statusBadgeClass = (status: Player['status']): string =>
+  status === 'ACTIVE' ? 'badge-success' : status === 'DISABLED' ? 'badge-error' : 'badge-outline';
 
 const PlayerTable = ({ players, onEdit, onDelete }: {
   players: Player[];
@@ -23,6 +34,7 @@ const PlayerTable = ({ players, onEdit, onDelete }: {
           <tr>
             <th>Name</th>
             <th>Email</th>
+            <th>Type</th>
             <th>Rank</th>
             <th>Score</th>
             <th>Status</th>
@@ -36,14 +48,23 @@ const PlayerTable = ({ players, onEdit, onDelete }: {
                 {capitalizeFirstLetter(player.name)}
               </td>
               <td>{player?.email}</td>
-              <td>#{player.playerRank}</td>
-              <td>{player.rankScore?.toFixed(1)}</td>
               <td>
-                <span className={`badge ${
-                  player.active ? 'badge-success' : 'badge-error'
-                }`}>
-                  {player.active ? 'Active' : 'Inactive'}
+                <span className={`badge ${player.playerType === 'OPEN_SLOT' ? 'badge-secondary' : 'badge-outline'}`}>
+                  {player.playerType === 'OPEN_SLOT' ? 'Open slot' : 'Fulltime'}
                 </span>
+              </td>
+              <td>{player.rankScore === null ? '—' : `#${player.playerRank}`}</td>
+              <td>
+                {!player.hasScore ? (
+                  <span className="text-warning font-medium">Needs a score</span>
+                ) : player.rankScore === null ? (
+                  '—'
+                ) : (
+                  player.rankScore.toFixed(1)
+                )}
+              </td>
+              <td>
+                <span className={`badge ${statusBadgeClass(player.status)}`}>{statusLabel(player.status)}</span>
               </td>
               <td>
                 <div className="flex items-center gap-2">
@@ -77,14 +98,21 @@ const PlayerTable = ({ players, onEdit, onDelete }: {
                 {player?.email}
               </div>
               <div className="text-sm text-base-content/70 mt-1">
-                Rank #{player.playerRank} • Score {player.rankScore?.toFixed(1)}
+                {!player.hasScore ? (
+                  <span className="text-warning font-medium">Needs a score</span>
+                ) : player.rankScore === null ? (
+                  'Not ranked right now'
+                ) : (
+                  `Rank #${player.playerRank} • Score ${player.rankScore.toFixed(1)}`
+                )}
               </div>
             </div>
-            <span className={`badge ${
-              player.active ? 'badge-success' : 'badge-error'
-            }`}>
-              {player.active ? 'Active' : 'Inactive'}
-            </span>
+            <div className="flex flex-col items-end gap-1">
+              <span className={`badge ${statusBadgeClass(player.status)}`}>{statusLabel(player.status)}</span>
+              <span className={`badge badge-sm ${player.playerType === 'OPEN_SLOT' ? 'badge-secondary' : 'badge-outline'}`}>
+                {player.playerType === 'OPEN_SLOT' ? 'Open slot' : 'Fulltime'}
+              </span>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-base-300">
@@ -106,11 +134,16 @@ const PlayerManagementPage = () => {
   const { id: squadId } = useSquad();
   const { players: activePlayers, isLoading: activeLoading, mutate: mutateActive } = useAdminPlayers('active');
   const { players: inactivePlayers, isLoading: inactiveLoading, mutate: mutateInactive } = useAdminPlayers('inactive');
+  // Everyone who is neither ACTIVE nor DISABLED. Without this list a freshly added player is on
+  // no admin screen at all until their first game - which used to be a brief gap for a fulltime
+  // player, but is the permanent resting state for a scoreless open-slot one, i.e. exactly the
+  // rows that need the "needs a score" marker (OPEN_SLOT_PLAYERS_PLAN.md).
+  const { players: pendingPlayers, isLoading: pendingLoading, mutate: mutatePending } = useAdminPlayers('enabled');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
 
-  if (activeLoading || inactiveLoading) {
+  if (activeLoading || inactiveLoading || pendingLoading) {
     return <PageLoader variant="screen" label="Loading players" />;
   }
 
@@ -123,7 +156,7 @@ const PlayerManagementPage = () => {
     // Implementation coming soon
   };
 
-  const handleAddPlayer = async (data: { name: string; email: string; initialScore: number }) => {
+  const handleAddPlayer = async (data: { name: string; email: string; initialScore?: number; playerType: PlayerType }) => {
     try {
       const response = await fetch(`/api/squads/${squadId}/players`, {
         method: 'POST',
@@ -137,7 +170,7 @@ const PlayerManagementPage = () => {
       }
 
       // Refresh both active and inactive player lists
-      await Promise.all([mutateActive(), mutateInactive()]);
+      await Promise.all([mutateActive(), mutateInactive(), mutatePending()]);
     } catch (error) {
       throw error;
     }
@@ -159,7 +192,7 @@ const PlayerManagementPage = () => {
       }
 
       // Refresh both active and inactive player lists
-      await Promise.all([mutateActive(), mutateInactive()]);
+      await Promise.all([mutateActive(), mutateInactive(), mutatePending()]);
     } catch (error) {
       throw error;
     }
@@ -199,6 +232,25 @@ const PlayerManagementPage = () => {
             </div>
           </div>
 
+          {pendingPlayers.length > 0 && (
+            <div className="bg-base-100 rounded-lg shadow-lg border border-base-200">
+              <div className="p-4 border-b border-base-200">
+                <h2 className="text-lg font-semibold">Not Yet Played</h2>
+                <p className="text-sm text-base-content/60">
+                  On the roster but yet to play a game. Open-slot players marked &quot;needs a
+                  score&quot; get one the first time they&apos;re picked for a game day.
+                </p>
+              </div>
+              <div className="p-4">
+                <PlayerTable
+                  players={pendingPlayers}
+                  onEdit={handleEditPlayer}
+                  onDelete={handleDeletePlayer}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="bg-base-100 rounded-lg shadow-lg border border-base-200">
             <div className="p-4 border-b border-base-200">
               <h2 className="text-lg font-semibold">Inactive Players</h2>
@@ -212,6 +264,8 @@ const PlayerManagementPage = () => {
               />
             </div>
           </div>
+
+          <ReplacementOversight squadId={squadId} />
         </div>
 
         <AddPlayerModal
