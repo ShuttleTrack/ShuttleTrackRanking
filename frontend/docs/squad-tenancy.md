@@ -314,3 +314,7 @@ schema.
    (public/private), squad-admin-editable.
 8. [#196](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/196) - collapsed the
    recurrence-schedule columns into `Squad.schedule` (one JSON column).
+9. [#198](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/198) - design doc for
+   open-slot/replacement players (`OPEN_SLOT_PLAYERS_PLAN.md`).
+10. [#203](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/203) - open-slot/replacement
+    players implementation (see "Open-slot & replacement players" above).
