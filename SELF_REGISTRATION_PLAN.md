@@ -93,7 +93,9 @@ Consequences the implementation must handle, none of which the first draft cover
 - **The cap is checked at request time, not only at approve.** `createJoinRequest` rejects when the squad is already at `maxPlayers`, and the browse card renders a **disabled "Squad is full"** CTA rather than inviting a request that can only ever be refused. No waitlist (see out-of-scope).
 - **A squad at its cap cannot approve anyone, and its own admin cannot unblock it** — `maxPlayers` is superadmin-only editable. The approve modal must say that explicitly rather than surfacing a bare failure.
 
-This sharpens open question 3 below: the question is not just "should squad admins be able to edit `maxPlayers`" but "should an `OPEN_SLOT` player count against it at all".
+**Settled on review: the cap stays exactly as it is.** An `OPEN_SLOT` player counts against `maxPlayers` like any other, and `maxPlayers` stays superadmin-only editable. A squad admin who needs more room asks a platform superadmin to raise it — the same path that already exists, and an acceptable one at these group sizes given raising a roster cap is a rare, deliberate act rather than day-to-day squad management.
+
+So no permission or counting change is in scope. What this does mean is that the two places a full squad surfaces — the disabled "Squad is full" browse CTA, and the approve modal — carry the *whole* explanation, including that a superadmin can raise the cap. Those strings are the entire mitigation for this, so they need to say who to ask, not just "full".
 
 ---
 
@@ -311,7 +313,8 @@ Recorded here so the union isn't added later as a "fix" for a problem that does 
 
 ## Open questions for review
 
-1. **`maxPlayers` and open-slot players.** Every approval consumes a cap slot, because the cap counts all `Player` rows regardless of type or status. Should an `OPEN_SLOT` player count against `maxPlayers` at all — or should the cap apply to fulltime only, which would make "open for open-slot registration" meaningful even for a nominally full squad? Related: `maxPlayers` is superadmin-only editable, so a capped squad's own admin cannot unblock approvals.
-2. **Rejected requests.** Should a rejection block re-requesting for some period, or is "an admin clicks reject again, and can see the previous rejection in the table" good enough at these group sizes?
-3. **Login redirect.** `/login` → `/squads` sends one-squad members to their board and multi-squad members to the picker instead of the public aggregate at `/`. Intended improvement, or should signed-in users keep landing on `/`?
-4. **Deactivated members.** Confirmed as out of scope above: a `DISABLED` player cannot self-re-apply and sees "on the roster, currently inactive". Is a reactivation request path wanted as follow-up work, or is "contact an admin" the right permanent answer?
+1. **Rejected requests.** Should a rejection block re-requesting for some period, or is "an admin clicks reject again, and can see the previous rejection in the table" good enough at these group sizes?
+2. **Login redirect.** `/login` → `/squads` sends one-squad members to their board and multi-squad members to the picker instead of the public aggregate at `/`. Intended improvement, or should signed-in users keep landing on `/`?
+3. **Deactivated members.** Confirmed as out of scope above: a `DISABLED` player cannot self-re-apply and sees "on the roster, currently inactive". Is a reactivation request path wanted as follow-up work, or is "contact an admin" the right permanent answer?
+
+**Settled:** the `maxPlayers` cap — open-slot players count against it, and raising it stays a superadmin action (see Decision 3).
