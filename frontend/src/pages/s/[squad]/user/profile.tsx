@@ -7,7 +7,7 @@ import { capitalizeFirstLetter } from '@/utils/string';
 import TrendIndicator from '@/components/leaderboard/TrendIndicator';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadUserOrRedirect } from '@/lib/squadPage';
-import type { SquadSummary } from '@/contexts/SquadContext';
+import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
 
 const iconOutlineBtn =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-surface-container-high/50 text-on-surface transition-colors hover:border-primary/40';
@@ -18,6 +18,7 @@ interface UserProfilePageProps {
 }
 
 const UserProfilePage = ({ playerId }: UserProfilePageProps) => {
+  const { name: squadName } = useSquad();
   const { data: session } = useSession();
   const { status } = useRequireUser(playerId !== null);
   const { rankings, isLoading: rankingsLoading } = useRankings();
@@ -61,6 +62,9 @@ const UserProfilePage = ({ playerId }: UserProfilePageProps) => {
                 </div>
                 <div className="text-xs text-on-surface-variant truncate">
                   {session?.user?.email}
+                </div>
+                <div className="mt-0.5 font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/60 truncate">
+                  {squadName}
                 </div>
               </div>
             </div>
