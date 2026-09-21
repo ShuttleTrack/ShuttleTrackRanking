@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { GetServerSideProps } from 'next';
 import useSWR from 'swr';
-import { PlayerType } from '@prisma/client';
 import { usePlayers } from '@/hooks/usePlayers';
 import { useRequireUser } from '@/hooks/useRequireUser';
 import { capitalizeFirstLetter } from '@/utils/string';
@@ -12,7 +11,7 @@ import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
 interface OpenSlotOption {
   id: number;
   name: string;
-  email: string;
+  maskedEmail: string;
 }
 
 interface ReplacementRow {
@@ -23,9 +22,27 @@ interface ReplacementRow {
   replacementPlayer: { id: number; name: string };
 }
 
+interface WindowPreview {
+  ok: boolean;
+  error: string | null;
+  playingDays: number;
+  playingDates: string[];
+  minPlayingDays: number;
+  maxEndDate: string | null;
+}
+
 interface ReplacementPageProps {
   squad: SquadSummary;
   playerId: number | null;
+}
+
+// A nominee who has never played has no rankScore, and the absentee sweep's null-score skip runs
+// before the replacement path - so the window's escalating demerit has no effect on them until
+// their first game. Worth saying up front rather than letting it surprise the nominating player
+// (OPEN_SLOT_PLAYERS_PLAN.md, "Scoreless nominee").
+function nomineeNeedsScore(players: { id: number; hasScore: boolean }[], nomineeId: number): boolean {
+  const nominee = players.find((p) => p.id === nomineeId);
+  return nominee ? !nominee.hasScore : false;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -60,6 +77,28 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
     squadId ? `/api/squads/${squadId}/replacements` : null,
     fetcher
   );
+
+  // Runs the server's own window validation as the dates change, so the form can say "2 playing
+  // days selected, need 3" (and which dates those are) before submit rather than after
+  // (OPEN_SLOT_PLAYERS_PLAN.md). A dedicated endpoint rather than counting client-side: the
+  // squad's schedule is squad-admin-readable only.
+  const { data: preview } = useSWR<WindowPreview>(
+    squadId && startDate && endDate
+      ? `/api/squads/${squadId}/replacements/preview?startDate=${startDate}&endDate=${endDate}`
+      : null,
+    fetcher
+  );
+
+  // Bounds the end-date picker with the same 4-month rule the server enforces. Only known once
+  // a start date is picked, since the cap is relative to it.
+  const { data: startOnlyPreview } = useSWR<WindowPreview>(
+    squadId && startDate
+      ? `/api/squads/${squadId}/replacements/preview?startDate=${startDate}&endDate=${startDate}`
+      : null,
+    fetcher
+  );
+  const maxEndDate = startOnlyPreview?.maxEndDate ?? undefined;
+  const selectedNeedsScore = selected ? nomineeNeedsScore(players, selected.id) : false;
 
   useEffect(() => {
     if (selected) setQuery(selected.name);
@@ -118,7 +157,9 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
     return <PageLoader variant="tall" label="Loading" />;
   }
 
-  if (currentPlayer && currentPlayer.playerType !== PlayerType.FULLTIME) {
+  // String literal, not Prisma's PlayerType object - a value import of '@prisma/client' here
+  // would ship its browser runtime in this page's bundle (see game-planner.tsx).
+  if (currentPlayer && currentPlayer.playerType !== 'FULLTIME') {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-8 mt-6 sm:mt-8 pb-8">
         <p className="text-on-surface-variant">
@@ -136,7 +177,7 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
         </h1>
         <div className="mt-3 h-0.5 w-10 rounded-full bg-primary" aria-hidden />
         <p className="text-on-surface-variant mt-2">
-          Give your slot to an open-slot player for a date range - at least 3 playing days. No admin approval
+          Give your slot to an open-slot player for a date range - at least 3 playing days, at most 4 months. No admin approval
           needed.
         </p>
       </header>
@@ -167,7 +208,7 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
                     onClick={() => setSelected(option)}
                   >
                     <div className="font-medium text-on-surface">{capitalizeFirstLetter(option.name)}</div>
-                    <div className="text-xs text-on-surface-variant">{option.email}</div>
+                    <div className="text-xs text-on-surface-variant">{option.maskedEmail}</div>
                   </button>
                 ))
               )}
@@ -187,9 +228,47 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
           </div>
           <div>
             <label className="block text-sm text-on-surface-variant mb-1">End date</label>
-            <input type="date" className={inputClass} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            <input
+              type="date"
+              className={inputClass}
+              value={endDate}
+              min={startDate || undefined}
+              max={maxEndDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
           </div>
         </div>
+
+        {preview && (
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm ${
+              preview.ok ? 'border-gray-600 text-on-surface-variant' : 'border-error/40 text-error'
+            }`}
+            aria-live="polite"
+          >
+            {preview.error ? (
+              preview.error
+            ) : (
+              <>
+                <span className="text-on-surface font-medium">
+                  {preview.playingDays} playing day{preview.playingDays === 1 ? '' : 's'} selected
+                </span>{' '}
+                (need {preview.minPlayingDays})
+                {preview.playingDates.length > 0 && (
+                  <div className="mt-1 text-xs">{preview.playingDates.join(' · ')}</div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {selectedNeedsScore && (
+          <p className="text-sm text-warning">
+            {capitalizeFirstLetter(selected!.name)} hasn&apos;t played yet, so they have no rank
+            score. Missing a day in this window won&apos;t cost them anything until an admin gives
+            them a starting score at their first game day.
+          </p>
+        )}
 
         {error && <p className="text-error text-sm">{error}</p>}
         {success && <p className="text-success text-sm">{success}</p>}

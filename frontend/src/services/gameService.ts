@@ -12,6 +12,14 @@ interface MatchScore {
   submitted?: boolean;
 }
 
+// The create/update routes reject a group containing a scoreless player with a 400 that names
+// them (OPEN_SLOT_PLAYERS_PLAN.md's server-side gate) - that message is the whole point of the
+// gate, so pass it through instead of flattening every failure to a fixed string.
+async function failureMessage(response: Response, fallback: string): Promise<string> {
+  const body = await response.json().catch(() => null);
+  return body && typeof body.message === 'string' ? body.message : fallback;
+}
+
 // Not a hook, so squadId is passed explicitly by every caller rather than read from
 // SquadContext (see hooks/*.ts for the equivalent read-side pattern).
 export const gameService = {
@@ -21,7 +29,7 @@ export const gameService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to create game');
+    if (!response.ok) throw new Error(await failureMessage(response, 'Failed to create game'));
     return response.json();
   },
 
@@ -37,7 +45,7 @@ export const gameService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to update game');
+    if (!response.ok) throw new Error(await failureMessage(response, 'Failed to update game'));
     return response.json();
   },
 

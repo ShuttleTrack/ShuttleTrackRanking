@@ -15,6 +15,14 @@ export interface Player {
   timeInHighestRank: string;
   active: boolean;
   playerType: PlayerType;
+  // The server's own three-state derived status (see lib/ranking/playerStatus.ts). `active`
+  // above only distinguishes ACTIVE from everything else, which can't tell a disabled player
+  // apart from one who simply hasn't played their first game yet.
+  status: 'ACTIVE' | 'ENABLED' | 'DISABLED';
+  // True once the player has a rankScore on their row at all. Not the same as
+  // `rankScore !== null` here: that field is nulled for every non-ACTIVE player, so it can't be
+  // used to spot a player who still needs a starting score (OPEN_SLOT_PLAYERS_PLAN.md).
+  hasScore: boolean;
 }
 
 export interface PlayerContextType {
