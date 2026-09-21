@@ -1,46 +1,41 @@
-import Link from 'next/link';
 import { useSession } from 'next-auth/react';
+import { LockClosedIcon } from '@heroicons/react/24/outline';
 import { useMySquads } from '@/hooks/useMySquads';
-import { SquadBoardSelector } from './SquadBoardSelector';
-
-function SelectorBand({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="relative border-y border-white/5 bg-black/30 mb-2 sm:mb-3">
-      <div className="pointer-events-none absolute inset-0 form-strip" aria-hidden />
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-8 py-1.5 sm:py-2">{children}</div>
-      <div className="h-px w-full kinetic-gradient" aria-hidden />
-    </div>
-  );
-}
+import { SquadBoardSelector, SelectorBand } from './SquadBoardSelector';
 
 const PublicRankingsCallout = () => {
   const { data: session } = useSession();
-  const { squads } = useMySquads();
+  const { squads, isLoading } = useMySquads();
   const hasSquads = session && squads.length > 0;
+
+  if (isLoading) {
+    return (
+      <SelectorBand>
+        <div className="min-h-[36px]" aria-hidden />
+      </SelectorBand>
+    );
+  }
 
   if (hasSquads) {
     return <SquadBoardSelector />;
   }
 
+  const message = session
+    ? 'Join a squad for rankings and match history.'
+    : 'Sign in for squad rankings and match history.';
+
   return (
-    <SelectorBand>
-      <div
-        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3"
-        role="status"
-      >
-        <p className="text-sm text-on-surface-variant font-medium text-center sm:text-left leading-snug">
-          {session
-            ? 'Select a squad to see detailed rankings, encounter history, and game days.'
-            : 'Sign in and select a squad to see detailed rankings, encounter history, and game days.'}
+    <SelectorBand scrim>
+      <div className="flex min-h-[36px] items-center justify-center gap-2.5">
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/40 bg-primary/10 text-primary"
+          aria-hidden
+        >
+          <LockClosedIcon className="h-4 w-4" />
+        </span>
+        <p className="min-w-0 text-[13px] font-medium leading-none text-on-surface-variant sm:text-sm">
+          {message}
         </p>
-        {!session && (
-          <Link
-            href="/login"
-            className="inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-lg border border-white/10 bg-surface-container-high/50 px-4 py-1.5 font-headline text-sm font-semibold text-on-surface transition-colors hover:border-primary/40 mx-auto sm:mx-0"
-          >
-            Sign in
-          </Link>
-        )}
       </div>
     </SelectorBand>
   );

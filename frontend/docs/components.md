@@ -64,7 +64,7 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **File:** `src/components/leaderboard/PublicRankingsCallout.tsx`
 
-**Purpose:** On `/`, wraps `SquadBoardSelector` when the user has squads; otherwise the sign-in / picker message band.
+**Purpose:** On `/`, band above the public leaderboard title. While `useMySquads` is loading, renders empty `SelectorBand` chrome. Signed-in users with squads get `SquadBoardSelector`. Otherwise: `SelectorBand` with `scrim`, lock icon, and one-line caption (sign-in vs join-squad); no in-band CTA.
 
 ---
 

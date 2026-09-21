@@ -29,10 +29,22 @@ const optionRowClass = (active: boolean, selected: boolean) =>
         : 'text-on-surface hover:bg-surface-container-high'
   );
 
-function SelectorBand({ children }: { children: ReactNode }) {
+export function SelectorBand({
+  children,
+  scrim = false,
+}: {
+  children?: ReactNode;
+  scrim?: boolean;
+}) {
   return (
     <div className="relative border-y border-white/5 bg-black/30 mb-2 sm:mb-3">
       <div className="pointer-events-none absolute inset-0 form-strip" aria-hidden />
+      {scrim && (
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(26,26,26,0.85),transparent_70%)]"
+          aria-hidden
+        />
+      )}
       <div className="relative max-w-7xl mx-auto px-4 sm:px-8 py-1.5 sm:py-2">{children}</div>
       <div className="h-px w-full kinetic-gradient" aria-hidden />
     </div>
@@ -89,7 +101,7 @@ export function SquadBoardSelector({ currentSlug }: SquadBoardSelectorProps) {
 
   return (
     <SelectorBand>
-      <div className="flex justify-center">
+      <div className="flex min-h-[36px] items-center justify-center">
         <Listbox value={selectedValue} onChange={handleChange}>
           <div className="relative">
             <div className={controlShellClass}>
