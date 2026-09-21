@@ -43,7 +43,7 @@ export function buildPublicRankingsFromMemberships(
 
   const merged: PublicPlayerRankingData[] = [];
 
-  for (const rows of byEmail.values()) {
+  for (const rows of Array.from(byEmail.values())) {
     const sortedForPrimary = [...rows].sort(comparePrimaryMembership);
     const primary = sortedForPrimary[0];
     const playerIds = rows.map((r) => r.playerId);
@@ -54,7 +54,7 @@ export function buildPublicRankingsFromMemberships(
     for (const r of rows) {
       squadMap.set(r.squadSlug, { slug: r.squadSlug, name: r.squadName });
     }
-    const squads = [...squadMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const squads = Array.from(squadMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
     merged.push({
       id: primary.playerId,
