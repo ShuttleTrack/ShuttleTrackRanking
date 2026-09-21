@@ -101,7 +101,7 @@ export function SquadBoardSelector({ currentSlug }: SquadBoardSelectorProps) {
 
   return (
     <SelectorBand>
-      <div className="flex min-h-[36px] w-full items-center justify-center">
+      <div className="flex min-h-[36px] w-full items-center justify-center md:justify-start">
         <Listbox value={selectedValue} onChange={handleChange}>
           <div className="relative w-[90%] sm:w-auto">
             <div className={controlShellClass}>
