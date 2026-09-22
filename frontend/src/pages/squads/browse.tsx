@@ -48,7 +48,7 @@ function monogram(name: string): string {
 
 function rosterLine(squad: DirectorySquad): string {
   if (squad.fulltimePlayerCount === 0) {
-    return 'No players yet';
+    return 'No players';
   }
   if (squad.maxPlayers !== null) {
     return `${squad.fulltimePlayerCount} of ${squad.maxPlayers} players`;
@@ -84,7 +84,7 @@ const SquadCard = ({
 
     <div className="mt-4 flex gap-2 border-t border-white/10 pt-4">
       <Link href={`/s/${squad.slug}`} className={`${outlineBtn} ${cardActionBtn}`}>
-        View board
+          View Leaderboard
       </Link>
       {squad.membership === 'none' && (
         <button
