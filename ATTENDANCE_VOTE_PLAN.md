@@ -6,6 +6,8 @@
 
 **Second revision:** a second review pass found that the first revision's own fixes had introduced two ordering defects and left the reconciliation rule incoherent. **`announcedVacancies` was written inside the transaction and the retry keyed on it being null** — so after a failed send the column already held the new value and the retry could never fire; it is now advanced only *after* a successful send, and the scheduler simply re-runs the sync on every `VOTING_CLOSED` row before `slotLockAt`, which needs no null special case. **`syncOpenSlotVacancies` cannot open its own transaction** while its callers hold a `SELECT … FOR UPDATE` on the same row — that is a second connection waiting on the caller's own lock — so it becomes `planVacancySync(tx, …)`, taking the caller's client, and only the outermost caller commits and sends. **The reconciliation rule claimed the vote moved with the slot while the steps deleted it**: discarding is correct (nobody inherits someone else's confirmation) and the heading was wrong, but the incoming holder then needs a way to confirm after the deadline, the outgoing holder's open-slot row must be *deleted* rather than `WITHDRAWN` (which is terminal, and would strand them if the window were later cancelled), the helper is a two-sided transfer rather than a per-player sweep, and `approveCancellationRequest` and the shorten path are callers too. Also: the admin `release` action reached the route table and the identity-rule exception it implies; Decision 8 no longer contradicts its own resolved question; disabling a squad from platform admin is named as the separate handler it is; and reconciliation's scope is pinned to existing `VOTING_OPEN`/`VOTING_CLOSED` rows **including today's**, since today's closed vote is exactly the one that must drop a disabled player's IN.
 
+**Third revision:** a third pass found that the reconciliation rule as revised **fills one slot twice** after the deadline. Deleting the outgoing holder's IN opens a vacancy, the sync promotes a waiting-list player into it, and the incoming holder then confirms on top — one physical slot held by two people, and one more person than the session has room for. The "`minPlayers` is a minimum, not a cap" argument does not cover it, because the extra person is manufactured by the system's own promotion rather than by anyone choosing to come; flooring `vacancies` at zero prevents a further promotion but does not take back the one already made. Fixed by extending Decision 6's reservation to the structural side: a transferred **IN** moves to the incoming holder as an *inherited reservation* (`GameDayVote.inheritedFromPlayerId`), which holds the slot in `slotsHeld` but is not a confirmation and so stays out of `confirmedIn` — the sync sees no vacancy, and their own IN later clears the stamp without moving the total. A transferred **OUT or absent** vote reserves nothing, which is the only case the old argument ever fitted. Also in this pass: the vote table's extra row now covers a slot gained in **either** direction (creating a window after the deadline is the same gain as cancelling one); the planner banner lists unconfirmed transferred holders beside unconfirmed assignees, since they were previously neither pre-ticked nor mentioned; the admin release is reclassified as `removePlayerFromGameDays` rather than a transfer, having no incoming player; and three sentences left over from the second revision that still said "call `syncOpenSlotVacancies`" — undoing the caller-owns-the-transaction fix — now say `planVacancySync(tx)` inside `withGameDayLock`.
+
 **Scope in one line:** give a squad a real **game day instance** — created two days ahead from its own schedule — that collects an in/out vote from whoever holds a slot that day, runs an open-slot waiting list for everyone else, closes voting at 13:00 to freeze attendance and fill the gap, and announces all of it to two per-squad Telegram groups.
 
 ## Context
@@ -143,12 +145,14 @@ The two terms are **disjoint by construction** — a player is either a structur
 **`confirmedIn`** — how many people have actually said they are coming.
 
 ```
-confirmedIn = count(votes IN)     // structural holders and assigned open-slot players alike
+confirmedIn = count(votes where choice = IN and inheritedFromPlayerId is null)
+              // structural holders and assigned open-slot players alike, but NOT a slot
+              // inherited through a post-deadline transfer - see "Eligibility is live"
 ```
 
-This is what the 09:00 minimum check compares, what the roster displays, and what Game Planner pre-ticks. An assigned player who has not voted appears as **awaiting confirmation** — visible to everyone on the page and to the admin in the planner banner — and is deliberately *not* counted as attendance.
+This is what the 09:00 minimum check compares, what the roster displays, and what Game Planner pre-ticks. **Two kinds of person hold a slot without having confirmed** — an assigned open-slot player who has not voted, and a structural holder sitting on an inherited reservation — and both appear as **awaiting confirmation**, visible on the page and in the planner banner, deliberately *not* counted as attendance.
 
-A consequence worth stating: `slotsHeld >= confirmedIn` always, and the difference is exactly the set of unconfirmed assignees. A session can therefore be "full" (no vacancies to offer) while still short of confirmed players. That is the correct behaviour — those slots are spoken for — and the gap closes itself as people confirm, or reopens via `syncOpenSlotVacancies` when they vote out.
+A consequence worth stating: `slotsHeld >= confirmedIn` always, and the difference is exactly the set of people holding a slot without having confirmed - unconfirmed assignees, plus any inherited reservation from a post-deadline transfer. A session can therefore be "full" (no vacancies to offer) while still short of confirmed players. That is the correct behaviour — those slots are spoken for — and the gap closes itself as people confirm, or reopens via the vacancy sync when they vote out.
 
 **Voting OUT and giving up an assigned slot are one action**, not two. `castVote(OUT)` writes the vote row and flips the `GameDayOpenSlot` to `WITHDRAWN` in the same transaction. Two separate operations would let the vote and the slot disagree — an "out" player still occupying a slot, or a withdrawn player still counted in — and there is no reading of the domain where those states mean anything.
 
@@ -260,6 +264,11 @@ model GameDayVote {
   gameDayId Int        @map("game_day_id")
   playerId  Int        @map("player_id")
   choice    VoteChoice
+  // Non-null = this IN was inherited with a transferred slot, not cast by this player. It holds
+  // the slot (slotsHeld) but is not a confirmation (confirmedIn), exactly like an ASSIGNED
+  // GameDayOpenSlot row with no vote. Cleared the moment they vote for themselves. Without it a
+  // post-deadline transfer fills one slot twice - see "The transferred slot must be reserved".
+  inheritedFromPlayerId Int? @map("inherited_from_player_id")
   votedAt   DateTime   @default(now()) @map("voted_at")
   updatedAt DateTime   @updatedAt      @map("updated_at")
 
@@ -410,11 +419,44 @@ A slot transfer covering a `VOTING_OPEN` or `VOTING_CLOSED` game day reconciles 
 2. **Delete the incoming holder's `GameDayOpenSlot` row**, whatever its status — `WAITING` *and* `ASSIGNED` alike — so they cannot hold a structural slot and an open slot at once. **Deleted, not `WITHDRAWN`.** `WITHDRAWN` is terminal (see below), and marking it that way would mean that cancelling the window later leaves the player unable to rejoin the queue they were removed from by a system action they did not take. `WITHDRAWN` stays terminal only when *the player themselves* gave a slot back.
 3. **Call `planVacancySync`**, since step 1 may have widened the gap.
 
-**The incoming holder must be able to confirm after the deadline.** A structural holder's slot is only counted once they vote IN, so someone who gains a slot after 13:00 starts out uncounted — and the post-close "IN rejected" rule would leave them permanently unable to say they are coming. So: **a player who gains a structural slot after voting has closed may vote IN until `slotLockAt`**, exactly as an assigned open-slot player may. This cannot over-fill anything, because `minPlayers` is a *minimum* that triggers the open-slot flow, never a cap — `vacancies` simply floors at zero.
+**The incoming holder must be able to confirm after the deadline.** A structural holder's slot is only counted once they vote IN, so someone who gains a slot after 13:00 starts out uncounted — and the post-close "IN rejected" rule would leave them permanently unable to say they are coming. So: **a player who gains a structural slot after voting has closed may vote IN until `slotLockAt`**, exactly as an assigned open-slot player may.
 
-That also answers the reverse case. If the window is cancelled and the owner takes their slot back after the deadline, their old vote is gone and is **not** restored — but they may vote IN under the same rule. "Cancelling reverses it" therefore means the slot and the right to vote return, not that a deleted vote reappears; the end-to-end step says so explicitly.
+### The transferred slot must be reserved, or the transfer fills it twice
 
-**Four callers, not two.** A window does not only begin at `createSlotReplacement`. It ends at **`approveCancellationRequest`**, and a **shorten** can pull `endDate` back before a game date without ever setting `cancelledAt`. All of `createSlotReplacement`, `approveCancellationRequest`, the shorten path, and the admin release must reconcile, or the vote stays with a player who no longer holds the slot.
+Steps 1 and 3 above, plus that confirmation right, combine into a double-fill — and the "`minPlayers` is a minimum, not a cap" argument does **not** cover it, because the extra person is manufactured by the system's own promotion rather than by people choosing to come. With `minPlayers = 16`, 13 structural INs and 3 promoted assignees (`slotsHeld = 16`), transferring one of those 13 slots after the deadline goes:
+
+| | `slotsHeld` |
+|---|---|
+| before the transfer | 13 IN + 3 assigned = **16** |
+| step 1 deletes the outgoing IN | 12 + 3 = **15** |
+| step 3 sees a vacancy and promotes a 4th assignee | 12 + 4 = **16** |
+| the incoming holder confirms | 13 + 4 = **17** |
+
+Seventeen people for a sixteen-person session, and structurally worse than the number suggests: one physical slot is now held by *both* the incoming holder and the waiting-list player who was let in because that slot looked empty. Flooring `vacancies` at zero does not help — it prevents a *further* promotion, it does not take back the one already made. This only bites after the deadline; while voting is open `planVacancySync` does nothing, so the incoming holder can vote with nobody being promoted against them.
+
+**The fix is the reservation Decision 6 already uses for an unconfirmed assignee**, applied to the structural side. When a transfer deletes an outgoing vote of **IN**, the incoming holder inherits that slot as a reservation, held whether or not they have voted:
+
+- `slotsHeld` counts them, so step 3 sees no vacancy and promotes nobody.
+- `confirmedIn` does **not** count them — a reservation is not a confirmation, exactly as an assignment is not.
+- Their later IN moves them into `confirmedIn` **without changing `slotsHeld`**. No double-count, no new promotion.
+- Their OUT drops the reservation, and *then* the sync promotes into the genuine vacancy.
+
+If the deleted vote was **OUT, or absent**, there is no reservation to inherit: the outgoing holder was not occupying a slot, so the incoming one starts with nothing and their IN simply adds a person. That case really is "the minimum, not a cap", and is the only one where the earlier argument was ever the right one.
+
+**Representing it:** rather than deleting the outgoing IN row and inventing new state, the transfer **moves the row to the incoming player and stamps `inheritedFromPlayerId`** with the outgoing player's id:
+
+```prisma
+// Non-null = this IN was inherited with a transferred slot, not cast by this player. It holds
+// the slot (slotsHeld) but is not a confirmation (confirmedIn), exactly like an ASSIGNED
+// GameDayOpenSlot row with no vote. Cleared the moment they vote for themselves.
+inheritedFromPlayerId Int? @map("inherited_from_player_id")
+```
+
+so `confirmedIn = count(votes where choice = IN and inheritedFromPlayerId is null)`, and it doubles as the audit trail for where the slot came from. An outgoing **OUT** row is deleted as before — there is nothing to inherit.
+
+That also answers the reverse case. If the window is cancelled and the owner takes their slot back after the deadline, they inherit the replacement's reservation on the same terms; nothing is restored and nothing is promoted against them. "Cancelling reverses it" therefore means the slot and the right to vote return, not that a cast vote reappears.
+
+**Three transfer callers, not one.** A window does not only begin at `createSlotReplacement`. It ends at **`approveCancellationRequest`**, and a **shorten** can pull `endDate` back before a game date without ever setting `cancelledAt`. All of `createSlotReplacement`, `approveCancellationRequest` and the shorten path must call `reconcileSlotTransfer`, or the vote stays with a player who no longer holds the slot. **The admin release is not one of them** - there is no incoming player, so it is `removePlayerFromGameDays` plus the vacancy sync, not a transfer.
 
 **The helper is a transfer, not a per-player sweep.** `reconcileGameDaysForPlayer(squadId, playerId, fromDate)` was the wrong shape: the rule has an outgoing *and* an incoming side, and a per-player helper called from both sides would delete the incoming holder's vote too. Two functions:
 
@@ -434,7 +476,7 @@ removePlayerFromGameDays(tx, squadId, playerId)   // the DISABLED case - no inco
 | Voter | Voting open | Voting closed, before `slotLockAt` | After `slotLockAt` |
 |---|---|---|---|
 | Structural slot holder | IN and OUT freely, any number of times | **IN rejected** — "voting has closed"; OUT allowed **only from a current IN** | OUT still allowed, but **no longer reopens a slot** |
-| Structural holder who **gained** the slot after the deadline (a cancelled/shortened window) | n/a | IN allowed — their confirmation, same right as an assignee; OUT allowed | **IN rejected**; OUT allowed, reopens nothing |
+| Structural holder who **gained** the slot after the deadline — a window created, cancelled or shortened, in **either** direction | n/a | IN allowed — their confirmation, same right as an assignee; OUT allowed, and releases any inherited reservation | **IN rejected**; OUT allowed, reopens nothing |
 | Assigned open slot, `source: WAITING_LIST` | n/a — assignment only happens once voting has closed | IN allowed (their confirmation); OUT allowed, and releases the slot | **OUT rejected** — too late to refill |
 | Assigned open slot, `source: DIRECT` | n/a | IN allowed; **OUT rejected** — "this slot is yours" | same |
 | Anyone else | rejected — not a voter | rejected | rejected |
@@ -443,11 +485,11 @@ removePlayerFromGameDays(tx, squadId, playerId)   // the DISABLED case - no inco
 
 Reaching the deadline with no vote row at all means you are already out, so an attempt to go OUT is rejected with the same message as IN rather than writing a row that means nothing.
 
-**The third column reconciles a contradiction in the first draft.** Decision 7's prose said that past `slotLockAt` "the slot stops being transferable for everyone", but the table applied the lock only to a waiting-list assignee — so a structural holder could vote out at 18:50, and that path called `syncOpenSlotVacancies`, which would cheerfully post "spots still open" to a group that has ten minutes' notice. Both halves are fixed: a holder may still record that they are not coming (the admin needs the truth for the planner, and people's evenings really do change), but **`syncOpenSlotVacancies` is a no-op past `slotLockAt`** — no promotion, no post. Dropping out late is information, not a vacancy.
+**The third column reconciles a contradiction in the first draft.** Decision 7's prose said that past `slotLockAt` "the slot stops being transferable for everyone", but the table applied the lock only to a waiting-list assignee — so a structural holder could vote out at 18:50, and that path called `syncOpenSlotVacancies`, which would cheerfully post "spots still open" to a group that has ten minutes' notice. Both halves are fixed: a holder may still record that they are not coming (the admin needs the truth for the planner, and people's evenings really do change), but **the vacancy sync is a no-op past `slotLockAt`** — no promotion, no post. Dropping out late is information, not a vacancy.
 
-**An unconfirmed direct claim needs an escape hatch, and it is an admin one.** A direct claimer cannot vote OUT at all, including before they have confirmed — so an unconfirmed direct claim sits in `slotsHeld`, stays out of `confirmedIn`, and nothing ever re-offers it. One mis-tap holds a court slot for the night. Rather than weakening Decision 7, the answer is an **admin release**: `PATCH /game-days/[date]/admin` with `{ action: 'release', playerId }` sets the entry `WITHDRAWN` and calls the same sync. This is also the answer to old open question 5 — releasing one slot is the operation that was actually missing on day one, not reopening a whole vote.
+**An unconfirmed direct claim needs an escape hatch, and it is an admin one.** A direct claimer cannot vote OUT at all, including before they have confirmed — so an unconfirmed direct claim sits in `slotsHeld`, stays out of `confirmedIn`, and nothing ever re-offers it. One mis-tap holds a court slot for the night. Rather than weakening Decision 7, the answer is an **admin release**: `PATCH /game-days/[date]/admin` with `{ action: 'release', playerId }` sets the entry `WITHDRAWN`, deletes that player's vote row for the game day if they had one, and runs the same vacancy sync - i.e. `removePlayerFromGameDays`, not a transfer, since no one is taking the slot over. This is also the answer to old open question 5 — releasing one slot is the operation that was actually missing on day one, not reopening a whole vote.
 
-Every transition that can widen the gap — a holder's post-deadline IN → OUT, an assignee's OUT, a direct claim, an admin release — is followed by `syncOpenSlotVacancies`.
+Every transition that can widen the gap — a holder's post-deadline IN → OUT, an assignee's OUT, a direct claim, a slot transfer, an admin release — runs inside `withGameDayLock` and ends with `planVacancySync(tx, gameDayId)`, with the send performed by the outermost caller after commit.
 
 ## Open slots: `lib/gameDay/openSlots.ts` (new)
 
@@ -521,10 +563,10 @@ which takes `SELECT … FOR UPDATE` on the `GameDay` row via `$queryRaw` as the 
 
 - The player must be in `getOpenSlotPool` for this date, and must not already have a `WITHDRAWN` row (below).
 - `status === VOTING_OPEN` → insert `WAITING`. The 09:00 ping is not a precondition (Decision 8).
-- `status === VOTING_CLOSED` → recompute `vacancies` **inside the lock**; `> 0` → insert straight to `ASSIGNED, source: DIRECT`, then call `syncOpenSlotVacancies`; `== 0` → `ValidationError`, "no open slots available".
+- `status === VOTING_CLOSED` → recompute `vacancies` **inside the lock**; `> 0` → insert straight to `ASSIGNED, source: DIRECT` **in this same transaction, before** `planVacancySync(tx, gameDayId)` counts, or the claim will not be in the count; `== 0` → `ValidationError`, "no open slots available".
 - Past `slotLockAt` → rejected outright.
 
-**Leaving** — `leaveOpenSlot(squadId, gameDayId, playerId)` handles only the `WAITING` case: delete the row, since it is just a queue, and a deleted row can be re-created if they change their mind. Giving up an **assigned** slot goes through `castVote(OUT)` (Decision 6), so there is exactly one code path that releases a slot.
+**Leaving** — `leaveOpenSlot(squadId, gameDayId, playerId)` handles only the `WAITING` case: delete the row, since it is just a queue, and a deleted row can be re-created if they change their mind. Giving up an **assigned** slot goes through `castVote(OUT)` (Decision 6). That is the only way a *player* releases their own slot; an admin can release someone else's (below), so there are two paths in total, not one.
 
 **`WITHDRAWN` is terminal for that player on that game day.** `@@unique([gameDayId, playerId])` means a withdrawn player cannot simply re-insert, and the first draft never said which way that resolved. It resolves as terminal: having been given a slot and handed it back, you do not go back in the queue ahead of people who have been waiting. A re-claim attempt is a `ValidationError` with that reason, not a unique-constraint 500.
 
@@ -555,7 +597,7 @@ A tick has **two distinct passes over different sets of rows**, and conflating t
 | **Announce** | `announcedAt` is null | `announcedAt` |
 | **Open-slot ping** | past 09:00 squad-local on the game date, `openSlotPingedAt` is null | `openSlotPingedAt` **either way**, with the skip reason logged, so a decided-not-to-send never retries |
 | **Remind** | past 10:00 squad-local, `remindedAt` is null | `remindedAt` |
-| **Close voting** | past `votesCloseAt` | → `VOTING_CLOSED` + `votingClosedAt`, then `syncOpenSlotVacancies` |
+| **Close voting** | past `votesCloseAt` | → `VOTING_CLOSED` + `votingClosedAt`, then the vacancy sync |
 
 The ping additionally requires the minimum *and* the open-slot chat id to be configured, and `confirmedIn` to be below the minimum (Decision 6).
 
@@ -576,7 +618,7 @@ Each squad's tick is wrapped in its own try/catch, so one squad's failure — a 
 | Vote is open | main | on creation, `voteOpensDaysBefore` ahead |
 | Reminder, with current counts | main | 10:00 game day |
 | Players needed — join the waiting list | open-slot | 09:00 game day, `confirmedIn` < minimum |
-| Slots assigned / slots available | open-slot | `syncOpenSlotVacancies` |
+| Slots assigned / slots available | open-slot | the vacancy sync |
 
 ## API routes
 
@@ -643,7 +685,7 @@ Returning the resolved `player` alongside the session is what makes that safe: t
 
 **Squad settings** (`pages/s/[squad]/admin/settings.tsx`) gains a **"Game day check-in"** card in the existing hand-rolled token style (`cardClass` / `inputFieldClass` / `primaryBtn`, as the "Open-slot players" card does) with an enable toggle and the four `gameDayOps` fields, plus a **timezone** select on the existing Play-schedule card.
 
-**Game Planner** (`pages/s/[squad]/admin/game-planner.tsx`) reads today's game day once voting has closed and pre-ticks **`confirmedIn` players only**, with a banner listing anyone who went OUT after the deadline and any assigned open-slot player still awaiting confirmation — so the admin decides about the unconfirmed rather than finding them silently ticked. `calculateGroupDistribution`, the rank-order slicing, the scoreless gate and the two-pool picker are all **unchanged**; this only seeds the initial selection. On create, stamp `Game.gameDayId`.
+**Game Planner** (`pages/s/[squad]/admin/game-planner.tsx`) reads today's game day once voting has closed and pre-ticks **`confirmedIn` players only**, with a banner listing anyone who went OUT after the deadline and **everyone holding a slot without having confirmed** — assigned open-slot players *and* a structural holder sitting on an inherited reservation from a post-deadline transfer. Naming only the assignees would leave the transferred holder neither pre-ticked nor mentioned anywhere, which is the one person on the list the admin is most likely to have to chase — so the admin decides about the unconfirmed rather than finding them silently ticked. `calculateGroupDistribution`, the rank-order slicing, the scoreless gate and the two-pool picker are all **unchanged**; this only seeds the initial selection. On create, stamp `Game.gameDayId`.
 
 DaisyUI stays out of the player-facing pages — they follow `docs/design.md` tokens like the rest of the mockup. Any admin oversight table added here follows `ReplacementOversight.tsx` instead. The codebase is deliberately inconsistent between these two idioms along the admin/player line, and this change keeps to that line rather than blurring it.
 
@@ -653,7 +695,8 @@ DaisyUI stays out of the player-facing pages — they follow `docs/design.md` to
 
 - **`clock.test.ts`** — `instantAt` round-trips against `wallClockIn` across a DST spring-forward and a fall-back in `Europe/Amsterdam`, and in a second zone with a different offset; 09:00/10:00/13:00 land on the right instants either side of each transition.
 - **`eligibility.test.ts`** — a covered fulltime owner is excluded and their filler included **for the game date, not today** (a window active on the game date but not today, *and* the reverse — this is the regression test for reusing a today-based helper); a cancelled window excludes nobody; a `DISABLED` player is in no pool; structural holders and the open-slot pool never intersect; an assigned open-slot player is returned by `getGameDayVoters` but not by `getStructuralSlotHolders`.
-- **`counts.test.ts`** — the two numbers. An assigned player who has not voted counts in `slotsHeld` but not `confirmedIn`; one who votes IN counts in both and is **not double-counted**; one who votes OUT counts in neither.
+- **`counts.test.ts`** — the two numbers. An assigned player who has not voted counts in `slotsHeld` but not `confirmedIn`; one who votes IN counts in both and is **not double-counted**; one who votes OUT counts in neither. Same three for an **inherited reservation** (`inheritedFromPlayerId` non-null): in `slotsHeld`, out of `confirmedIn`, and their own IN clears the stamp while leaving `slotsHeld` unchanged.
+- **`transferDoubleFill.test.ts`** — the regression test for this class of bug, stated as a total: with `minPlayers = 16`, 13 structural INs and 3 assignees, transferring one of those 13 slots after the deadline leaves `slotsHeld` at **16 at every step** — after the transfer, after the sync (which must promote **nobody**), and after the incoming holder confirms. Then the same transfer where the outgoing vote was **OUT or absent**: no reservation is inherited, nobody is promoted on that account, and the incoming holder's IN raises `slotsHeld` by exactly one.
 - **`votes.test.ts`** — free switching while voting is open; IN rejected after the deadline for a structural holder; OUT after the deadline accepted only from a current IN; no-vote OUT after the deadline rejected; a vote from a non-voter rejected; an assigned `WAITING_LIST` player's OUT succeeds before `slotLockAt`, fails after, and flips the entry to `WITHDRAWN` in the same transaction; a `DIRECT` claimer's OUT always fails; `CANCELLED` rejects everything.
 - **`openSlots.test.ts`** — promotion is strictly `joinedAt` order; **the deadline pass promotes exactly `vacancies` players and does not loop** (the regression test for the double-count Decision 6 fixes); a direct claim past the deadline succeeds while vacancies remain and 400s at zero; two concurrent claims for one slot leave exactly one winner.
 - **`syncOpenSlotVacancies.test.ts`** — posts when voting closes, with and without a waiting list; **does not** post when the vacancy count is unchanged (the anti-spam property) **but still promotes**; **promotes with no open-slot chat id configured, skipping only the post**; sends the "filled up" message when a ping went out and the shortfall closed; posts again when a post-deadline OUT widens the gap; a direct claim updates `announcedVacancies` so a later OUT is not swallowed by the equality check (the stale-counter regression); no-op past `slotLockAt`; no-ops entirely when the minimum is unset.
@@ -682,18 +725,19 @@ DaisyUI stays out of the player-facing pages — they follow `docs/design.md` to
 12. Two browsers claim the last remaining slot at once → one succeeds, one gets a clean 400 and no phantom row.
 13. Open Game Planner on the day → `confirmedIn` players pre-ticked and the banner lists post-deadline dropouts and unconfirmed assignees. **Assert the pre-tick and the banner separately from the create**, and use a count that is actually legal: `isValidPlayerCount` accepts 4–5, 8–10, 12–15 and 16–20, so a perfectly ordinary confirmed count of **6 or 7 cannot be created at all** — the pre-tick is a seed, not a guarantee of a valid game. Note also that `handleCreateGameDay` filters the selection through `getAvailablePlayersForGame`, which is "today" in **UTC**, so a pre-ticked id can be silently dropped near midnight; assert the selected count against the confirmed count rather than trusting it. Then with a legal count, Create Game Day works and stamps `Game.gameDayId`; a second create against the same game day answers 400. Include a **scoreless** open-slot holder and confirm the existing `BulkScorePanel` gate still blocks — this is the important one: it proves the new entry path cannot leak a scoreless player into the Elo math.
 14. **Reconciliation.** With a vote open, create a `SlotReplacement` covering that date: the owner's IN vote disappears, the page turns read-only for them, the replacement can vote, and their waiting-list row is gone. Cancel the window and confirm the owner gets the slot back and can vote IN again — their old vote is **not** restored — and that the replacement can rejoin the waiting list. Repeat with the replacement already `ASSIGNED`, and repeat the cancellation via the admin **approve-cancellation** path and via a **shorten** that moves `endDate` before the game date. Do all of it again with the vote already `VOTING_CLOSED`.
-15. **A squad with the vote configured but no open-slot chat id** still promotes its waiting list at the deadline; only the Telegram post is skipped.
-16. **After `slotLockAt`**: a structural holder's OUT is recorded but posts nothing and promotes nobody; a waiting-list assignee's OUT is refused; an admin release of an unconfirmed direct claim works and, being past the lock, also posts nothing.
-17. **Disable `gameDayOps`** with a vote open → the open row is cancelled and the main group is told, rather than being left to accept votes forever. Then repeat by disabling the squad from `/platform/squads` (`PATCH /api/squads/[squadId]`) and confirm the same thing happens — it is a different handler.
-18. **Outage catch-up**: stop the app for a day that contains a candidate date, restart, and confirm the missed game day is still created. Separately, restart after the deadline with an unsent reminder and confirm the reminder is *skipped*, not sent late, while voting still closes.
-19. **A failed Telegram send at the deadline** — revoke the open-slot chat id, close voting, restore it — and confirm the next Pass B tick posts the message that was lost, promotes nobody a second time, and then goes quiet. This is the one the previous revision got backwards.
-20. **Boundary check:** a signed-in player of squad A hitting squad B's `/game-days/*` routes gets 401/403, and a write body carrying someone else's identity has no effect — **except** `PATCH [date]/admin.ts` with `{ action: 'release', playerId }`, where a squad admin acting on another player is the point of the route.
+15. **The post-deadline transfer, with a waiting list standing by.** This is the double-fill case, and the numbers are the assertion: with the session at `minPlayers` and at least one player still `WAITING`, transfer a slot whose holder had voted **IN**. Confirm **nobody is promoted**, `slotsHeld` is unchanged at every step, the incoming holder shows as *awaiting confirmation* on the page and in the planner banner, and their IN moves them into `confirmedIn` without the total moving. Then have them vote **OUT** instead and confirm the waiting-list player *is* promoted at that point. Finally repeat where the outgoing holder had voted OUT: no reservation, and the incoming holder's IN adds one.
+16. **A squad with the vote configured but no open-slot chat id** still promotes its waiting list at the deadline; only the Telegram post is skipped.
+17. **After `slotLockAt`**: a structural holder's OUT is recorded but posts nothing and promotes nobody; a waiting-list assignee's OUT is refused; an admin release of an unconfirmed direct claim works and, being past the lock, also posts nothing.
+18. **Disable `gameDayOps`** with a vote open → the open row is cancelled and the main group is told, rather than being left to accept votes forever. Then repeat by disabling the squad from `/platform/squads` (`PATCH /api/squads/[squadId]`) and confirm the same thing happens — it is a different handler.
+19. **Outage catch-up**: stop the app for a day that contains a candidate date, restart, and confirm the missed game day is still created. Separately, restart after the deadline with an unsent reminder and confirm the reminder is *skipped*, not sent late, while voting still closes.
+20. **A failed Telegram send at the deadline** — revoke the open-slot chat id, close voting, restore it — and confirm the next Pass B tick posts the message that was lost, promotes nobody a second time, and then goes quiet. This is the one the previous revision got backwards.
+21. **Boundary check:** a signed-in player of squad A hitting squad B's `/game-days/*` routes gets 401/403, and a write body carrying someone else's identity has no effect — **except** `PATCH [date]/admin.ts` with `{ action: 'release', playerId }`, where a squad admin acting on another player is the point of the route.
 
 ## `frontend/docs/squad-tenancy.md`
 
 Per the rule in `CLAUDE.md`, the implementation PR updates the living reference in the same change:
 
-- A new **"Game day check-in & attendance vote"** section: the three models, `slotsHeld` vs `confirmedIn` and why they must stay separate, why the status is `VOTING_OPEN`/`VOTING_CLOSED` rather than `OPEN`/`CLOSED` (the 13:00 deadline closes the vote, not the session, which starts hours later), the eligibility predicate and why it resolves against the game date rather than today, the clock rules and where they live, `gameDayOps` with its default-off rationale, the per-squad chat ids, and the new routes.
+- A new **"Game day check-in & attendance vote"** section: the three models, `slotsHeld` vs `confirmedIn` and why they must stay separate, the two ways of holding a slot without confirming (an unconfirmed assignee and an inherited reservation) and why a transfer must reserve rather than release, why the status is `VOTING_OPEN`/`VOTING_CLOSED` rather than `OPEN`/`CLOSED` (the 13:00 deadline closes the vote, not the session, which starts hours later), the eligibility predicate and why it resolves against the game date rather than today, the clock rules and where they live, `gameDayOps` with its default-off rationale, the per-squad chat ids, and the new routes.
 - **Squad schedule** — rewrite. It is no longer "informational only"; this is the first thing that reads it to *do* something. Add `timezone` to the documented `SquadScheduleData` shape.
 - **Auth & access model** — note `requireSquadMember` as the member-level gate, and that the five routes which previously inlined it now use it.
 - **Routing** — add `/s/[squad]/game-day/[date]` and the new API routes.
