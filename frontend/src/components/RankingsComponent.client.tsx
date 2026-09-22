@@ -3,11 +3,13 @@ import { useRankings } from '@/hooks/useRankings';
 import Leaderboard from '@/components/leaderboard/Leaderboard';
 import PageHeader from '@/components/leaderboard/PageHeader';
 import { SquadBoardSelector } from '@/components/leaderboard/SquadBoardSelector';
+import { useJoinSquadCallout } from '@/components/squads/JoinSquadCallout';
 import { useOptionalSquad } from '@/contexts/SquadContext';
 import { PageLoader } from '@/components/common/GameLoader';
 
 const RankingsComponent = () => {
   const squad = useOptionalSquad();
+  const joinCallout = useJoinSquadCallout();
   const { rankings, error, isLoading } = useRankings();
 
   if (isLoading) {
@@ -30,7 +32,8 @@ const RankingsComponent = () => {
 
   return (
     <>
-      <SquadBoardSelector currentSlug={squad?.slug} />
+      <SquadBoardSelector currentSlug={squad?.slug} trailing={joinCallout?.inline} />
+      {joinCallout?.modal}
       <PageHeader title="Leaderboard" />
       <Leaderboard players={activePlayers} />
     </>

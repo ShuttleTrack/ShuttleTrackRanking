@@ -1,16 +1,12 @@
 import React from 'react';
 import type { GetServerSideProps } from 'next';
 import RankingsComponent from '@/components/RankingsComponent.client';
-import { JoinSquadCallout } from '@/components/squads/JoinSquadCallout';
 import { resolveSquadOrNotFound } from '@/lib/squadPage';
 import type { SquadSummary } from '@/contexts/SquadContext';
 
 const Home = () => {
   return (
     <div className="min-h-screen">
-      {/* Renders nothing unless this squad is open for registration and the viewer isn't
-          already on its roster (SELF_REGISTRATION_PLAN.md). */}
-      <JoinSquadCallout />
       <RankingsComponent />
     </div>
   );

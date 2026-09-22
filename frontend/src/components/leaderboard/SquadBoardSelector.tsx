@@ -60,9 +60,10 @@ export function SelectorBand({
 
 interface SquadBoardSelectorProps {
   currentSlug?: string | null;
+  trailing?: ReactNode;
 }
 
-export function SquadBoardSelector({ currentSlug }: SquadBoardSelectorProps) {
+export function SquadBoardSelector({ currentSlug, trailing }: SquadBoardSelectorProps) {
   const router = useRouter();
   const labelId = useId();
   const { data: session } = useSession();
@@ -102,13 +103,24 @@ export function SquadBoardSelector({ currentSlug }: SquadBoardSelectorProps) {
     void router.push(`/s/${value}`);
   };
 
-  if (!hasSquads) {
+  if (!hasSquads && !trailing) {
     return null;
+  }
+
+  if (!hasSquads) {
+    return (
+      <SelectorBand>
+        <div className="flex min-h-[36px] w-full items-center justify-center md:justify-end">
+          {trailing}
+        </div>
+      </SelectorBand>
+    );
   }
 
   return (
     <SelectorBand>
-      <div className="flex min-h-[36px] w-full items-center justify-center md:justify-start">
+      <div className="flex min-h-[36px] w-full flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
+        <div className="flex w-full items-center justify-center md:w-auto md:justify-start">
         <Listbox value={selectedValue} onChange={handleChange}>
           <div className="relative w-[90%] sm:w-auto">
             <div className={controlShellClass}>
@@ -174,6 +186,8 @@ export function SquadBoardSelector({ currentSlug }: SquadBoardSelectorProps) {
             </Transition>
           </div>
         </Listbox>
+        </div>
+        {trailing}
       </div>
     </SelectorBand>
   );
