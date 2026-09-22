@@ -93,7 +93,15 @@ export function toPlayerInfo(player: PrismaPlayer, mostRecentScoreHistory: Prism
     previousRank: mostRecentPlayerOldRank(player, mostRecentScoreHistory),
     colorHex: player.colorHex,
     highestRank: player.highestRank,
-    timeInHighestRank: timeInHighestRankLabel(player.rankSince),
+    // timeInHighestRankLabel deliberately *throws* on a null rankSince, mirroring the Java
+    // Period.between NPE (see period.ts) on the assumption that "real data always has it
+    // populated". Open-slot players broke that assumption: addPlayer leaves rankSince null for
+    // anyone created without a starting score, so calling it unconditionally made a single
+    // scoreless player 500 this squad's whole roster *and* the public players list - every
+    // caller of toPlayerInfo maps over all players, so one bad row takes down the response.
+    // Null here rather than a label is already the DTO's contract (the field is `string | null`,
+    // and addPlayer's own return leaves it null), so nothing downstream needed to change.
+    timeInHighestRank: player.rankSince === null ? null : timeInHighestRankLabel(player.rankSince),
     status: derivePlayerStatus(player),
     playerType: player.playerType,
     hasScore: player.rankScore !== null,

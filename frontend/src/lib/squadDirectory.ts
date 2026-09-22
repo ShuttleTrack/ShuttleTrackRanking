@@ -5,18 +5,19 @@
 // instead of an N+1 across every listed squad.
 import { JoinRequestStatus, PlayerType } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { isActive } from '@/lib/ranking/playerStatus';
+import { isDisabled } from '@/lib/ranking/playerStatus';
 import type { SquadScheduleData } from '@/lib/squadSchedule';
 
 export type DirectoryMembership =
   | 'none'
   | 'pending'
   | 'member'
-  // On the roster but deactivated. Kept distinct from 'member' so the card can say so: any
-  // Player row counts as membership everywhere in this app (getSquadsForEmail, getSquadAccess),
-  // so a deactivated person can't self-re-apply, and telling them "You're a member" for a squad
-  // they were removed from would be actively confusing. Reactivation is an admin action on the
-  // existing row - see SELF_REGISTRATION_PLAN.md.
+  // On the roster but **deactivated** - i.e. playerStatus DISABLED specifically. Kept distinct
+  // from 'member' so the card can say so: any Player row counts as membership everywhere in this
+  // app (getSquadsForEmail, getSquadAccess), so a deactivated person can't self-re-apply, and
+  // telling them "You're a member" for a squad they were removed from would be actively
+  // confusing. Reactivation is an admin action on the existing row - see
+  // SELF_REGISTRATION_PLAN.md.
   | 'memberInactive';
 
 export interface DirectorySquad {
@@ -90,7 +91,12 @@ export async function listOpenSquads(actorEmail: string): Promise<DirectorySquad
     const player = playerBySquad.get(squad.id);
     let membership: DirectoryMembership = 'none';
     if (player) {
-      membership = isActive(player) ? 'member' : 'memberInactive';
+      // Only a DISABLED row reads as inactive. Not `!isActive(...)`: addPlayer leaves
+      // playerStatus null until a player's first processed game, and isActive() is a strict
+      // === 'ACTIVE' check, so that spelling told someone who had *just been approved* they
+      // were "on the roster (inactive)". A scoreless open-slot player never leaves that null
+      // state until they play, so it would have been the normal case, not an edge one.
+      membership = isDisabled(player) ? 'memberInactive' : 'member';
     } else if (pendingSquadIds.has(squad.id)) {
       membership = 'pending';
     }
