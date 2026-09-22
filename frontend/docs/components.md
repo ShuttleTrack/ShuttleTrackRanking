@@ -84,6 +84,8 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **Purpose:** **Public** row (links to `/`, check when on `/`) plus monogram + name rows per squad with check on `currentSlug`; used in `AccountMenu` and `MobileScoreboardMenu`. Zero squads → link to `/squads`.
 
+**Find a squad:** a `/squads/browse` row appears in **both** render trees — the zero-squad early return *and* the normal list. The second one matters: an existing member looking for another squad never sees the first tree.
+
 **Data:** `useMySquads` → `GET /api/squads` when authenticated.
 
 ---
@@ -95,6 +97,22 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 **`/squads`:** `PageHeader` + monogram squad rows (dark cards). Single-squad users redirect to `/s/{slug}`.
 
 **`/platform/squads`:** Superadmin only; card rows (no DaisyUI table), dark modals, status chips — same tokens as squad admin settings.
+
+---
+
+### Squad directory & join requests
+
+**Files:** `src/pages/squads/browse.tsx`, `src/components/squads/{JoinRequestModal,JoinSquadCallout}.tsx`, `src/components/player-management/JoinRequestOversight.tsx`
+
+**`/squads/browse`:** `PageHeader` + one dark card per open squad (name, schedule line or **"Schedule not set"**, full-time count against the cap with the total alongside) and a CTA that is *Request to join* / *Request pending* / *You're a member* / *On the roster (inactive)*. A **Your requests** section above it lists the caller's own pending rows with Withdraw — including rows whose squad has since closed, which drop out of the directory but must stay withdrawable. Separate page from `/squads`, which redirects one-squad members straight to their board.
+
+**`JoinSquadCallout`:** banner above the board on `/s/[slug]` for a non-member when the squad is open; signed-out variant links to `/login`. Renders nothing otherwise.
+
+**`JoinRequestModal`:** name prefilled from the Google profile (capped at `Player.name`'s 32 chars, with a counter), optional message, and the signed-in address shown as text — never an editable field, since identity comes from the session server-side.
+
+**`JoinRequestOversight`:** admin table on `/s/[squad]/admin/players`, styled like `ReplacementOversight` — all statuses with badges, actions only on pending rows, so a re-request after a rejection is visibly that. Approve modal defaults to **Open slot** with an optional score.
+
+**Data:** `useOpenSquads` / `useMyJoinRequests` → `GET /api/squads/open` and `GET /api/squads/join-requests`.
 
 ---
 
@@ -336,6 +354,22 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 ---
 
+### Login page
+
+**File:** `src/pages/login.tsx`
+
+**Purpose:** Google SSO entry for squad members and admins. Uses the global `Layout` (nav watermark, footer) — no separate marketing shell.
+
+**Composes:** Centered club access card (`max-w-md`, `surface-container/55` + light `backdrop-blur`, kinetic hairline only), static racket mark in a primary ring (no animation), `GoogleSignInButton` (filled `bg-primary`), optional NextAuth error banner (`?error=`), `safeCallbackUrl` for `?callbackUrl=`.
+
+**Loading / redirect:** `LoadingSpinner` → `PageLoader` while session loads or after sign-in until `router.replace(callbackUrl)`.
+
+**Nav:** `AccountMenu` and mobile overlay mark **Sign In** active when `pathname === '/login'`.
+
+**Helpers:** `src/utils/loginAuth.ts` (`safeCallbackUrl`, `getLoginErrorMessage`). `safeCallbackUrl` defaults to **`/squads`**, not `/` — a session with no squad is a real state now, and the public board tells such a person nothing about what to do next. An explicit `?callbackUrl=` still wins. `getLoginErrorMessage`'s `AccessDenied` copy is about *token verification*, not roster membership: not being on a roster no longer blocks sign-in, so "ask a squad admin to add you" would send people away from the join-request flow meant for them.
+
+---
+
 ## Mapping from legacy UI
 
 | Legacy | New |
@@ -359,7 +393,5 @@ Keep existing DaisyUI patterns until a dedicated restyle:
 - Manage players
 - Modals and password gates on other admin routes (score keeper and user management score entry restyled; logic unchanged)
 - `ActionCard`
-- Login page styling
-- `LoadingSpinner` (login) and `PageLoader` / `GameLoader` elsewhere — see `GameLoader.tsx` and `design.md` Loading
 
 When restyling those pages later, reuse tokens from `design.md` and prefer new primitives over new one-off styles.

@@ -10,14 +10,21 @@ import { classNames } from '@/components/nav/navUtils';
 
 export const PUBLIC_BOARD_VALUE = 'public';
 
-const squadLabelClass =
-  'flex shrink-0 items-center px-2.5 sm:px-3 font-label text-[10px] font-bold uppercase tracking-widest text-on-surface bg-surface-container-high border-r border-gray-600';
+const squadTypographyClass =
+  'font-label text-[10px] font-bold uppercase tracking-widest';
+
+const squadLabelClass = classNames(
+  'flex shrink-0 items-center px-2.5 sm:px-3 text-on-surface bg-surface-container-high border-r border-gray-600',
+  squadTypographyClass
+);
 
 const controlShellClass =
   'flex w-full items-stretch overflow-hidden rounded-lg border border-primary/50 bg-surface-container shadow-[inset_0_0_0_1px_rgb(238_138_51_/_0.35)] sm:inline-flex sm:w-auto';
 
-const triggerClass =
-  'relative flex min-h-[36px] min-w-0 flex-1 items-center justify-center rounded-r-lg bg-surface-container-highest py-1.5 pl-4 pr-9 text-center font-headline text-sm font-bold text-primary transition-colors hover:bg-surface-container-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset sm:min-w-[9.5rem] md:min-w-[18rem] md:justify-start md:text-left';
+const triggerClass = classNames(
+  'relative flex min-h-[36px] min-w-0 flex-1 items-center justify-center rounded-r-lg bg-surface-container-highest py-1.5 pl-4 pr-9 text-center text-primary transition-colors hover:bg-surface-container-high focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset sm:min-w-[9.5rem] md:min-w-[18rem] md:justify-start md:text-left',
+  squadTypographyClass
+);
 
 const optionRowClass = (active: boolean, selected: boolean) =>
   classNames(
@@ -111,7 +118,7 @@ export function SquadBoardSelector({ currentSlug }: SquadBoardSelectorProps) {
                 aria-label="Select squad"
                 aria-labelledby={labelId}
               >
-                <span className="truncate font-bold">{displayLabel}</span>
+                <span className="truncate">{displayLabel}</span>
                 <ChevronDownIcon
                   className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary"
                   aria-hidden
@@ -131,10 +138,7 @@ export function SquadBoardSelector({ currentSlug }: SquadBoardSelectorProps) {
                   {({ active, selected }) => (
                     <div className={optionRowClass(active, selected)}>
                       <span
-                        className={classNames(
-                          'min-w-0 font-headline text-sm truncate',
-                          selected ? 'font-bold' : 'font-semibold'
-                        )}
+                        className={classNames('min-w-0 truncate', squadTypographyClass)}
                       >
                         Public
                       </span>
@@ -152,10 +156,7 @@ export function SquadBoardSelector({ currentSlug }: SquadBoardSelectorProps) {
                     {({ active, selected }) => (
                       <div className={optionRowClass(active, selected)}>
                         <span
-                          className={classNames(
-                            'min-w-0 font-headline text-sm truncate',
-                            selected ? 'font-bold' : 'font-semibold'
-                          )}
+                          className={classNames('min-w-0 truncate', squadTypographyClass)}
                         >
                           {squad.name}
                         </span>
