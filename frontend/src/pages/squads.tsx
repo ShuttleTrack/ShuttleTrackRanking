@@ -59,7 +59,7 @@ const SquadPickerPage = ({ squads, isSuperAdmin }: SquadPickerPageProps) => {
             </p>
             {!isSuperAdmin && (
               <Link href="/squads/browse" className="btn btn-primary btn-sm mt-4">
-                Find a squad
+                Join a squad
               </Link>
             )}
           </div>

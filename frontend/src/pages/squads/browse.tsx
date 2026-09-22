@@ -147,7 +147,7 @@ const BrowseSquadsPage = () => {
   return (
     <div className="min-h-screen pb-12">
       <PageHeader
-        title="Find a squad"
+        title="Join a squad"
         subtitle="Squads accepting new players. A squad admin reviews every request."
       />
 

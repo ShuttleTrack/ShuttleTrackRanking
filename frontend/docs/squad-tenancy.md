@@ -389,9 +389,10 @@ Full design doc: `SELF_REGISTRATION_PLAN.md` at the repo root. What's built:
   says "On the roster (inactive)" rather than "You're a member".
 - **Surfaces**: `/squads/browse` (directory, request modal, own pending requests, withdraw); a
   "Request to join" callout on the squad's own public board `/s/[slug]` (link-public, and where
-  someone handed a share link actually lands); "Find a squad" in `SquadSwitcherLinks` - added to
-  **both** of that component's render trees, since the zero-squad early return is not the one an
-  existing member sees; `JoinRequestOversight` on `/s/[squad]/admin/players` (all statuses, not
+  someone handed a share link actually lands); **Join a squad** (`JoinSquadMenuSection` in
+  `AccountMenu` / `MobileScoreboardMenu`, below the squad switcher, links to `/squads/browse`);
+  `JoinRequestOversight`
+  on `/s/[squad]/admin/players` (all statuses, not
   just pending, so an admin can see they already declined someone); and a pending-count badge on
   `/s/[squad]/admin/dashboard`, sourced from `pendingJoinRequestCount` on the squad detail
   payload rather than a second SWR hook.

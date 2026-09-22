@@ -2,12 +2,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Fragment } from 'react';
 import { Menu } from '@headlessui/react';
-import { CheckIcon, MagnifyingGlassCircleIcon, Squares2X2Icon } from '@heroicons/react/24/outline';
+import { CheckIcon, Squares2X2Icon } from '@heroicons/react/24/outline';
 import type { MySquadOption } from '@/hooks/useMySquads';
-import { classNames } from './navUtils';
-
-const sectionLabelClass =
-  'px-3 py-1.5 font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant';
+import { classNames, navSectionLabelClass } from './navUtils';
 
 function monogram(name: string): string {
   return name
@@ -65,14 +62,10 @@ export function SquadSwitcherLinks({
 
     const content = (
       <div className={isDesktop ? 'px-1.5 py-1' : 'py-1'}>
-        <p className={classNames(sectionLabelClass, isDesktop ? '' : 'px-1')}>Squads</p>
+        <p className={classNames(navSectionLabelClass, isDesktop ? '' : 'px-1')}>Squads</p>
         <Link href="/squads" className={rowClass} onClick={onNavigate}>
           <Squares2X2Icon className="h-8 w-8 shrink-0 rounded-lg bg-white/[0.06] p-1.5 text-on-surface-variant" aria-hidden />
           <span className="min-w-0 truncate">Your squads</span>
-        </Link>
-        <Link href="/squads/browse" className={rowClass} onClick={onNavigate}>
-          <MagnifyingGlassCircleIcon className="h-8 w-8 shrink-0 rounded-lg bg-white/[0.06] p-1.5 text-on-surface-variant" aria-hidden />
-          <span className="min-w-0 truncate">Find a squad</span>
         </Link>
       </div>
     );
@@ -139,51 +132,6 @@ export function SquadSwitcherLinks({
     );
   };
 
-  // "Find a squad" has to appear in this branch as well as the zero-squad one above: an existing
-  // member looking for a *second* squad is exactly who the directory is for, and they never see
-  // the other tree (SELF_REGISTRATION_PLAN.md). Rendered with an icon rather than a monogram
-  // badge, since it isn't a squad.
-  const renderFindRow = () => {
-    const rowClass = classNames(
-      'flex min-h-[44px] items-center gap-3 rounded-lg px-3 transition-colors text-on-surface hover:bg-white/5',
-      isDesktop ? 'font-headline text-sm' : 'font-headline text-base'
-    );
-    const inner = (
-      <>
-        <MagnifyingGlassCircleIcon
-          className={classNames(
-            'shrink-0 rounded-lg bg-white/[0.06] p-1.5 text-on-surface-variant',
-            isDesktop ? 'h-8 w-8' : 'h-9 w-9'
-          )}
-          aria-hidden
-        />
-        <span className="min-w-0 flex-1 truncate">Find a squad</span>
-      </>
-    );
-
-    if (isDesktop) {
-      return (
-        <Menu.Item key="find">
-          {({ active }) => (
-            <Link
-              href="/squads/browse"
-              className={classNames(rowClass, active ? 'bg-white/5' : '')}
-              onClick={onNavigate}
-            >
-              {inner}
-            </Link>
-          )}
-        </Menu.Item>
-      );
-    }
-
-    return (
-      <Link key="find" href="/squads/browse" className={rowClass} onClick={onNavigate}>
-        {inner}
-      </Link>
-    );
-  };
-
   const rows = [
     renderRow('public', '/', 'Public', 'Public', isPublicCurrent),
     ...squads.map((squad) =>
@@ -195,20 +143,12 @@ export function SquadSwitcherLinks({
         squad.slug === currentSlug
       )
     ),
-    renderFindRow(),
   ];
-
-  const wrapper = (
-    <div className={isDesktop ? 'px-1.5 py-1' : 'py-1'}>
-      <p className={classNames(sectionLabelClass, isDesktop ? '' : 'px-1')}>Squads</p>
-      {isDesktop ? null : <div className="space-y-0.5">{rows}</div>}
-    </div>
-  );
 
   if (isDesktop) {
     return (
       <>
-        <p className={sectionLabelClass}>Squads</p>
+        <p className={navSectionLabelClass}>Squads</p>
         {rows}
       </>
     );
@@ -216,7 +156,7 @@ export function SquadSwitcherLinks({
 
   return (
     <div className="py-1">
-      <p className={classNames(sectionLabelClass, 'px-1')}>Squads</p>
+      <p className={classNames(navSectionLabelClass, 'px-1')}>Squads</p>
       <div className="mt-0.5 space-y-0.5">{rows}</div>
     </div>
   );

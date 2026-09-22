@@ -22,9 +22,9 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 - Encounters → searchable player list (color dot + `#` rank) → `/s/{slug}/player/{id}/encounters`
 - History → Ranking History, Encounter History (card rows with short hints) under `/s/{slug}/`
 - Live → `/s/{slug}/game-viewer` with progress (hidden when no live games)
-- Session: avatar menu → identity header, Profile, Matches (when player in squad), Admin Dashboard (squad admin), **Squads** switcher rows (`SquadSwitcherLinks`), Sign out
+- Session: avatar menu → identity header (links to profile when player in current squad), Matches, Replacement (when player in squad), Admin Dashboard (squad admin), **Squads** switcher (`SquadSwitcherLinks`), **Join a squad** (`JoinSquadMenuSection` → `/squads/browse`), Sign out
 
-**Visual:** active desktop segment uses `bg-primary/15` orange chip (`aria-current="page"`); dark dropdown surfaces (`surface-container`); kinetic gradient hairline on the nav band. **Avatar menu:** `w-72`, identity block (avatar, name, email), icon + label rows (`min-h-[44px]`); squad switcher monogram rows + check on current; `ring-primary/40` on photo; dividers; **Sign Out** (`text-red-400`). Mobile overlay uses the same identity + switcher pattern.
+**Visual:** active desktop segment uses `bg-primary/15` orange chip (`aria-current="page"`); dark dropdown surfaces (`surface-container`); kinetic gradient hairline on the nav band. **Avatar menu:** `w-72`, identity block (avatar, name, email; whole row links to profile when the user is a player in the current squad), icon + label rows (`min-h-[44px]`); squad switcher monogram rows + check on current; `ring-primary/40` on photo; dividers; **Sign Out** (`text-red-400`). Mobile overlay uses the same identity + switcher pattern.
 
 ---
 
@@ -84,9 +84,17 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **Purpose:** **Public** row (links to `/`, check when on `/`) plus monogram + name rows per squad with check on `currentSlug`; used in `AccountMenu` and `MobileScoreboardMenu`. Zero squads → link to `/squads`.
 
-**Find a squad:** a `/squads/browse` row appears in **both** render trees — the zero-squad early return *and* the normal list. The second one matters: an existing member looking for another squad never sees the first tree.
-
 **Data:** `useMySquads` → `GET /api/squads` when authenticated.
+
+---
+
+### JoinSquadMenuSection
+
+**File:** `src/components/nav/JoinSquadMenuSection.tsx`
+
+**Props:** `variant` (`account-menu` | `mobile`), optional `onNavigate`
+
+**Purpose:** Divider plus a single **Join a squad** row to `/squads/browse` below `SquadSwitcherLinks` in `AccountMenu` and `MobileScoreboardMenu` (no section heading).
 
 ---
 
