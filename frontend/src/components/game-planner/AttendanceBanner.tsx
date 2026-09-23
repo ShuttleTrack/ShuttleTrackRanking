@@ -17,6 +17,9 @@ const names = (players: { name: string }[]) => players.map((p) => capitalizeFirs
 export function AttendanceBanner({ attendance, preTickedCount, onReleaseSlot, releasing }: AttendanceBannerProps) {
   const { confirmed, unconfirmed, outAfterDeadline, gameId } = attendance;
   const droppedCount = confirmed.length - preTickedCount;
+  // One-day hand-offs (SINGLE_DAY_NOMINATION_PLAN.md): already pre-ticked in place of the slot
+  // holder - named here so nobody wonders why the holder is missing from the selection.
+  const standIns = confirmed.filter((p) => p.standingInFor !== null);
 
   return (
     <section className="mb-6 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm text-on-surface" aria-label="Check-in attendance">
@@ -33,6 +36,14 @@ export function AttendanceBanner({ attendance, preTickedCount, onReleaseSlot, re
         <p className="mt-2 text-on-surface-variant">
           {droppedCount} confirmed {droppedCount === 1 ? 'player is' : 'players are'} not in today&apos;s roster below (disabled, or
           not available today) and could not be pre-selected.
+        </p>
+      ) : null}
+      {standIns.length > 0 ? (
+        <p className="mt-2">
+          <span className="font-semibold">Playing in someone else&apos;s slot:</span>{' '}
+          {standIns
+            .map((p) => `${capitalizeFirstLetter(p.name)} (for ${capitalizeFirstLetter(p.standingInFor!.name)})`)
+            .join(', ')}
         </p>
       ) : null}
       {outAfterDeadline.length > 0 ? (

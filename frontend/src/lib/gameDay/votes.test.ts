@@ -169,6 +169,7 @@ describe('evaluateVote (the rule table the page also renders from)', () => {
     slotLockAt: new Date('2026-09-23T15:00:00Z'),
     holding: 'STRUCTURAL',
     source: null,
+    nominatorName: null,
     vote: { choice: 'IN', inheritedFromPlayerId: null },
   };
 

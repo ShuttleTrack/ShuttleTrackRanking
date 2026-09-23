@@ -80,6 +80,9 @@ model Player {
   // Back-references Prisma requires for the game-day check-in rows (ATTENDANCE_VOTE_PLAN.md).
   gameDayVotes           GameDayVote[]
   gameDayOpenSlots       GameDayOpenSlot[]
+  // Back-references for one-day slot nominations (SINGLE_DAY_NOMINATION_PLAN.md).
+  slotNominationsMade     GameDaySlotNomination[] @relation("SlotNominator")
+  slotNominationsReceived GameDaySlotNomination[] @relation("SlotNominee")
 
   @@unique([squadId, email])
   @@index([squadId])
@@ -395,9 +398,10 @@ model GameDay {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   squad     Squad             @relation(fields: [squadId], references: [id])
-  votes     GameDayVote[]
-  openSlots GameDayOpenSlot[]
-  game      Game?
+  votes           GameDayVote[]
+  openSlots       GameDayOpenSlot[]
+  slotNominations GameDaySlotNomination[]
+  game            Game?
 
   @@unique([squadId, gameDate])
   @@index([squadId, status])
@@ -453,4 +457,48 @@ model GameDayOpenSlot {
   @@unique([gameDayId, playerId])
   @@index([gameDayId, status])
   @@map("GAME_DAY_OPEN_SLOT")
+}
+
+// Why a one-day slot nomination ended. SESSION_ENDED is the normal end - the hand-off ran its
+// course - and is the only ended state in which the nominee still counts as having played in the
+// slot (the roster swap in lib/gameDay/view.ts).
+enum SlotNominationEndReason {
+  REVOKED // nominator took the slot back before 13:00
+  SWITCHED // replaced by a nomination to someone else
+  NOMINATOR_OUT // nominator voted OUT
+  ADMIN_RELEASE // admin released the nominator's slot
+  PLAYER_DISABLED // nominator or nominee set DISABLED
+  GAME_DAY_CANCELLED // cancelGameDay, by any path
+  SESSION_ENDED // the session is over
+}
+
+// A fulltime player passing their slot to an open-slot player for ONE game day
+// (SINGLE_DAY_NOMINATION_PLAN.md). Pre-arranged between the two: the nominator keeps the vote,
+// the nominee has none - so slotsHeld/confirmedIn never change, only who is shown as attending.
+// Active = endedAt IS NULL, derived like SlotReplacement.cancelledAt. "One active per nominator /
+// per nominee per game day" can't be a MySQL unique index over a nullable column, so it is
+// enforced under withGameDayLock, which every write path takes.
+model GameDaySlotNomination {
+  id                Int                      @id @default(autoincrement())
+  gameDayId         Int                      @map("game_day_id")
+  nominatorPlayerId Int                      @map("nominator_player_id")
+  nomineePlayerId   Int                      @map("nominee_player_id")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  endedAt           DateTime?                @map("ended_at")
+  endReason         SlotNominationEndReason? @map("end_reason")
+
+  // What the open-slot group has been told (lib/gameDay/nominationPosts.ts). announcedAt: a post
+  // naming this nominee was actually SENT - never set by a skip. retractedAt: the group's
+  // picture no longer includes this nominee, by a sent post or deliberately settled without one.
+  announcedAt DateTime? @map("announced_at")
+  retractedAt DateTime? @map("retracted_at")
+
+  gameDay   GameDay @relation(fields: [gameDayId], references: [id])
+  nominator Player  @relation("SlotNominator", fields: [nominatorPlayerId], references: [id])
+  nominee   Player  @relation("SlotNominee", fields: [nomineePlayerId], references: [id])
+
+  @@index([gameDayId, endedAt])
+  @@index([nominatorPlayerId])
+  @@index([nomineePlayerId])
+  @@map("GAME_DAY_SLOT_NOMINATION")
 }

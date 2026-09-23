@@ -14,6 +14,7 @@ import type { GameDay } from '@prisma/client';
 import { isoFromDateOnly } from './clock';
 import type { Db } from './eligibility';
 import { lockGameDay } from './lock';
+import { endNominationsInvolving } from './nominations';
 import { planVacancySync, type VacancyPlan } from './openSlots';
 import { sessionPhase } from './voteWindow';
 
@@ -115,6 +116,10 @@ export async function reconcileSlotTransfer(tx: Db, transfer: SlotTransfer, now:
 // One player out of one game day - no incoming side. `withdraw` marks an open-slot entry
 // WITHDRAWN (the admin release: the slot was deliberately taken back, and WITHDRAWN is
 // terminal); `delete` removes it (a DISABLED player, who may one day be re-enabled).
+//
+// Either way it ends any one-day nomination they are on, from either side - and a disabled
+// NOMINEE takes the nominator's IN with them (endNominationsInvolving). The hand-off posts are the
+// caller's to sync after commit (syncUnsettledNominationPosts).
 export async function removePlayerFromGameDay(
   tx: Db,
   gameDayId: number,
@@ -122,6 +127,7 @@ export async function removePlayerFromGameDay(
   mode: 'withdraw' | 'delete',
   now: Date = new Date()
 ): Promise<VacancyPlan | null> {
+  await endNominationsInvolving(tx, gameDayId, playerId, mode === 'withdraw' ? 'ADMIN_RELEASE' : 'PLAYER_DISABLED', now);
   await tx.gameDayVote.deleteMany({ where: { gameDayId, playerId } });
   if (mode === 'delete') {
     await tx.gameDayOpenSlot.deleteMany({ where: { gameDayId, playerId } });

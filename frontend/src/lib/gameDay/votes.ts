@@ -15,9 +15,13 @@ import type { GameDayStatus, GameDayVote, OpenSlotClaimSource, VoteChoice } from
 import { ValidationError } from '@/lib/api/validationError';
 import { loadGameDayState, type GameDayState } from './eligibility';
 import { withGameDayLock } from './lock';
+import { endNominations, nominatorNameFor, nomineeRefusal } from './nominations';
+import { syncNominationPosts } from './nominationPosts';
 import { deliverVacancyPlan, planVacancySync } from './openSlots';
 
-export type Holding = 'STRUCTURAL' | 'ASSIGNED' | 'OPEN_SLOT_POOL' | 'NONE';
+// NOMINEE: playing in someone else's slot through a one-day nomination (SINGLE_DAY_NOMINATION_
+// PLAN.md). Not a voter - the nominator keeps the slot's vote - and not in the pool either.
+export type Holding = 'STRUCTURAL' | 'ASSIGNED' | 'NOMINEE' | 'OPEN_SLOT_POOL' | 'NONE';
 
 export interface VoteContext {
   status: GameDayStatus;
@@ -25,6 +29,7 @@ export interface VoteContext {
   slotLockAt: Date;
   holding: Holding;
   source: OpenSlotClaimSource | null; // when ASSIGNED
+  nominatorName: string | null; // when NOMINEE
   vote: Pick<GameDayVote, 'choice' | 'inheritedFromPlayerId'> | null;
 }
 
@@ -34,6 +39,7 @@ const VOTING_CLOSED = 'Voting has closed';
 
 export function evaluateVote(ctx: VoteContext, choice: VoteChoice): VoteVerdict {
   if (ctx.status === 'CANCELLED') return { ok: false, reason: 'This game day has been cancelled' };
+  if (ctx.holding === 'NOMINEE') return { ok: false, reason: nomineeRefusal(ctx.nominatorName ?? 'The slot holder') };
   if (ctx.holding === 'OPEN_SLOT_POOL') {
     return { ok: false, reason: 'You do not hold a slot on this game day - join the waiting list instead' };
   }
@@ -72,6 +78,7 @@ export function evaluateVote(ctx: VoteContext, choice: VoteChoice): VoteVerdict 
 export function holdingOf(state: GameDayState, playerId: number): Holding {
   if (state.structuralHolderIds.has(playerId)) return 'STRUCTURAL';
   if (state.assignedIds.has(playerId)) return 'ASSIGNED';
+  if (state.activeNominationByNominee.has(playerId)) return 'NOMINEE';
   if (state.openSlotPoolIds.has(playerId)) return 'OPEN_SLOT_POOL';
   return 'NONE';
 }
@@ -86,6 +93,7 @@ export function voteContextFor(state: GameDayState, playerId: number, now: Date)
     slotLockAt: state.gameDay.slotLockAt,
     holding,
     source: holding === 'ASSIGNED' ? entry?.source ?? null : null,
+    nominatorName: holding === 'NOMINEE' ? nominatorNameFor(state, playerId) : null,
     vote,
   };
 }
@@ -98,13 +106,20 @@ export async function castVote(
   choice: VoteChoice,
   now: Date = new Date()
 ): Promise<GameDayVote> {
-  const { vote, plan } = await withGameDayLock(gameDayId, async (tx, gameDay) => {
+  const { vote, plan, endedNomination } = await withGameDayLock(gameDayId, async (tx, gameDay) => {
     if (gameDay.squadId !== squadId) throw new ValidationError('Game day not found');
 
     const state = await loadGameDayState(tx, gameDay);
     const ctx = voteContextFor(state, playerId, now);
     const verdict = evaluateVote(ctx, choice);
     if (!verdict.ok) throw new ValidationError(verdict.reason);
+
+    // An OUT means nobody from this slot is coming, so it voids the nominator's hand-off -
+    // permanently: a later IN is the nominator themselves, never the nominee coming back
+    // (SINGLE_DAY_NOMINATION_PLAN.md, Decision 5). Ended BEFORE the sync plans, so a
+    // post-deadline OUT's vacancy is promoted into on this same pass.
+    const nomination = choice === 'OUT' ? state.activeNominationByNominator.get(playerId) : undefined;
+    if (nomination) await endNominations(tx, [nomination.id], 'NOMINATOR_OUT', now);
 
     // Voting for yourself always clears an inherited stamp: an inherited IN becomes your own
     // confirmation without moving slotsHeld; an OUT drops the reservation.
@@ -123,8 +138,9 @@ export async function castVote(
       });
     }
 
-    return { vote: written, plan: await planVacancySync(tx, gameDayId, now) };
+    return { vote: written, plan: await planVacancySync(tx, gameDayId, now), endedNomination: nomination !== undefined };
   });
   await deliverVacancyPlan(plan);
+  if (endedNomination) await syncNominationPosts(gameDayId, playerId, now);
   return vote;
 }

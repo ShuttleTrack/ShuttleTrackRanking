@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { CheckInVote, RosterPlayer, UnconfirmedPlayer } from '@/lib/check-in/types';
+import { capitalizeFirstLetter } from '@/utils/string';
 import { CheckInPlayerRow } from './CheckInPlayerRow';
 
 type RosterTab = 'IN' | 'OUT';
@@ -49,7 +50,13 @@ function PlayerList({
   );
 }
 
-const openSlotBadge = (player: RosterPlayer) => (player.isOpenSlot ? 'Open slot' : undefined);
+// "for Ada": playing in Ada's slot through a one-day hand-off - Ada is not listed separately.
+const inBadge = (player: RosterPlayer) =>
+  player.standingInFor
+    ? `for ${capitalizeFirstLetter(player.standingInFor.name)}`
+    : player.isOpenSlot
+      ? 'Open slot'
+      : undefined;
 
 export function CheckInRoster({
   inPlayers,
@@ -100,7 +107,7 @@ export function CheckInRoster({
           <h3 className="mb-2 hidden font-label text-xs font-bold uppercase tracking-widest text-primary md:block">
             In ({inPlayers.length})
           </h3>
-          <PlayerList players={inPlayers} currentPlayerId={currentPlayerId} avatarUrl={avatarUrl} badgeFor={openSlotBadge} />
+          <PlayerList players={inPlayers} currentPlayerId={currentPlayerId} avatarUrl={avatarUrl} badgeFor={inBadge} />
         </div>
         <div className={tab === 'OUT' ? 'block' : 'hidden md:block'}>
           <h3 className="mb-2 hidden font-label text-xs font-bold uppercase tracking-widest text-red-400 md:block">

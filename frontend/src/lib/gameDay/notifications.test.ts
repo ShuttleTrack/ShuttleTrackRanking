@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildCancellationMessage,
+  buildNominationMessage,
   buildOpenSlotPingMessage,
   buildReminderMessage,
   buildVacancyMessage,
@@ -74,5 +75,19 @@ describe('the four message bodies', () => {
     const post = buildVoteOpenMessage({ ...ctx, appUrl: 'http://localhost:3000' });
     expect(post.buttons).toBeUndefined();
     expect(post.text).toContain('http://localhost:3000/s/wed/game-day/2026-09-23');
+  });
+});
+
+describe('slot hand-off posts (SINGLE_DAY_NOMINATION_PLAN.md)', () => {
+  it('create, switch and end - names escaped, with the link', () => {
+    const created = buildNominationMessage(ctx, { kind: 'CREATED', nominatorName: 'Ada', nomineeName: 'Bob <3' });
+    expect(created.text).toBe(`🔁 Ada's slot for Wednesday 23 Sep, 19:00–22:00 goes to Bob &lt;3.\n\n${URL}`);
+    expect(created.buttons?.inline_keyboard[0][0].url).toBe(URL);
+
+    const switched = buildNominationMessage(ctx, { kind: 'SWITCHED', nominatorName: 'Ada', nomineeName: 'Carol', previousNomineeName: 'Bob' });
+    expect(switched.text.split('\n')[0]).toBe("🔁 Ada's slot for Wednesday 23 Sep, 19:00–22:00 now goes to Carol instead of Bob.");
+
+    const ended = buildNominationMessage(ctx, { kind: 'ENDED', nominatorName: 'Ada', previousNomineeName: 'Bob' });
+    expect(ended.text.split('\n')[0]).toBe("↩️ Ada's slot for Wednesday 23 Sep, 19:00–22:00 is no longer passed to Bob.");
   });
 });

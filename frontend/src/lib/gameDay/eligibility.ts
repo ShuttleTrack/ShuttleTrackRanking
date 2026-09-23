@@ -11,7 +11,12 @@
 //
 // all excluding DISABLED. The first two are disjoint by construction; that is what makes
 // slotsHeld a sum rather than a union (counts.ts), and what lets one page serve both roles.
-import type { GameDay, GameDayOpenSlot, GameDayVote, Player, Prisma } from '@prisma/client';
+//
+// A one-day slot nomination (SINGLE_DAY_NOMINATION_PLAN.md) changes none of the structural side:
+// the nominator keeps the slot and the vote. It only takes the nominee out of THIS game day's
+// open-slot pool (loadGameDayState), so they cannot also queue for - and be promoted into - a
+// second slot.
+import type { GameDay, GameDayOpenSlot, GameDaySlotNomination, GameDayVote, Player, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 
 // Any Prisma client - the root one or an interactive transaction's. Every read here must be
@@ -76,22 +81,34 @@ export interface GameDayState {
   gameDay: GameDay;
   players: Map<number, Player>;
   structuralHolderIds: Set<number>;
+  // This game day's pool: the date's open-slot pool minus the day's active nominees.
   openSlotPoolIds: Set<number>;
   // Pool players holding an ASSIGNED open slot today - voters alongside structural holders.
   assignedIds: Set<number>;
   voterIds: Set<number>;
   votes: GameDayVote[];
   openSlots: GameDayOpenSlot[];
+  // Every nomination row of the game day, ended ones included (the history), and the active
+  // ones keyed both ways. At most one active per nominator and per nominee - enforced under the
+  // game day's lock (nominations.ts).
+  nominations: GameDaySlotNomination[];
+  activeNominationByNominator: Map<number, GameDaySlotNomination>;
+  activeNominationByNominee: Map<number, GameDaySlotNomination>;
 }
 
 export async function loadGameDayState(db: Db, gameDay: GameDay): Promise<GameDayState> {
-  const [{ players, structuralHolders, openSlotPool }, votes, openSlots] = await Promise.all([
+  const [{ players, structuralHolders, openSlotPool }, votes, openSlots, nominations] = await Promise.all([
     classify(db, gameDay.squadId, gameDay.gameDate),
     db.gameDayVote.findMany({ where: { gameDayId: gameDay.id } }),
     db.gameDayOpenSlot.findMany({ where: { gameDayId: gameDay.id } }),
+    db.gameDaySlotNomination.findMany({ where: { gameDayId: gameDay.id }, orderBy: { id: 'asc' } }),
   ]);
+  const active = nominations.filter((n) => n.endedAt === null);
+  const activeNominationByNominee = new Map(active.map((n) => [n.nomineePlayerId, n]));
   const structuralHolderIds = new Set(structuralHolders.map((p) => p.id));
-  const openSlotPoolIds = new Set(openSlotPool.map((p) => p.id));
+  const openSlotPoolIds = new Set(
+    openSlotPool.map((p) => p.id).filter((id) => !activeNominationByNominee.has(id))
+  );
   // Only a pool member's ASSIGNED row makes them a voter: a DISABLED player's leftover row, or
   // one whose player has since become a structural holder, grants nothing.
   const assignedIds = new Set(
@@ -106,5 +123,8 @@ export async function loadGameDayState(db: Db, gameDay: GameDay): Promise<GameDa
     voterIds: new Set([...Array.from(structuralHolderIds), ...Array.from(assignedIds)]),
     votes,
     openSlots,
+    nominations,
+    activeNominationByNominator: new Map(active.map((n) => [n.nominatorPlayerId, n])),
+    activeNominationByNominee,
   };
 }

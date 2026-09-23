@@ -19,6 +19,8 @@ import { computeGameDayCounts } from './counts';
 import { loadGameDayState } from './eligibility';
 import { cancelGameDay, closeVoting } from './lifecycle';
 import { GAME_DAY_TX_OPTIONS, lockGameDay, withGameDayLock } from './lock';
+import { endFinishedSessionNominations } from './nominations';
+import { syncUnsettledNominationPosts } from './nominationPosts';
 import { buildOpenSlotPingMessage, buildReminderMessage, buildVoteOpenMessage } from './notifications';
 import { deliverVacancyPlan, planVacancySync } from './openSlots';
 import { logSend, messageContextFor, sendGameDayPost, type SendOutcome } from './telegram';
@@ -147,6 +149,7 @@ export interface TickSummary {
   recreated: number;
   cancelled: number;
   closed: number;
+  nominationsEnded: number;
   errors: number;
   skipped?: string;
 }
@@ -177,6 +180,9 @@ async function recreateCancelledGameDay(gameDayId: number, snapshot: GameDaySnap
     if (await tx.game.findUnique({ where: { gameDayId } })) return false;
     await tx.gameDayVote.deleteMany({ where: { gameDayId } });
     await tx.gameDayOpenSlot.deleteMany({ where: { gameDayId } });
+    // Already ended GAME_DAY_CANCELLED by cancelGameDay; deleted so nothing of the old row
+    // survives, including a hand-off the fresh vote never saw.
+    await tx.gameDaySlotNomination.deleteMany({ where: { gameDayId } });
     await tx.gameDay.update({
       where: { id: gameDayId },
       data: {
@@ -324,7 +330,7 @@ async function runStepsPass(gameDay: GameDay & { squad: Squad }, now: Date, summ
 }
 
 export async function runGameDayTick(now: Date = new Date()): Promise<TickSummary> {
-  const summary: TickSummary = { created: 0, recreated: 0, cancelled: 0, closed: 0, errors: 0 };
+  const summary: TickSummary = { created: 0, recreated: 0, cancelled: 0, closed: 0, nominationsEnded: 0, errors: 0 };
   // Ticks never overlap in-process: a slow tick (Telegram timing out) must not let the next one
   // send the same one-shot message before the first has stamped it.
   if (global.__gameDayTickInProgress) {
@@ -359,6 +365,19 @@ export async function runGameDayTick(now: Date = new Date()): Promise<TickSummar
         console.error(`[game-day] ${gameDay.squad.slug}: steps pass failed for game day ${gameDay.id}`, error);
       }
     }
+
+    // One-day slot nominations (SINGLE_DAY_NOMINATION_PLAN.md): end the ones whose session is
+    // over - a frozen hand-off has no other way to end, and would otherwise block a period
+    // replacement for good - then retry any hand-off post that has not landed. Its own step: Pass B
+    // stops looking at a game day at slotLockAt, hours before its session ends. Both wrap their
+    // own per-row failures, so neither can abort the other.
+    try {
+      summary.nominationsEnded = await endFinishedSessionNominations(now);
+    } catch (error) {
+      summary.errors++;
+      console.error('[game-day] session-end step for slot nominations failed', error);
+    }
+    await syncUnsettledNominationPosts(now);
     return summary;
   } finally {
     global.__gameDayTickInProgress = false;

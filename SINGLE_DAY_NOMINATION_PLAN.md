@@ -1,6 +1,6 @@
 # Single-Day Slot Nomination — Design Plan
 
-**Status:** Proposed. Design only; implementation is a separate follow-up PR.
+**Status:** Approved (PR #212) and **implemented** in the follow-up PR. The places the build refined the plan are listed under "Implementation notes" at the end rather than rewritten into the body. The living reference is now `frontend/docs/squad-tenancy.md`'s "Single-day slot nominations".
 
 **Builds on:** `ATTENDANCE_VOTE_PLAN.md` (#210) and its implementation (#211, now on `main`). Every file under `lib/gameDay/` named below is on `main`.
 
@@ -395,3 +395,17 @@ The implementation PR adds a **"Single-day slot nominations"** subsection under 
 ## Still open
 
 Nothing.
+
+## Implementation notes
+
+Where the implementation departed from, or had to fill a gap in, the plan above.
+
+1. **`announcedAt` can be carried over without a send**, in one case: the hand-off switched away and back to the same person before any post landed (Bob → Carol → Bob). The group already believes Bob is playing, so the stamp moves from Bob's old row to his new one and nothing is posted. It still never records something the group was not told.
+2. **A told `SESSION_ENDED` row is settled, not "unsettled".** The plan's derivation (an ended row with `announcedAt` set and `retractedAt` null) would have matched every hand-off that ran its course and been re-checked every tick forever. The retry query excludes `SESSION_ENDED`.
+3. **The replacement guardrail takes no lock of its own.** `findBlockingNomination` runs *after* `reconcileSlotTransfer`, which has already locked every live game day in range, and nominations are only written under those locks. Locking again, in nomination order rather than game-day-id order, could have deadlocked a concurrent writer. A rejection rolls back the reconciliation with everything else.
+4. **Create, switch and revoke share one verdict** (`nominationVerdict`, exposed to the page as `actions.nominate`). They have the same window and the same "fulltime, own slot" rule, so there was nothing for three verdicts to disagree about.
+5. **The candidate list shows before anything is typed** (at most 20), unlike the period-replacement picker. A squad's open-slot pool for one game day is small. The response shape and the email masking are the same (`maskEmail` is now exported from `lib/replacements.ts`).
+6. **Posts are synced after every write that ends a nomination**, not only by the scheduler: `nominate`, `revokeNomination` and a nominator's OUT sync that nominator. `cancelGameDay`, `releaseSlot` and the disabled-player cleanup sync every unsettled row (for the game day, or everywhere). The scheduler tick stays the retry path.
+7. **`TickSummary` gained `nominationsEnded`**, and `instrumentation.ts` logs a tick that ended any.
+8. **UI.** The hand-off controls are their own component (`components/check-in/SlotHandOff.tsx`) below the vote buttons. Game Planner's `AttendanceBanner` also names who is playing in whose slot, since they arrive pre-ticked in the holder's place. The profile list's chip reads *Passed to Bob* for the nominator (whose vote is IN, but "In" would say they are coming) and *Playing (Ada's slot)* for the nominee.
+9. **Verified against the real local MySQL** once, beyond the stateful-fake tests: nominate / switch / revoke / renominate, the nominee view, the collision message, the unsettled-posts query, close → planner pre-tick → post-deadline OUT → waiting-list promotion, the session-end step and `cancelGameDay`. The browser walk-through still needs a Google sign-in the local environment does not have configured.

@@ -127,3 +127,17 @@ export function votesOf(db: FakePrisma, gameDayId: number) {
 export function openSlotsOf(db: FakePrisma, gameDayId: number) {
   return db.store.gameDayOpenSlot.filter((s) => s.gameDayId === gameDayId);
 }
+
+export function seedNomination(
+  db: FakePrisma,
+  gameDayId: number,
+  nominatorId: number,
+  nomineeId: number,
+  extra: Record<string, unknown> = {}
+) {
+  return db.insert('gameDaySlotNomination', { gameDayId, nominatorPlayerId: nominatorId, nomineePlayerId: nomineeId, ...extra });
+}
+
+export function nominationsOf(db: FakePrisma, gameDayId: number) {
+  return db.store.gameDaySlotNomination.filter((n) => n.gameDayId === gameDayId);
+}
