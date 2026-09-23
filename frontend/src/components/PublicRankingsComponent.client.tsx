@@ -1,12 +1,15 @@
 import React from 'react';
 import { usePublicRankings } from '@/hooks/usePublicRankings';
+import { usePublicLiveGames } from '@/hooks/usePublicLiveGames';
 import Leaderboard from '@/components/leaderboard/Leaderboard';
 import PageHeader from '@/components/leaderboard/PageHeader';
 import PublicRankingsCallout from '@/components/leaderboard/PublicRankingsCallout';
+import PublicLiveGames from '@/components/leaderboard/PublicLiveGames';
 import { PageLoader } from '@/components/common/GameLoader';
 
 const PublicRankingsComponent = () => {
   const { rankings, error, isLoading } = usePublicRankings();
+  const { liveGames } = usePublicLiveGames();
 
   if (isLoading) {
     return <PageLoader variant="compact" label="Loading rankings" />;
@@ -28,6 +31,7 @@ const PublicRankingsComponent = () => {
     return (
       <div className="min-h-screen">
         <PublicRankingsCallout />
+        <PublicLiveGames games={liveGames} />
         <PageHeader title="Public Leaderboard" />
         <div className="max-w-7xl mx-auto px-8 pb-20">
           <div className="rounded-xl border border-gray-600 bg-surface-container p-6 text-on-surface-variant">
@@ -41,6 +45,7 @@ const PublicRankingsComponent = () => {
   return (
     <div className="min-h-screen">
       <PublicRankingsCallout />
+      <PublicLiveGames games={liveGames} />
       <PageHeader title="Public Leaderboard" />
       <Leaderboard players={rankings.players} variant="public" />
     </div>

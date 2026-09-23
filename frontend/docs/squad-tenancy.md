@@ -118,7 +118,10 @@ flag - and, later, what signing in requires at all:
   that person's public memberships. Narrower columns than the per-squad board (no peak tenure,
   last-day net, or trend). Rows are **not** clickable — a callout directs visitors to sign in and
   pick a squad for detailed rankings and encounter history. Per-squad boards at `/s/[slug]` still
-  link rows to player encounters as before.
+  link rows to player encounters as before. Above the board, a **"Live now"** strip lists every
+  `IN_PROGRESS` game in those same `enabled` + `isPublic` squads (`GET /api/games/live`, polled
+  every 30s), each card linking to that squad's public `/s/[slug]/game-viewer` - so a signed-out
+  visitor can follow a public squad's game without knowing its slug.
 - **`/squads/browse`** - signed-in squad **directory**: squads open to join requests, the
   caller's own pending requests, and withdraw. Deliberately a separate page from `/squads`,
   which redirects a one-squad member straight to their board - anything placed there would be
@@ -133,6 +136,7 @@ flag - and, later, what signing in requires at all:
 - **`/login`** - stays global, not squad-scoped.
 - **API**: everything under the old flat `/api/{players,games,encounters,rankings,user}/**` moved
   to `/api/squads/[squadId]/**`. Plus **`GET /api/rankings`** (public aggregate board data; no
+  auth), **`GET /api/games/live`** (in-progress games of public squads, progress summary only; no
   auth), `/api/squads` (list mine / create, superadmin-only create),
   `/api/squads/[squadId]` (GET detail incl. schedule fields, squad-admin-readable; PATCH
   `enabled`/`maxPlayers`, superadmin-only), `/api/squads/[squadId]/admins` (superadmin-only),
@@ -226,7 +230,9 @@ rate combine matches across those memberships. Private squads are excluded from 
 remain link-public at `/s/[slug]` like before. Unlike `enabled`/`maxPlayers`, editable by the
 squad's **own admins** (`requireSquadAdmin`, not superadmin-only), via
 `PATCH /api/squads/[squadId]/visibility` and a toggle on `/s/[squad]/admin/settings`.
-Implementation: `lib/ranking/publicRankings.ts`.
+Implementation: `lib/ranking/publicRankings.ts`. The same flag gates the "Live now" strip on `/`
+(`lib/games/liveGames.ts`); a private squad's game viewer stays link-public as before, it just isn't
+advertised.
 
 ## Squad schedule
 
