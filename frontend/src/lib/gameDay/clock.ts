@@ -1,9 +1,8 @@
 // Wall-clock <-> instant arithmetic for the game-day check-in (ATTENDANCE_VOTE_PLAN.md, "The
 // clock"). Every threshold in the feature (09:00, 10:00, 13:00, start - 2h) is a wall-clock time
 // in the squad's own zone that has to become an absolute instant, and `date-fns-tz` is not a
-// dependency - this repo hand-rolls rather than adding one for a single job (see
-// lib/telegram/sendEncounterPoll.ts). Intl.DateTimeFormat + formatToParts does the read
-// direction; instantAt is its inverse.
+// dependency - this repo hand-rolls rather than adding one for a single job.
+// Intl.DateTimeFormat + formatToParts does the read direction; instantAt is its inverse.
 //
 // Pure: no Prisma, no env, no Date.now(). This is the only place in the codebase doing timezone
 // arithmetic, and it is safe to import from client components too.

@@ -31,7 +31,7 @@ export function formatGameDate(gameDate: string): string {
 
 // Telegram rejects an inline button whose URL it considers unreachable (localhost, a bare IP
 // on a dev box) and fails the WHOLE message - so a local run keeps the link in the text only.
-function buttonsFor(url: string, label: string): InlineKeyboard | undefined {
+export function buttonsFor(url: string, label: string): InlineKeyboard | undefined {
   try {
     const { protocol, hostname } = new URL(url);
     if (protocol !== 'https:' && protocol !== 'http:') return undefined;

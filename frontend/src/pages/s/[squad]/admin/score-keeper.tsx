@@ -228,7 +228,7 @@ const ScoreKeeperPage = () => {
           throw new Error('Failed to delete game');
         }
 
-        await notificationService.notifyGameCancelled(gameId);
+        await notificationService.notifyGameCancelled(squadId, gameId);
         // Only redirect after successful deletion
         router.push(`/s/${slug}/admin/dashboard`, undefined, { shallow: false });
       }
@@ -246,7 +246,7 @@ const ScoreKeeperPage = () => {
 
     try {
       await gameService.processGame(squadId, gameId);
-      const notificationSent = await notificationService.notifyGameCompleted(slug, gameId);
+      const notificationSent = await notificationService.notifyGameCompleted(squadId, gameId);
       if (!notificationSent) {
         console.warn('Notification was cancelled or failed to send');
       }
@@ -294,7 +294,7 @@ const ScoreKeeperPage = () => {
 
     try {
       await gameService.startGame(squadId, gameId as string);
-      await notificationService.notifyGameStarted(slug, gameId);
+      await notificationService.notifyGameStarted(squadId, gameId as string);
       setIsGameStarted(true);
       await mutate(); // Refresh game data
     } catch (error) {

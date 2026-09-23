@@ -242,9 +242,9 @@ list for holidays), stored as a **single JSON blob** on `Squad.schedule` (`Squad
 individual field (day, a time, a date), so separate columns bought nothing but column count.
 `null` = never configured; an object with `isRecurring: false` = explicitly one-off. **No longer
 informational only**: the game-day check-in scheduler (below) reads it to create each session's
-`GameDay`, and an admin cancelling a session adds its date to `skipDates`. It still does not drive
-the old 17:00 Telegram poll. Carries a `timezone` (IANA, e.g. `Europe/Amsterdam`) qualifying
-`startTime`/`endTime` - a start time without a zone is incomplete, and every clock in the check-in
+`GameDay`, and an admin cancelling a session adds its date to `skipDates`. Carries a `timezone`
+(IANA, e.g. `Europe/Amsterdam`) qualifying `startTime`/`endTime` - a start time without a zone is
+incomplete, and every clock in the check-in
 feature is a wall-clock time in it. Optional on the stored type because rows written before it
 have no such key; read it via `scheduleTimezone()`, which defaults to `Europe/Amsterdam`. No
 migration was needed (`schedule` was already `Json?`). Validated by `validateScheduleInput` (unit
@@ -486,9 +486,9 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   *deleted*, never `WITHDRAWN`. A player auto-deactivated by the absentee sweep is cleared from
   live game days afterwards (`removeDisabledPlayerFromGameDays`, best-effort, outside the ranking
   transaction).
-- **Scheduler** (`lib/gameDay/scheduler.ts`, every 5 minutes from `instrumentation.ts`, beside the
-  untouched 17:00 poll). Pass A, per squad with a recurring schedule and check-in on: scan every
-  squad-local date from today to today + `voteOpensDaysBefore` (recovers a missed day), create
+- **Scheduler** (`lib/gameDay/scheduler.ts`, every 5 minutes from `instrumentation.ts`; it replaced
+  the old global 17:00 Telegram poll, now removed). Pass A, per squad with a recurring schedule
+  and check-in on: scan every squad-local date from today to today + `voteOpensDaysBefore` (recovers a missed day), create
   missing rows with a no-op conflict path, cancel open rows no longer on the schedule, and
   re-create a cancelled one in place (fresh vote) once its date is back. Pass B, over every live
   row: announce, 09:00 open-slot ping (only when `confirmedIn` is short), 10:00 reminder - each
@@ -504,6 +504,13 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   squad from platform admin (`PATCH /api/squads/[squadId]`, a different handler) - both via
   `cancelOpenGameDays`. The bot token stays the one shared `TELEGRAM_BOT_TOKEN`; only chat ids are
   per-squad. `GET /api/squads/[squadId]` unpacks it into flat `gameDayXxx` fields.
+- **Score keeper notifications** (game started / completed / cancelled): `POST
+  /api/squads/[squadId]/notify` (`{ event, gameId }`, squad admins) posts to the same
+  `telegramMainChatId` via `sendGameDayPost`; `lib/gameNotifications.ts` builds the text and the
+  squad-scoped links (`/s/[slug]/game-viewer?gameId=…`, `/s/[slug]`) server-side, so the client
+  only names the event. With check-in off there is no chat id, and the route answers `skipped`.
+  This replaced the old flat `/api/notify`, which was superadmin-only and always posted to one
+  global `TELEGRAM_CHAT_ID` whatever the squad - that env var is gone.
 - **Routes**: `GET /game-days` (upcoming = not ended and not cancelled - *not* "voting open",
   which would drop today's row at 13:00), `GET /game-days/[date]` (the caller's view: role, vote,
   allowed actions, and the roster - withheld from a voter who has not voted yet), `PUT
@@ -553,10 +560,6 @@ schema.
 
 ## Explicitly out of scope so far
 
-- Making the old Telegram "who's in" poll (`lib/telegram/`, the 17:00 cron in
-  `instrumentation.ts`) per-squad configurable, or having the schedule drive it - it's still a
-  single global cron job, now running beside the game-day check-in rather than replaced by it.
-- Retiring that old poll once the check-in has proven itself (ATTENDANCE_VOTE_PLAN.md, Decision 2).
 - Per-squad Telegram bot tokens, more than one playing day per week, per-player notifications,
   and auto-creating the `Game` row when voting closes (the planner pre-ticks instead).
 - Getting Pasan's real email.
