@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { formatLocalTime, formatSessionTimeRange, formatSessionTitle } from './schedule';
+import {
+  formatLocalTime,
+  formatSessionTimeRange,
+  formatSessionTitle,
+  formatTimezoneCity,
+} from './schedule';
 
 describe('check-in display helpers', () => {
   it('titles a session by its own date', () => {
@@ -14,5 +19,10 @@ describe('check-in display helpers', () => {
   it("renders a stored instant in the game day's zone, not the viewer's", () => {
     expect(formatLocalTime('2026-09-23T11:00:00.000Z', 'Europe/Amsterdam')).toBe('13:00');
     expect(formatLocalTime('2026-09-23T11:00:00.000Z', 'Asia/Colombo')).toBe('16:30');
+  });
+
+  it('shortens IANA zones to a city label', () => {
+    expect(formatTimezoneCity('Europe/Amsterdam')).toBe('Amsterdam');
+    expect(formatTimezoneCity('America/New_York')).toBe('New York');
   });
 });

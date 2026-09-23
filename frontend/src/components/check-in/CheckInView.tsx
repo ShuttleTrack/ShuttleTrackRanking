@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { useOptionalSquad } from '@/contexts/SquadContext';
 import {
+  durationUntilLabel,
   formatLocalTime,
   formatSessionTimeRange,
   formatSessionTitle,
@@ -14,6 +16,7 @@ import {
   CheckInVoteButtons,
   checkInButtonBase,
   checkInButtonIdle,
+  checkInButtonOut,
   checkInButtonPrimary,
 } from './CheckInVoteButtons';
 
@@ -58,31 +61,100 @@ function phaseChipClass(phase: ReturnType<typeof sessionPhase>): string {
 const sectionLabel = 'font-label text-xs font-bold uppercase tracking-widest text-on-surface-variant opacity-80';
 const note = 'mt-3 text-sm text-on-surface-variant';
 
-function VotingStatusLine({ view }: { view: GameDayView }) {
-  const closesAt = formatLocalTime(view.votesCloseAt, view.timezone);
-  if (view.status === 'CANCELLED') {
-    return <p className="mt-4 text-sm font-semibold text-red-400">This session has been cancelled.</p>;
-  }
-  const tally =
-    view.minPlayers === null ? `${view.counts.confirmedIn} in` : `${view.counts.confirmedIn} of ${view.minPlayers} in`;
+function SessionHeader({
+  view,
+  now,
+}: {
+  view: GameDayView;
+  now: Date;
+}) {
+  const phase = sessionPhase(view, now);
+  const status =
+    view.status === 'CANCELLED' ? 'Cancelled' : sessionStatusLabel(view, now);
+
   return (
-    <p className="mt-4 text-sm text-on-surface-variant">
-      {view.status === 'VOTING_OPEN' ? `Voting closes at ${closesAt} on the day` : `Voting closed at ${closesAt}`}
-      <span aria-hidden> · </span>
-      <span className="font-numeric tabular-nums">{tally}</span>
-    </p>
+    <div>
+      <h2 className="font-headline text-xl font-bold text-on-surface">{formatSessionTitle(view)}</h2>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="font-numeric text-base tabular-nums text-primary" title={view.timezone}>
+          {formatSessionTimeRange(view)}
+        </p>
+        {view.status !== 'CANCELLED' ? (
+          <span
+            className={`rounded-full px-2.5 py-0.5 font-label text-[10px] font-bold uppercase tracking-widest ${phaseChipClass(phase)}`}
+          >
+            {status}
+          </span>
+        ) : (
+          <span className="rounded-full bg-red-950/40 px-2.5 py-0.5 font-label text-[10px] font-bold uppercase tracking-widest text-red-400">
+            Cancelled
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
-function VoterPanel({ view, pending, onVote }: Pick<CheckInViewProps, 'view' | 'pending' | 'onVote'>) {
+function CheckInStatCells({ view, now }: { view: GameDayView; now: Date }) {
+  const closesAt = formatLocalTime(view.votesCloseAt, view.timezone);
+  const voteCountdown =
+    view.status === 'VOTING_OPEN'
+      ? durationUntilLabel(new Date(view.votesCloseAt), now)
+      : null;
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-x-4 border-t border-gray-600 pt-3">
+      <div className="min-w-0 text-left">
+        <div className="flex flex-wrap items-baseline gap-x-1.5">
+          <p className={sectionLabel}>Voting closes</p>
+          <p className="font-numeric text-xs font-normal normal-case tracking-normal tabular-nums text-on-surface-variant">
+            at {closesAt}
+          </p>
+        </div>
+        {voteCountdown ? (
+          <p className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5">
+            <span className="font-numeric text-lg font-bold tabular-nums text-on-surface">{voteCountdown}</span>
+            <span className="text-sm text-on-surface-variant">left</span>
+          </p>
+        ) : (
+          <p className="mt-0.5 font-numeric text-lg font-bold tabular-nums text-on-surface-variant">Closed</p>
+        )}
+      </div>
+      <div className="min-w-0 text-right">
+        <p className={sectionLabel}>Confirmed</p>
+        <p className="mt-0.5 font-numeric text-lg font-bold tabular-nums text-on-surface">{view.counts.confirmedIn}</p>
+      </div>
+    </div>
+  );
+}
+
+function VoterPanel({
+  view,
+  pending,
+  onVote,
+  rosterHidden,
+}: Pick<CheckInViewProps, 'view' | 'pending' | 'onVote'> & { rosterHidden: boolean }) {
   const { actions, myOpenSlot } = view;
   const isDirect = view.holding === 'ASSIGNED' && myOpenSlot?.source === 'DIRECT';
   const lockTime = formatLocalTime(view.slotLockAt, view.timezone);
-  // A button stays enabled while it is your current choice, even when switching to it again would
-  // be refused, so the selected state still reads as selected rather than greyed out.
-  const inDisabled = !actions.voteIn.ok && view.myVote !== 'IN';
-  const outDisabled = !actions.voteOut.ok && view.myVote !== 'OUT';
-  const refusal = inDisabled ? actions.voteIn : outDisabled ? actions.voteOut : null;
+  const inDisabled = !actions.voteIn.ok || view.myVote === 'IN';
+  const outDisabled = !actions.voteOut.ok || view.myVote === 'OUT';
+  const canChangeVote =
+    view.myVote !== null &&
+    !isDirect &&
+    (view.myVote === 'IN' ? actions.voteOut.ok : actions.voteIn.ok);
+
+  const [changingVote, setChangingVote] = useState(false);
+  useEffect(() => {
+    setChangingVote(false);
+  }, [view.myVote]);
+
+  const showVoteButtons = view.myVote === null || (canChangeVote && changingVote);
+  const refusal =
+    showVoteButtons && view.myVote === 'IN' && !actions.voteOut.ok
+      ? actions.voteOut
+      : showVoteButtons && view.myVote === 'OUT' && !actions.voteIn.ok
+        ? actions.voteIn
+        : null;
 
   let context: string | null = null;
   if (view.myReservation) {
@@ -98,17 +170,33 @@ function VoterPanel({ view, pending, onVote }: Pick<CheckInViewProps, 'view' | '
   return (
     <>
       <p className={sectionLabel}>Your vote</p>
+      {rosterHidden && view.myVote === null ? (
+        <p className="mt-2 text-sm text-on-surface-variant">Vote in or out to see who else is playing.</p>
+      ) : null}
       {context ? <p className="mt-2 text-sm text-on-surface">{context}</p> : null}
-      <div className="mt-3">
-        <CheckInVoteButtons
-          myVote={view.myVote}
-          onVote={onVote}
+      {canChangeVote && !changingVote ? (
+        <button
+          type="button"
+          className={`${checkInButtonBase} ${checkInButtonIdle} mt-3 w-full sm:w-auto sm:min-w-[12rem]`}
           disabled={pending || view.status === 'CANCELLED'}
-          inDisabled={inDisabled}
-          outDisabled={outDisabled}
-          hideOut={isDirect}
-        />
-      </div>
+          aria-expanded={false}
+          onClick={() => setChangingVote(true)}
+        >
+          Change your vote
+        </button>
+      ) : null}
+      {showVoteButtons ? (
+        <div className="mt-3">
+          <CheckInVoteButtons
+            myVote={view.myVote}
+            onVote={onVote}
+            disabled={pending || view.status === 'CANCELLED'}
+            inDisabled={inDisabled}
+            outDisabled={outDisabled}
+            hideOut={isDirect}
+          />
+        </div>
+      ) : null}
       {refusal && !refusal.ok && view.status !== 'CANCELLED' ? <p className={note}>{refusal.reason}.</p> : null}
     </>
   );
@@ -125,7 +213,7 @@ function OpenSlotPanel({ view, pending, onJoinOrClaim, onLeave }: Pick<CheckInVi
       <>
         <p className="mt-2 text-sm text-on-surface">
           You&apos;re <span className="font-numeric tabular-nums">#{myOpenSlot.waitingPosition ?? '?'}</span> on the waiting
-          list. Slots are handed out in join order when voting closes at {closesAt}.
+          list. It&apos;s first come, first served. When voting closes at {closesAt}, you&apos;ll get a slot if any are left.
         </p>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:gap-4">
           <button type="button" className={`${checkInButtonBase} ${checkInButtonPrimary}`} disabled aria-pressed>
@@ -133,7 +221,7 @@ function OpenSlotPanel({ view, pending, onJoinOrClaim, onLeave }: Pick<CheckInVi
           </button>
           <button
             type="button"
-            className={`${checkInButtonBase} ${checkInButtonIdle}`}
+            className={`${checkInButtonBase} ${checkInButtonOut}`}
             disabled={pending || !actions.leaveWaitingList.ok}
             onClick={onLeave}
           >
@@ -146,11 +234,11 @@ function OpenSlotPanel({ view, pending, onJoinOrClaim, onLeave }: Pick<CheckInVi
     body = (
       <>
         <p className="mt-2 text-sm text-on-surface">
-          You don&apos;t hold a regular slot for this session. Join the waiting list and you&apos;ll be given one, in join
-          order, if the session is short when voting closes at {closesAt}.
+          Join the waiting list for an open slot. It&apos;s first come, first served. When voting closes at {closesAt},
+          you&apos;ll get a slot if any are left.
         </p>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:gap-4">
-          <button type="button" className={`${checkInButtonBase} ${checkInButtonIdle}`} disabled={pending} onClick={onJoinOrClaim}>
+          <button type="button" className={`${checkInButtonBase} ${checkInButtonPrimary}`} disabled={pending} onClick={onJoinOrClaim}>
             Join waiting list
           </button>
         </div>
@@ -184,29 +272,18 @@ function OpenSlotPanel({ view, pending, onJoinOrClaim, onLeave }: Pick<CheckInVi
 }
 
 export function CheckInView({ view, now, avatarUrl, pending, actionError, onVote, onJoinOrClaim, onLeave }: CheckInViewProps) {
-  const phase = sessionPhase(view, now);
-  const status = view.status === 'CANCELLED' ? 'Cancelled' : sessionStatusLabel(view, now);
   const showRoster = view.rosterVisible && view.roster !== null;
 
   return (
     <div className="max-w-3xl">
-      <section className="rounded-xl border border-gray-600 bg-surface-container/90 p-5 sm:p-6 motion-safe:animate-fadeIn">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="font-headline text-xl font-bold text-on-surface sm:text-2xl">{formatSessionTitle(view)}</h2>
-            <p className="mt-1 font-numeric text-lg tabular-nums text-primary">{formatSessionTimeRange(view)}</p>
-            <p className="mt-1 text-xs text-on-surface-variant">{view.timezone}</p>
-          </div>
-          <span
-            className={`rounded-full px-3 py-1 font-label text-[10px] font-bold uppercase tracking-widest ${
-              view.status === 'CANCELLED' ? 'bg-red-950/40 text-red-400' : phaseChipClass(phase)
-            }`}
-          >
-            {status}
-          </span>
-        </div>
+      <section className="rounded-xl border border-gray-600 bg-surface-container/90 p-4 sm:p-5 motion-safe:animate-fadeIn">
+        <SessionHeader view={view} now={now} />
 
-        <VotingStatusLine view={view} />
+        {view.status === 'CANCELLED' ? (
+          <p className="mt-3 text-sm font-semibold text-red-400">This session has been cancelled.</p>
+        ) : (
+          <CheckInStatCells view={view} now={now} />
+        )}
 
         {showRoster ? (
           <CheckInRoster
@@ -222,9 +299,9 @@ export function CheckInView({ view, now, avatarUrl, pending, actionError, onVote
         ) : null}
 
         {view.status !== 'CANCELLED' ? (
-          <div className={showRoster ? 'mt-6 border-t border-gray-600 pt-5' : 'mt-6'}>
+          <div className="mt-4 border-t border-gray-600 pt-4">
             {view.role === 'VOTER' ? (
-              <VoterPanel view={view} pending={pending} onVote={onVote} />
+              <VoterPanel view={view} pending={pending} onVote={onVote} rosterHidden={!showRoster} />
             ) : view.role === 'OPEN_SLOT' ? (
               <OpenSlotPanel view={view} pending={pending} onJoinOrClaim={onJoinOrClaim} onLeave={onLeave} />
             ) : (
@@ -238,10 +315,6 @@ export function CheckInView({ view, now, avatarUrl, pending, actionError, onVote
               <p role="alert" className="mt-4 rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-400">
                 {actionError}
               </p>
-            ) : null}
-
-            {!showRoster ? (
-              <p className="mt-4 text-sm text-on-surface-variant">Vote in or out to see who else is playing.</p>
             ) : null}
           </div>
         ) : null}

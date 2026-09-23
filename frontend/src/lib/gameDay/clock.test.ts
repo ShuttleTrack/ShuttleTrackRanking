@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { addCalendarDays, addMinutes, instantAt, isValidTimeZone, localDateIso, wallClockIn } from './clock';
-import { resolveGameDayInstants, sessionPhase, sessionStatusLabel } from './voteWindow';
+import { durationUntilLabel, resolveGameDayInstants, sessionPhase, sessionStatusLabel } from './voteWindow';
 
 const AMS = 'Europe/Amsterdam';
 
@@ -95,5 +95,15 @@ describe('game day instants and phase', () => {
     expect(sessionStatusLabel(clock, new Date('2026-09-21T15:00:00Z'))).toBe('Starts in 2d 2h');
     expect(sessionStatusLabel(clock, new Date('2026-09-23T16:15:00Z'))).toBe('Starts in 45m');
     expect(sessionStatusLabel(clock, new Date('2026-09-23T18:00:00Z'))).toBe('Live now');
+  });
+
+  it('formats duration until an instant', () => {
+    const closes = new Date('2026-09-23T11:00:00.000Z'); // 13:00 Amsterdam
+    expect(durationUntilLabel(closes, new Date('2026-09-23T09:08:00.000Z'))).toBe('1h 52m');
+    expect(durationUntilLabel(closes, new Date('2026-09-23T11:00:00.000Z'))).toBeNull();
+    expect(durationUntilLabel(closes, new Date('2026-09-23T12:00:00.000Z'))).toBeNull();
+    expect(durationUntilLabel(new Date('2026-09-30T11:00:00.000Z'), new Date('2026-09-23T09:00:00.000Z'))).toBe(
+      '7d 2h'
+    );
   });
 });

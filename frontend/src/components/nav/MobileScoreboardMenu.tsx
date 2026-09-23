@@ -4,6 +4,7 @@ import Image from 'next/image';
 import {
   ChevronDownIcon,
   UserCircleIcon,
+  CalendarDaysIcon,
   PencilSquareIcon,
   Squares2X2Icon,
   ArrowRightOnRectangleIcon,
@@ -18,6 +19,7 @@ import { LiveGameProgressCards } from './LiveGameProgressList';
 import { classNames, buildHistoryLinks } from './navUtils';
 import { useOptionalSquad } from '@/contexts/SquadContext';
 import { useMySquads } from '@/hooks/useMySquads';
+import { useUpcomingGameDays } from '@/hooks/useUpcomingGameDays';
 import { SquadSwitcherLinks } from './SquadSwitcherLinks';
 import { JoinSquadMenuSection } from './JoinSquadMenuSection';
 
@@ -48,6 +50,13 @@ export function MobileScoreboardMenu({
   const { data: session } = useSession();
   const squad = useOptionalSquad();
   const { squads: mySquads } = useMySquads();
+  const { gameDays } = useUpcomingGameDays(Boolean(squad?.isPlayerHere));
+  const checkInHref =
+    squad?.slug && gameDays[0]
+      ? `/s/${squad.slug}/game-day/${gameDays[0].gameDate}`
+      : squad?.slug
+        ? `/s/${squad.slug}/user/profile`
+        : null;
   const [encountersOpen, setEncountersOpen] = useState(false);
 
   return (
@@ -199,6 +208,14 @@ export function MobileScoreboardMenu({
           )}
           {squad?.isPlayerHere && (
             <>
+              {checkInHref ? (
+                <Link href={checkInHref} className={mobileRowClass} onClick={onClose}>
+                  <span className="flex items-center gap-3">
+                    <CalendarDaysIcon className="h-5 w-5 text-on-surface-variant" aria-hidden />
+                    Check-in
+                  </span>
+                </Link>
+              ) : null}
               <Link href={`/s/${squad.slug}/user/matches`} className={mobileRowClass} onClick={onClose}>
                 <span className="flex items-center gap-3">
                   <PencilSquareIcon className="h-5 w-5 text-on-surface-variant" aria-hidden />

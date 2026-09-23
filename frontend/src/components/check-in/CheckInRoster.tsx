@@ -73,7 +73,7 @@ export function CheckInRoster({
       : 'text-on-surface-variant hover:bg-white/5';
 
   return (
-    <section className={`motion-safe:animate-slideUp ${nested ? 'mt-6' : 'mt-8'}`} aria-label="Player votes">
+    <section className={`motion-safe:animate-slideUp ${nested ? 'mt-4' : 'mt-8'}`} aria-label="Player votes">
       <h2 className="font-label text-xs font-bold uppercase tracking-widest text-on-surface-variant opacity-80">
         Who&apos;s playing
       </h2>

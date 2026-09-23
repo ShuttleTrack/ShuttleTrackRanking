@@ -5,6 +5,7 @@ import { Menu, Transition } from '@headlessui/react';
 import {
   ArrowRightOnRectangleIcon,
   ArrowsRightLeftIcon,
+  CalendarDaysIcon,
   PencilSquareIcon,
   Squares2X2Icon,
   UserCircleIcon,
@@ -14,6 +15,7 @@ import { useRouter } from 'next/router';
 import { classNames, menuTransitionProps, scoreboardSegmentClass } from './navUtils';
 import { useOptionalSquad } from '@/contexts/SquadContext';
 import { useMySquads } from '@/hooks/useMySquads';
+import { useUpcomingGameDays } from '@/hooks/useUpcomingGameDays';
 import { SquadSwitcherLinks } from './SquadSwitcherLinks';
 import { JoinSquadMenuSection } from './JoinSquadMenuSection';
 
@@ -38,6 +40,14 @@ export function AccountMenu() {
   const squad = useOptionalSquad();
   const { squads: mySquads } = useMySquads();
   const onLoginPage = router.pathname === '/login';
+  const showUserLinks = Boolean(squad?.isPlayerHere);
+  const { gameDays } = useUpcomingGameDays(showUserLinks);
+  const checkInHref =
+    squad?.slug && gameDays[0]
+      ? `/s/${squad.slug}/game-day/${gameDays[0].gameDate}`
+      : squad?.slug
+        ? `/s/${squad.slug}/user/profile`
+        : null;
 
   if (!session) {
     return (
@@ -51,7 +61,6 @@ export function AccountMenu() {
     );
   }
 
-  const showUserLinks = Boolean(squad?.isPlayerHere);
   const showAdmin = Boolean(squad?.isSquadAdmin);
   const profileHref =
     squad?.isPlayerHere && squad.slug ? `/s/${squad.slug}/user/profile` : null;
@@ -124,6 +133,16 @@ export function AccountMenu() {
           )}
           {showUserLinks && (
             <>
+              {checkInHref ? (
+                <Menu.Item>
+                  {({ active }) => (
+                    <Link href={checkInHref} className={accountMenuRowClass(active)}>
+                      <CalendarDaysIcon className="h-5 w-5 shrink-0 text-on-surface-variant" aria-hidden />
+                      Check-in
+                    </Link>
+                  )}
+                </Menu.Item>
+              ) : null}
               <Menu.Item>
                 {({ active }) => (
                   <Link href={`/s/${squad?.slug}/user/matches`} className={accountMenuRowClass(active)}>

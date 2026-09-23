@@ -6,7 +6,12 @@
 import { format, parseISO } from 'date-fns';
 import { localTimeOf, type GameDayClock } from '@/lib/gameDay/voteWindow';
 
-export { sessionPhase, sessionStatusLabel, type SessionPhase } from '@/lib/gameDay/voteWindow';
+export {
+  durationUntilLabel,
+  sessionPhase,
+  sessionStatusLabel,
+  type SessionPhase,
+} from '@/lib/gameDay/voteWindow';
 
 // "Wednesday · 23 Sep 2026"
 export function formatSessionTitle(gameDay: Pick<GameDayClock, 'gameDate'>): string {
@@ -21,4 +26,11 @@ export function formatSessionTimeRange(gameDay: Pick<GameDayClock, 'startTime' |
 // A stored instant (the voting deadline, the slot lock) as the squad reads its own clock.
 export function formatLocalTime(isoInstant: string, timezone: string): string {
   return localTimeOf(new Date(isoInstant), timezone);
+}
+
+// "Europe/Amsterdam" → "Amsterdam" for display; full id stays on title/tooltip.
+export function formatTimezoneCity(timezone: string): string {
+  const segment = timezone.split('/').pop();
+  if (!segment) return timezone;
+  return segment.replace(/_/g, ' ');
 }

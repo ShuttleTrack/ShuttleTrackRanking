@@ -52,6 +52,23 @@ export function isToday(clock: GameDayClock, now: Date): boolean {
   return localDateIso(now, clock.timezone) === clock.gameDate;
 }
 
+function formatDurationMinutes(diffMinutes: number): string {
+  const days = Math.floor(diffMinutes / (60 * 24));
+  const hours = Math.floor((diffMinutes % (60 * 24)) / 60);
+  const minutes = diffMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+// Compact countdown until an absolute instant ("1h 52m", "6d 7h"). Null once the instant has
+// passed. Measured in real elapsed time between instants.
+export function durationUntilLabel(until: Date, now: Date): string | null {
+  const diffMinutes = Math.floor((until.getTime() - now.getTime()) / 60_000);
+  if (diffMinutes <= 0) return null;
+  return formatDurationMinutes(diffMinutes);
+}
+
 // "Starts in 2d 4h" / "Live now" / "Ended". Measured in real elapsed time between instants, so a
 // countdown across a DST change is right to the minute.
 export function sessionStatusLabel(clock: GameDayClock, now: Date): string {
@@ -63,12 +80,7 @@ export function sessionStatusLabel(clock: GameDayClock, now: Date): string {
     (resolveGameDayInstants(clock).sessionStartAt.getTime() - now.getTime()) / 60_000
   );
   if (diffMinutes <= 0) return 'Starting soon';
-  const days = Math.floor(diffMinutes / (60 * 24));
-  const hours = Math.floor((diffMinutes % (60 * 24)) / 60);
-  const minutes = diffMinutes % 60;
-  if (days > 0) return `Starts in ${days}d ${hours}h`;
-  if (hours > 0) return `Starts in ${hours}h ${minutes}m`;
-  return `Starts in ${minutes}m`;
+  return `Starts in ${formatDurationMinutes(diffMinutes)}`;
 }
 
 // "HH:mm" of an instant in the game day's own zone - for rendering a stored instant (the
