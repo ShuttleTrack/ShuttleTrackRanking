@@ -153,7 +153,11 @@ flag - and, later, what signing in requires at all:
   `/game-days/[date]/nomination` (GET/PUT/DELETE - one-day slot hand-off),
   `/game-days/[date]/admin` (GET/PATCH, squad-admin-only), `/api/squads/[squadId]/game-day-ops`
   (PATCH, squad-admin-only) and `/api/admin/game-day-tick` (POST, superadmin-only) - see "Game day
-  check-in & attendance vote" below.
+  check-in & attendance vote" below. `/api/squads/[squadId]/games/group-seed` (GET,
+  squad-admin-only) returns the squad's random seed for today (squad-local date, schedule
+  timezone). The game planner uses it to order group sizes, so a same-day re-create can't
+  re-roll. It is held in process memory only (`lib/games/groupSeed.ts`); a restart issues a new
+  one.
   these. Plus, for self-registration: **`GET /api/squads/open`** (the directory + the caller's
   standing per squad, signed-in), **`GET /api/squads/join-requests`** (the caller's own rows
   across every squad and status, signed-in), `/api/squads/[squadId]/join-requests` (POST create
