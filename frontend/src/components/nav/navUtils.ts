@@ -40,6 +40,9 @@ export function isHistoryRoute(pathname: string): boolean {
   return pathname.endsWith('/player-ranking-history') || pathname.endsWith('/encounter-history');
 }
 
+export const navSectionLabelClass =
+  'px-3 py-1.5 font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant';
+
 export const scoreboardSegmentClass = (active: boolean) =>
   classNames(
     'inline-flex min-h-[36px] items-center justify-center rounded-lg px-3 py-1.5 font-label text-xs uppercase tracking-wider transition-colors',

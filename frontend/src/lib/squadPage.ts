@@ -40,6 +40,7 @@ async function resolveSquadAndAccess(
     name: squadRow.name,
     isSquadAdmin: access.isSquadAdmin || isSuperAdmin,
     isPlayerHere: access.player !== null,
+    openForOpenSlot: squadRow.openForOpenSlot,
   };
 
   return { squad, session, access };

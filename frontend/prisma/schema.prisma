@@ -23,6 +23,17 @@ enum PlayerType {
   OPEN_SLOT
 }
 
+// Self-service registration (SELF_REGISTRATION_PLAN.md): a person asks to join a squad, a squad
+// admin decides. Decided rows are kept, never deleted - they're the audit trail for "why is this
+// person on the roster" / "did we already turn them down", and keeping them is what lets someone
+// re-request after a rejection without needing a partial unique index MySQL can't express.
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
 model Player {
   id           Int        @id @default(autoincrement())
   squadId      Int        @map("squad_id")
@@ -103,6 +114,42 @@ model SlotReplacement {
   @@map("SLOT_REPLACEMENT")
 }
 
+// A request to join a squad (SELF_REGISTRATION_PLAN.md). Keyed by email like SquadAdmin, not by
+// a user id - this app resolves identity from the Google-verified email throughout, and adding a
+// profile/user table would sit alongside that rather than replace it (see the plan's Decision 1).
+//
+// There is deliberately NO unique index enforcing "at most one PENDING per (squadId, email)":
+// MySQL has no partial/filtered unique index, so that rule can't be a constraint. Same situation
+// as SlotReplacement's overlap rule - the check happens application-side inside the same
+// transaction as the insert (lib/joinRequests.ts).
+model SquadJoinRequest {
+  id      Int    @id @default(autoincrement())
+  squadId Int    @map("squad_id")
+  // Lowercased on write, same convention as SquadAdmin.email / Player.email. ALWAYS taken from
+  // the verified session, never from a request body - now that any Google account can sign in
+  // (see lib/auth/validateUserAccess.ts), a body-supplied email would let anyone file a request
+  // as someone else.
+  email   String @db.VarChar(255)
+  // VarChar(32) deliberately matches Player.name: this string becomes that one on approval, so
+  // validating the length here means the approval insert can't fail on it.
+  name    String @db.VarChar(32)
+  message String? @db.VarChar(500)
+
+  status         JoinRequestStatus @default(PENDING)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  decidedAt      DateTime?         @map("decided_at")
+  decidedByEmail String?           @map("decided_by_email") @db.VarChar(255)
+  // The Player row this request resolved to. Not an FK relation - it's an audit breadcrumb, and
+  // a deleted player shouldn't block reading the request history.
+  createdPlayerId Int? @map("created_player_id")
+
+  squad Squad @relation(fields: [squadId], references: [id])
+
+  @@index([squadId, status])
+  @@index([email])
+  @@map("SQUAD_JOIN_REQUEST")
+}
+
 model Encounter {
   id              Int      @id @default(autoincrement())
   squadId         Int      @map("squad_id")
@@ -176,13 +223,20 @@ model Game {
 // game days, and ranking board. New, frontend-owned table like Game - not part of the original
 // Java backend's schema.
 model Squad {
-  id         Int     @id @default(autoincrement())
-  name       String
-  slug       String  @unique
-  enabled    Boolean @default(true)
-  // Roster size cap. Nullable = unlimited (the default, so this can't retroactively put an
-  // already-over-the-cap squad in an invalid state) - visible to that squad's own admins, but
-  // only a platform superadmin can change it (see requireSuperAdmin in the squad-settings API).
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  enabled   Boolean  @default(true)
+  // Cap on the FULLTIME roster only - an OPEN_SLOT player does not consume a slot
+  // (SELF_REGISTRATION_PLAN.md). An open-slot player "fills a vacant spot rather than holding a
+  // permanent one" (OPEN_SLOT_PLAYERS_PLAN.md), so a cap on permanent slots that they consume
+  // would mean a squad with a full fulltime roster could never take on the one category of
+  // player the open-slot feature exists for. Counted by playerType only, NOT playerStatus: a
+  // fulltime slot is held whether or not its holder is currently active - the same premise
+  // SlotReplacement runs on, where an absent fulltime player's slot is *covered*, not freed.
+  // Nullable = unlimited (the default, so this can't retroactively put an already-over-the-cap
+  // squad in an invalid state) - visible to that squad's own admins, but only a platform
+  // superadmin can change it (see requireSuperAdmin in the squad-settings API).
   maxPlayers Int?    @map("max_players")
 
   // When true (default), this squad's active ranked players feed the site-root public leaderboard
@@ -231,6 +285,14 @@ model Squad {
   // an admin opts in is the safe state.
   gameDayOps Json? @map("game_day_ops")
 
+  // Whether this squad is listed in the public directory and accepts self-service open-slot
+  // join requests (SELF_REGISTRATION_PLAN.md). Deliberately NOT folded into isPublic above:
+  // that flag answers "does this squad's board feed the site-root aggregate leaderboard", which
+  // is a display question, not a recruiting one - a squad wanting a public board and a closed
+  // roster has to stay expressible, and so does a private squad that is still recruiting.
+  // Default false so no existing squad starts receiving requests without its admin opting in.
+  openForOpenSlot Boolean @default(false) @map("open_for_open_slot")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -240,6 +302,7 @@ model Squad {
   games            Game[]
   slotReplacements SlotReplacement[]
   gameDays         GameDay[]
+  joinRequests     SquadJoinRequest[]
 }
 
 // Per-squad admin membership (squad + email), replacing the old flat ALLOWED_ADMIN_EMAILS env

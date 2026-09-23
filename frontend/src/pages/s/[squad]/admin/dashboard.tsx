@@ -222,10 +222,16 @@ const DashboardPage = () => {
                 >
                   {squadSettings.enabled ? 'Enabled' : 'Disabled'}
                 </span>
+                {/*
+                  The cap applies to full-time players only, so it's shown against that count;
+                  the total roster is a separate figure (SELF_REGISTRATION_PLAN.md).
+                */}
                 <span>
-                  {squadSettings.playerCount}
-                  {squadSettings.maxPlayers !== null ? ` / ${squadSettings.maxPlayers}` : ''} players
+                  {squadSettings.fulltimePlayerCount}
+                  {squadSettings.maxPlayers !== null ? ` / ${squadSettings.maxPlayers}` : ''} full-time
                   {squadSettings.maxPlayers === null && ' (no limit)'}
+                  {squadSettings.playerCount !== squadSettings.fulltimePlayerCount &&
+                    ` · ${squadSettings.playerCount} total`}
                 </span>
               </div>
             )}
@@ -240,6 +246,15 @@ const DashboardPage = () => {
               <Link href={`/s/${slug}/admin/players`} className={outlineButtonClass}>
                 <UserGroupIcon className="h-5 w-5 shrink-0" aria-hidden />
                 Manage Players
+                {/*
+                  There's no notification channel for join requests, so this badge is the only
+                  thing stopping them sitting unnoticed (SELF_REGISTRATION_PLAN.md).
+                */}
+                {(squadSettings?.pendingJoinRequestCount ?? 0) > 0 && (
+                  <span className="ml-auto rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-300">
+                    {squadSettings?.pendingJoinRequestCount} pending
+                  </span>
+                )}
               </Link>
               <Link href={`/s/${slug}/admin/settings`} className={outlineButtonClass}>
                 <Cog6ToothIcon className="h-5 w-5 shrink-0" aria-hidden />

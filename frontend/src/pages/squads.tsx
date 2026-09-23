@@ -51,10 +51,17 @@ const SquadPickerPage = ({ squads, isSuperAdmin }: SquadPickerPageProps) => {
       <PageHeader title="Your squads" subtitle="Pick a squad to view its ranking board." />
       <div className="max-w-2xl mx-auto px-4 sm:px-8">
         {squads.length === 0 ? (
-          <div className="rounded-xl border border-gray-600 bg-surface-container/90 p-6 text-on-surface-variant">
-            {isSuperAdmin
-              ? 'No squads have been created yet.'
-              : "You're not a member of any squad yet - ask a squad admin to add you."}
+          <div className="rounded-xl border border-gray-600 bg-surface-container/90 p-6">
+            <p className="text-on-surface-variant">
+              {isSuperAdmin
+                ? 'No squads have been created yet.'
+                : "You're not a member of any squad yet."}
+            </p>
+            {!isSuperAdmin && (
+              <Link href="/squads/browse" className="btn btn-primary btn-sm mt-4">
+                Join a squad
+              </Link>
+            )}
           </div>
         ) : (
           <ul className="space-y-3">
@@ -76,6 +83,17 @@ const SquadPickerPage = ({ squads, isSuperAdmin }: SquadPickerPageProps) => {
               </li>
             ))}
           </ul>
+        )}
+
+        {squads.length > 0 && (
+          <div className="mt-6">
+            <Link
+              href="/squads/browse"
+              className="font-headline text-sm font-semibold text-primary hover:text-primary-container"
+            >
+              Find another squad
+            </Link>
+          </div>
         )}
 
         {isSuperAdmin && (
