@@ -40,8 +40,6 @@ jobs:
           echo "NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}" >> .env.production
           echo "NEXT_PUBLIC_APP_URL=${{ secrets.NEXT_PUBLIC_APP_URL }}" >> .env.production
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env.production
-          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env.production
-          echo "TELEGRAM_CHAT_ID_WEDNESDAY=${{ secrets.TELEGRAM_CHAT_ID_WEDNESDAY }}" >> .env.production
           echo "SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}" >> .env.production
           echo "NEXT_PUBLIC_BUILD_IDENTIFIER=v3.0-migration-$(TZ=Europe/Amsterdam date '+%Y-%m-%d %H:%M:%S')" >> .env.production
           echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env

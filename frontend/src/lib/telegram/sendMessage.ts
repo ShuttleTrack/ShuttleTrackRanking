@@ -1,7 +1,8 @@
-// Plain-fetch Telegram Bot API sendMessage, extracted from pages/api/notify.ts so the game-day
-// check-in (ATTENDANCE_VOTE_PLAN.md) can send to per-squad chat ids. The chat id is always an
-// argument - nothing here reads env for a destination. Same no-client-library reasoning as
-// sendEncounterPoll.ts.
+// Plain-fetch Telegram Bot API sendMessage, used by the game-day check-in (ATTENDANCE_VOTE_PLAN.md)
+// and the score keeper's game notifications (pages/api/squads/[squadId]/notify.ts), both sending
+// to per-squad chat ids. The chat id is always an argument - nothing here reads env for a
+// destination. Plain fetch rather than a Telegram client library, to keep the dependency surface
+// small.
 
 export interface TelegramButton {
   text: string;

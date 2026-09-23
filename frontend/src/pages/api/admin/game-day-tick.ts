@@ -3,7 +3,7 @@ import { requireSuperAdmin } from '@/lib/auth';
 import { runGameDayTick } from '@/lib/gameDay/scheduler';
 
 // "Run scheduler tick now" (ATTENDANCE_VOTE_PLAN.md, end-to-end verification) - platform
-// superadmin only, mirroring the Telegram test buttons on the admin dashboard, so a full vote
+// superadmin only (a button on the admin dashboard), so a full vote
 // cycle can be exercised without waiting for the 5-minute cron. Runs exactly the tick the cron
 // runs, against the real clock.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

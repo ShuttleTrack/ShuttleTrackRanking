@@ -13,18 +13,11 @@ import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
 import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
 import { useSquadSettings } from '@/hooks/useSquadSettings';
 
-type TelegramTestGroup = 'wednesday' | 'friday';
-
-interface TelegramTestState {
+interface TickState {
   loading: boolean;
   message?: string;
   isError?: boolean;
 }
-
-const TELEGRAM_TEST_GROUPS: { group: TelegramTestGroup; label: string }[] = [
-  { group: 'wednesday', label: 'Test Wednesday group' },
-  { group: 'friday', label: 'Test Friday group' },
-];
 
 const cardClass =
   'rounded-xl bg-surface-container/90 border border-gray-600 p-4 sm:p-6';
@@ -70,11 +63,7 @@ const DashboardPage = () => {
   const { data: session } = useSession();
   const { games = [], isLoading: gamesLoading } = useGames();
   const { settings: squadSettings } = useSquadSettings();
-  const [telegramTestState, setTelegramTestState] = useState<Record<TelegramTestGroup, TelegramTestState>>({
-    wednesday: { loading: false },
-    friday: { loading: false },
-  });
-  const [tickState, setTickState] = useState<TelegramTestState>({ loading: false });
+  const [tickState, setTickState] = useState<TickState>({ loading: false });
 
   const getGameLink = (game: Game) => {
     switch (game.status) {
@@ -84,31 +73,6 @@ const DashboardPage = () => {
         return `/s/${slug}/admin/game-day?gameId=${game.id}`;
       default:
         return `/s/${slug}/admin/game-day?gameId=${game.id}`;
-    }
-  };
-
-  const handleTelegramTest = async (group: TelegramTestGroup) => {
-    setTelegramTestState((prev) => ({ ...prev, [group]: { loading: true } }));
-    try {
-      const response = await fetch('/api/admin/telegram-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ group }),
-      });
-      const data = await response.json();
-      setTelegramTestState((prev) => ({
-        ...prev,
-        [group]: { loading: false, message: data.message, isError: !response.ok },
-      }));
-    } catch (error) {
-      setTelegramTestState((prev) => ({
-        ...prev,
-        [group]: {
-          loading: false,
-          message: error instanceof Error ? error.message : 'Failed to send test message',
-          isError: true,
-        },
-      }));
     }
   };
 
@@ -263,50 +227,15 @@ const DashboardPage = () => {
             </div>
           </div>
 
-          {/* Telegram - platform-superadmin only: the scheduler itself is still global, not
-              per-squad-configurable (SQUAD_TENANCY_PLAN.md), so only a superadmin can trigger it. */}
+          {/* Game-day scheduler - platform-superadmin only: the tick runs across every squad, so
+              only a superadmin can trigger it. */}
           {session?.user?.isSuperAdmin && (
             <div className={`${cardClass} order-3 md:order-3 md:col-start-1`}>
-              <h2 className={sectionTitleClass}>Telegram Scheduler Test</h2>
+              <h2 className={sectionTitleClass}>Game-Day Scheduler</h2>
               <p className="text-sm text-on-surface-variant mb-4">
-                Sends a one-off test message to each configured group, so the bot token/chat id pairs
-                can be checked without waiting for the daily 17:00 poll.
+                Runs the game-day check-in tick now instead of waiting for the 5-minute cron.
               </p>
               <div className="space-y-3">
-                {TELEGRAM_TEST_GROUPS.map(({ group, label }) => {
-                  const state = telegramTestState[group];
-                  return (
-                    <div key={group}>
-                      <button
-                        type="button"
-                        className={outlineButtonClass}
-                        disabled={state.loading}
-                        onClick={() => handleTelegramTest(group)}
-                      >
-                        {state.loading ? (
-                          <GameLoader
-                            size="sm"
-                            label={`Sending test to ${group}`}
-                            caption={false}
-                            decorative
-                            inline
-                            className="shrink-0"
-                          />
-                        ) : (
-                          <PaperAirplaneIcon className="h-5 w-5 shrink-0" aria-hidden />
-                        )}
-                        {label}
-                      </button>
-                      {state.message && (
-                        <p
-                          className={`text-sm mt-1.5 ${state.isError ? 'text-red-400' : 'text-primary'}`}
-                        >
-                          {state.message}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
                 <div>
                   <button
                     type="button"

@@ -1,28 +1,22 @@
-import { publicUrl } from "@/utils/constants";
+import type { GameEvent } from '@/lib/gameNotifications';
 
-interface TelegramInlineKeyboard {
-  inline_keyboard: Array<Array<{
-    text: string;
-    url?: string;
-    callback_data?: string;
-  }>>;
-}
-
-interface NotificationOptions {
-  title: string;
-  message: string;
-  buttons?: TelegramInlineKeyboard;
-}
+const TITLES: Record<GameEvent, string> = {
+  started: '🏸 Game has started',
+  completed: '🏆 Game has been completed',
+  cancelled: '❌ Game cancelled',
+};
 
 class NotificationService {
-  private async sendNotification(options: NotificationOptions) {
+  // The server (pages/api/squads/[squadId]/notify.ts) builds the message and its links and sends
+  // it to this squad's own main Telegram group - the client only names the event.
+  private async sendNotification(squadId: number, event: GameEvent, gameId: string) {
     try {
-      const response = await fetch('/api/notify', {
+      const response = await fetch(`/api/squads/${squadId}/notify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(options),
+        body: JSON.stringify({ event, gameId }),
       });
 
       if (!response.ok) {
@@ -36,7 +30,8 @@ class NotificationService {
     }
   }
 
-  private async sendNotificationWithConfirm(options: NotificationOptions): Promise<boolean> {
+  private async sendNotificationWithConfirm(squadId: number, event: GameEvent, gameId: string): Promise<boolean> {
+    const title = `${TITLES[event]} (#${gameId.slice(-4)})`;
     return new Promise((resolve) => {
       const modal = document.createElement('div');
       modal.innerHTML = `
@@ -45,11 +40,11 @@ class NotificationService {
             <h3 class="font-bold text-lg mb-4">Send Notification</h3>
             <div class="space-y-4">
               <div class="p-4 bg-base-200 rounded-lg">
-                <p class="font-semibold">${options.title}</p>
-                <p class="text-sm mt-2 text-base-content/70">Send this notification to all subscribed users?</p>
+                <p class="font-semibold">${title}</p>
+                <p class="text-sm mt-2 text-base-content/70">Post this to the squad's Telegram group?</p>
               </div>
               <p class="text-sm text-base-content/70">
-                This notification will be sent to all subscribed users.
+                It goes to the main group set in this squad's game-day settings.
               </p>
             </div>
             <div class="modal-action">
@@ -81,7 +76,7 @@ class NotificationService {
       modal.querySelector('#confirm-notify')?.addEventListener('click', async () => {
         cleanup();
         try {
-          await this.sendNotification(options);
+          await this.sendNotification(squadId, event, gameId);
           resolve(true);
         } catch (error) {
           console.error('Notification Error:', error);
@@ -91,47 +86,17 @@ class NotificationService {
     });
   }
 
-  // squadSlug identifies which squad's public board to link to. Making the underlying Telegram
-  // scheduler itself per-squad-configurable is out of scope for this pass (SQUAD_TENANCY_PLAN.md)
-  // - this only keeps the linked URLs pointing at a real, valid squad-scoped page.
-  async notifyGameStarted(squadSlug: string, gameId: string) {
-    const gameViewerUrl = encodeURI(`${publicUrl}/s/${squadSlug}/game-viewer?gameId=${gameId}`);
-
-    return this.sendNotificationWithConfirm({
-      title: `🏸 Game #${gameId.slice(-4)} has started!`,
-      message: `Track live scores, groups and game combinations by clicking the button below.`,
-      buttons: {
-        inline_keyboard: [[
-          {
-            text: '📊 Track Scores',
-            url: gameViewerUrl
-          }
-        ]]
-      }
-    });
+  async notifyGameStarted(squadId: number, gameId: string) {
+    return this.sendNotificationWithConfirm(squadId, 'started', gameId);
   }
 
-  async notifyGameCompleted(squadSlug: string, gameId: string) {
-    return this.sendNotificationWithConfirm({
-      title: `🏆 Game #${gameId.slice(-4)} has been completed!`,
-      message: `Game #${gameId.slice(-4)} has been completed and scores have been processed. Check the updated rankings by clicking the button below.`,
-      buttons: {
-        inline_keyboard: [[
-          {
-            text: '🏆 Check Rankings',
-            url: encodeURI(`${publicUrl}/s/${squadSlug}`)
-          }
-        ]]
-      }
-    });
+  async notifyGameCompleted(squadId: number, gameId: string) {
+    return this.sendNotificationWithConfirm(squadId, 'completed', gameId);
   }
 
-  async notifyGameCancelled(gameId: string) {
-    return this.sendNotificationWithConfirm({
-      title: '❌ Game Cancelled',
-      message: `Game #${gameId.slice(-4)} has been cancelled.`
-    });
+  async notifyGameCancelled(squadId: number, gameId: string) {
+    return this.sendNotificationWithConfirm(squadId, 'cancelled', gameId);
   }
 }
 
-export const notificationService = new NotificationService(); 
+export const notificationService = new NotificationService();
