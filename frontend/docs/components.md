@@ -116,7 +116,7 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **`JoinSquadCallout`:** quiet secondary row on `/s/[slug]` for a non-member when the squad is open (`useJoinSquadCallout` in `RankingsComponent`, passed as `SquadBoardSelector`'s `trailing` slot) — always inside the striped `SelectorBand`: stacked under the squad selector, centered, on mobile; to its right on `md+`. No border, `bg-surface-container-high`, `font-label` uppercase copy so it stays secondary to the selector's orange-ringed control. *Want to play here?* + *Request a spot* / *Request pending* / *Sign in*; no DaisyUI.
 
-**`JoinRequestModal`:** name prefilled from the Google profile (capped at `Player.name`'s 32 chars, with a counter), optional message, and the signed-in address shown as text — never an editable field, since identity comes from the session server-side.
+**`JoinRequestModal`:** short intro (*Subject to squad admin approval. If the roster is full, you'll be added as an open-slot player.*). Name prefilled from the Google profile (capped at `Player.name`'s 32 chars) with its counter on the label row, not below the field; optional message with the same counter treatment. *Applying as {email}* — never an editable field, since identity comes from the session server-side. Gated-page field/button styles (`fieldClass`/`outlineBtn`/`primaryBtn`), no DaisyUI.
 
 **`JoinRequestOversight`:** admin table on `/s/[squad]/admin/players`, styled like `ReplacementOversight` — all statuses with badges, actions only on pending rows, so a re-request after a rejection is visibly that. Approve modal defaults to **Open slot** with an optional score.
 

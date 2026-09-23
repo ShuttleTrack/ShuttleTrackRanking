@@ -9,6 +9,13 @@ import { MAX_MESSAGE_LENGTH, MAX_NAME_LENGTH } from '@/lib/joinRequests';
 // from the session server-side; a body-supplied email would let anyone file a request as
 // someone else now that sign-in is open to every verified Google account.
 
+const fieldClass =
+  'w-full rounded-xl border border-gray-600 bg-surface-container px-4 py-3 text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40';
+const outlineBtn =
+  'inline-flex min-h-[36px] items-center justify-center rounded-lg border border-white/10 px-4 text-sm font-medium text-on-surface transition-colors hover:border-primary/40 disabled:opacity-50';
+const primaryBtn =
+  'inline-flex min-h-[36px] items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
+
 interface JoinRequestModalProps {
   squadId: number;
   squadName: string;
@@ -72,47 +79,55 @@ export function JoinRequestModal({ squadId, squadName, onClose, onSubmitted }: J
           Request to join {squadName}
         </h3>
         <p className="mb-4 text-sm text-on-surface-variant">
-          A squad admin reviews this. You&apos;ll be added as an open-slot player unless they
-          decide otherwise.
+          Subject to squad admin approval. If the roster is full, you&apos;ll be added as an
+          open-slot player.
         </p>
 
-        <label className="mb-1 block text-sm font-medium text-on-surface" htmlFor="join-name">
-          Your name
-        </label>
+        <div className="mb-1 flex items-baseline justify-between">
+          <label className="block text-sm font-medium text-on-surface" htmlFor="join-name">
+            Your name
+          </label>
+          <span className="text-xs text-on-surface-variant">
+            {trimmedName.length}/{MAX_NAME_LENGTH}
+          </span>
+        </div>
         <input
           id="join-name"
-          className="input input-bordered mb-1 w-full"
+          className={`${fieldClass} mb-4`}
           value={name}
           maxLength={MAX_NAME_LENGTH}
           onChange={(e) => setName(e.target.value)}
         />
-        <p className="mb-3 text-xs text-on-surface-variant">
-          {trimmedName.length}/{MAX_NAME_LENGTH} — how you&apos;ll appear on the squad&apos;s board.
-        </p>
 
-        <label className="mb-1 block text-sm font-medium text-on-surface" htmlFor="join-message">
-          Message <span className="text-on-surface-variant">(optional)</span>
-        </label>
+        <div className="mb-1 flex items-baseline justify-between">
+          <label className="block text-sm font-medium text-on-surface" htmlFor="join-message">
+            Message <span className="text-on-surface-variant">(optional)</span>
+          </label>
+          <span className="text-xs text-on-surface-variant">
+            {message.length}/{MAX_MESSAGE_LENGTH}
+          </span>
+        </div>
         <textarea
           id="join-message"
-          className="textarea textarea-bordered mb-1 w-full"
+          className={`${fieldClass} mb-4 resize-none`}
           rows={3}
           maxLength={MAX_MESSAGE_LENGTH}
           value={message}
-          placeholder="Anything the admin should know — how you heard about the squad, your level, when you can play."
+          placeholder="Level, when you can play, anything else."
           onChange={(e) => setMessage(e.target.value)}
         />
+
         <p className="mb-4 text-xs text-on-surface-variant">
-          Signing in as {session?.user?.email}
+          Applying as {session?.user?.email}
         </p>
 
         {error && <p className="mb-3 text-sm text-error">{error}</p>}
 
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} disabled={submitting}>
+          <button type="button" className={outlineBtn} onClick={onClose} disabled={submitting}>
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={submit} disabled={!canSubmit}>
+          <button type="button" className={primaryBtn} onClick={submit} disabled={!canSubmit}>
             {submitting ? 'Sending…' : 'Send request'}
           </button>
         </div>
