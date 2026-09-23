@@ -1,18 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireSuperAdmin } from '@/lib/auth';
-
-interface TelegramMessage {
-  chat_id: string;
-  text: string;
-  parse_mode: 'HTML' | 'Markdown' | 'MarkdownV2';
-  reply_markup?: {
-    inline_keyboard: Array<Array<{
-      text: string;
-      url?: string;
-      callback_data?: string;
-    }>>;
-  };
-}
+import { sendTelegramMessage } from '@/lib/telegram/sendMessage';
 
 export default async function handler(
   req: NextApiRequest,
@@ -46,27 +34,15 @@ export default async function handler(
       });
     }
     
-    const telegramMessage: TelegramMessage = {
-      chat_id: process.env.TELEGRAM_CHAT_ID!,
-      text: formattedMessage,
-      parse_mode: 'HTML',
-      reply_markup: buttons
-    };
-
-    const response = await fetch(
-      `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(telegramMessage),
-      }
+    const result = await sendTelegramMessage(
+      process.env.TELEGRAM_BOT_TOKEN!,
+      process.env.TELEGRAM_CHAT_ID!,
+      formattedMessage,
+      buttons
     );
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Telegram API error: ${errorData.description || response.statusText}`);
+    if (!result.ok) {
+      throw new Error(`Telegram API error: ${result.description}`);
     }
 
     res.status(200).json({ message: 'Notification sent successfully' });

@@ -1,8 +1,13 @@
-// Informational-only recurrence schedule for a squad (SQUAD_TENANCY_PLAN.md follow-up), stored
+// Recurrence schedule for a squad (SQUAD_TENANCY_PLAN.md follow-up), stored
 // as a single JSON blob on Squad.schedule rather than separate columns - nothing ever
 // queries/filters by day-of-week, start time, or any other individual piece, so separate columns
 // bought nothing but column count. Validation lives here so both the API route and (if ever
 // needed) a script/test can share it.
+//
+// No longer informational-only: the game-day check-in scheduler (ATTENDANCE_VOTE_PLAN.md) reads
+// it to create each session's GameDay, which is why it now carries a timezone - a start time
+// without a zone is incomplete, and every clock in that feature is a wall-clock time in it.
+import { DEFAULT_TIMEZONE, isValidTimeZone } from '@/lib/gameDay/clock';
 
 export type DayOfWeek = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
 
@@ -17,6 +22,7 @@ export interface ScheduleInput {
   startDate?: string | null;
   endDate?: string | null;
   skipDates?: string[];
+  timezone?: string | null;
 }
 
 // Exactly what's stored in Squad.schedule (and returned by GET /api/squads/[squadId], unpacked
@@ -30,6 +36,16 @@ export interface SquadScheduleData {
   startDate: string | null;
   endDate: string | null;
   skipDates: string[];
+  // IANA zone the times above are wall-clock times in (Decision 3). Optional on the type because
+  // rows written before it existed have no such key - read it through scheduleTimezone(), never
+  // directly.
+  timezone?: string | null;
+}
+
+// The zone a stored schedule's times are in: the stored value, or Europe/Amsterdam for a row
+// written before the field existed (the only zone this app ever assumed until then).
+export function scheduleTimezone(schedule: Pick<SquadScheduleData, 'timezone'> | null | undefined): string {
+  return schedule?.timezone && isValidTimeZone(schedule.timezone) ? schedule.timezone : DEFAULT_TIMEZONE;
 }
 
 const DAYS_OF_WEEK: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
@@ -48,6 +64,7 @@ export function validateScheduleInput(input: ScheduleInput): { data: SquadSchedu
         startDate: null,
         endDate: null,
         skipDates: [],
+        timezone: null,
       },
     };
   }
@@ -74,6 +91,11 @@ export function validateScheduleInput(input: ScheduleInput): { data: SquadSchedu
     return { error: 'End date must be on or after the start date' };
   }
 
+  const timezone = input.timezone ?? DEFAULT_TIMEZONE;
+  if (!isValidTimeZone(timezone)) {
+    return { error: `Unknown timezone: "${String(timezone)}" (expected an IANA zone like Europe/Amsterdam)` };
+  }
+
   const skipDates = input.skipDates ?? [];
   for (const d of skipDates) {
     if (!DATE_FORMAT.test(d)) {
@@ -90,6 +112,7 @@ export function validateScheduleInput(input: ScheduleInput): { data: SquadSchedu
       startDate: input.startDate,
       endDate: input.endDate ?? null,
       skipDates,
+      timezone,
     },
   };
 }

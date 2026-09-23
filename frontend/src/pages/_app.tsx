@@ -57,6 +57,7 @@ export default function App({ Component, pageProps: { session, squad, ...pagePro
   return (
     <SessionProvider session={session}>
       <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <title>Dutch Lankan Shuttle Masters</title>
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />

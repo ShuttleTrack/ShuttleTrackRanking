@@ -5,6 +5,27 @@ import { parseSquadId } from '@/lib/api/squadParam';
 import { findScorelessPlayersInGroups } from '@/lib/ranking/players';
 import { isValidationError } from '@/lib/api/validationError';
 
+// A second create for the same game day must be a 400 naming the existing game, not a
+// unique-index 500 (ATTENDANCE_VOTE_PLAN.md, "Game - one nullable link"). Replacing a draft is the
+// edit path (PUT /games/[id]), which never touches the link.
+async function gameDayLinkError(squadId: number, gameDayId: unknown): Promise<{ message: string; existingGameId?: string } | null> {
+  if (gameDayId === undefined || gameDayId === null) return null;
+  if (!Number.isInteger(gameDayId)) return { message: 'gameDayId must be an integer' };
+  const gameDay = await prisma.gameDay.findUnique({
+    where: { id: gameDayId as number },
+    include: { game: { select: { id: true } } },
+  });
+  if (!gameDay || gameDay.squadId !== squadId) return { message: 'Game day not found' };
+  if (gameDay.status !== 'VOTING_CLOSED') return { message: 'A game can only be planned from a game day whose voting has closed' };
+  if (gameDay.game) {
+    return {
+      message: `This game day already has a game (${gameDay.game.id}) - open or delete it instead`,
+      existingGameId: gameDay.game.id,
+    };
+  }
+  return null;
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -18,7 +39,7 @@ export default async function handler(
 
   if (req.method === 'POST') {
     try {
-      const { groups } = req.body;
+      const { groups, gameDayId } = req.body;
       // OPEN_SLOT_PLAYERS_PLAN.md "Null-rankScore safety" item 2: a scoreless player must never
       // reach the Elo calculation - this is the authoritative gate, not the planner's client-side
       // bulk-assign panel.
@@ -29,16 +50,26 @@ export default async function handler(
           scorelessPlayers: scoreless,
         });
       }
+      const linkError = await gameDayLinkError(squadId, gameDayId);
+      if (linkError) {
+        return res.status(400).json(linkError);
+      }
       const game = await prisma.game.create({
         data: {
           squadId,
           groups,
           scores: {},
-          status: 'DRAFT'
+          status: 'DRAFT',
+          // Traces the throwaway session state back to the attendance that produced it.
+          gameDayId: gameDayId ?? null,
         }
       });
       res.status(201).json(game);
     } catch (error) {
+      // Two creates racing past the check above.
+      if ((error as { code?: string })?.code === 'P2002') {
+        return res.status(400).json({ message: 'This game day already has a game - open or delete it instead' });
+      }
       // A player id that is not in this squad is a bad request, not a server fault.
       if (isValidationError(error)) {
         return res.status(400).json({ message: error.message });

@@ -74,6 +74,7 @@ const DashboardPage = () => {
     wednesday: { loading: false },
     friday: { loading: false },
   });
+  const [tickState, setTickState] = useState<TelegramTestState>({ loading: false });
 
   const getGameLink = (game: Game) => {
     switch (game.status) {
@@ -108,6 +109,25 @@ const DashboardPage = () => {
           isError: true,
         },
       }));
+    }
+  };
+
+  // Runs the game-day check-in scheduler's tick now (ATTENDANCE_VOTE_PLAN.md) rather than waiting
+  // for the 5-minute cron - for exercising a vote cycle end to end.
+  const handleGameDayTick = async () => {
+    setTickState({ loading: true });
+    try {
+      const response = await fetch('/api/admin/game-day-tick', { method: 'POST' });
+      const data = await response.json();
+      setTickState({
+        loading: false,
+        isError: !response.ok,
+        message: response.ok
+          ? `Tick done: ${data.created} created, ${data.recreated} re-created, ${data.cancelled} cancelled, ${data.closed} closed, ${data.errors} errors${data.skipped ? ` (${data.skipped})` : ''}`
+          : data.message,
+      });
+    } catch (error) {
+      setTickState({ loading: false, isError: true, message: error instanceof Error ? error.message : 'Tick failed' });
     }
   };
 
@@ -287,6 +307,26 @@ const DashboardPage = () => {
                     </div>
                   );
                 })}
+                <div>
+                  <button
+                    type="button"
+                    className={outlineButtonClass}
+                    disabled={tickState.loading}
+                    onClick={handleGameDayTick}
+                  >
+                    {tickState.loading ? (
+                      <GameLoader size="sm" label="Running the game-day tick" caption={false} decorative inline className="shrink-0" />
+                    ) : (
+                      <PaperAirplaneIcon className="h-5 w-5 shrink-0" aria-hidden />
+                    )}
+                    Run game-day check-in tick now
+                  </button>
+                  {tickState.message && (
+                    <p className={`text-sm mt-1.5 ${tickState.isError ? 'text-red-400' : 'text-primary'}`}>
+                      {tickState.message}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -11,7 +11,10 @@ export function useRequireUser(isUser: boolean) {
 
   useEffect(() => {
     if (status === 'unauthenticated') {
-      router.push('/login');
+      // Client-side session expiry: come back here after signing in. The first-load case (a
+      // signed-out request) is handled server-side by squadPage.ts's loginRedirectFor.
+      const returnPath = router.asPath || '/';
+      router.push(returnPath === '/' || returnPath.startsWith('/login') ? '/login' : `/login?callbackUrl=${encodeURIComponent(returnPath)}`);
     } else if (status === 'authenticated' && !isUser) {
       router.push('/');
     }

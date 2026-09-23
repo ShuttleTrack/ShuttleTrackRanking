@@ -35,35 +35,35 @@ enum JoinRequestStatus {
 }
 
 model Player {
-  id           Int       @id @default(autoincrement())
-  squadId      Int       @map("squad_id")
-  name         String    @db.VarChar(32)
+  id           Int        @id @default(autoincrement())
+  squadId      Int        @map("squad_id")
+  name         String     @db.VarChar(32)
   // Nullable (OPEN_SLOT_PLAYERS_PLAN.md): an open-slot player may be added, or self-register in
   // future, before anyone has assigned them a score. FULLTIME players still always get one at
   // creation (players.ts:addPlayer's initialScore > 0 requirement is unchanged for FULLTIME).
   // Every ranking-math path that reads this must treat null as "not yet eligible to be scored,
   // ranked, or absentee-swept" rather than coercing it - see the plan's "Null-rankScore safety"
   // section for the specific call sites this touches.
-  rankScore    Float?    @map("rank_score")
-  playerRank   Int?      @map("player_rank")
-  highestRank  Int?      @map("highest_rank")
-  rankSince    DateTime? @map("rank_since") @db.Date
-  colorHex     String    @default("aaaaaa") @map("color_hex") @db.VarChar(6)
+  rankScore    Float?     @map("rank_score")
+  playerRank   Int?       @map("player_rank")
+  highestRank  Int?       @map("highest_rank")
+  rankSince    DateTime?  @map("rank_since") @db.Date
+  colorHex     String     @default("aaaaaa") @map("color_hex") @db.VarChar(6)
   // Legacy pre-`playerStatus` active flag. Confirmed still live in the DB (Phase 1) but no
   // longer read/written by the Java app (no `disabled` field on backend Player.java) - dead
   // column kept here only for introspection fidelity. Don't use; don't drop without checking
   // nothing else reads it directly.
-  disabled     Boolean   @default(dbgenerated("b'0'")) @db.Bit(1)
+  disabled     Boolean    @default(dbgenerated("b'0'")) @db.Bit(1)
   // Required going forward (SQUAD_TENANCY_PLAN.md): email is the only link between a login and
   // a role in a squad, so every player needs one. Unique per squad, not globally - the same
   // email can be a separately-ranked player in more than one squad.
-  email        String    @db.VarChar(255)
+  email        String     @db.VarChar(255)
   // Free-form varchar in the DB (Hibernate `@Enumerated(STRING)`), not a real SQL enum, and
   // nullable - some rows may have no status. Kept as String? rather than a Prisma enum so an
   // unexpected/legacy value can't make a query throw; port PlayerStatus derivation exactly
   // (see backend Player.java isActive/isDisabled/isAvailableForGame) rather than trusting this
   // column alone.
-  playerStatus String?   @map("player_status")
+  playerStatus String?    @map("player_status")
   // Set once at creation, never changed afterward. "Replacement" is a temporal state derived
   // from an active SlotReplacement row covering the current date, not stored here - see
   // OPEN_SLOT_PLAYERS_PLAN.md's "Why not separate tables" for why a mutable REPLACEMENT type
@@ -71,12 +71,15 @@ model Player {
   // always correct).
   playerType   PlayerType @default(FULLTIME) @map("player_type")
 
-  squad Squad @relation(fields: [squadId], references: [id])
+  squad                  Squad             @relation(fields: [squadId], references: [id])
   // Both sides required by Prisma for a model with two FKs to the same target (SlotReplacement
   // below) - Player itself has no back-reference to Squad/Encounter/ScoreHistory today, so this
   // is new, not a gap being filled in.
   slotOwnerReplacements  SlotReplacement[] @relation("SlotOwner")
   slotFillerReplacements SlotReplacement[] @relation("SlotFiller")
+  // Back-references Prisma requires for the game-day check-in rows (ATTENDANCE_VOTE_PLAN.md).
+  gameDayVotes           GameDayVote[]
+  gameDayOpenSlots       GameDayOpenSlot[]
 
   @@unique([squadId, email])
   @@index([squadId])
@@ -89,17 +92,17 @@ model Player {
 // not stored, since MySQL can't express "no overlapping ranges" as a constraint; the overlap
 // check has to happen application-side inside the same transaction as the insert.
 model SlotReplacement {
-  id                            Int       @id @default(autoincrement())
-  squadId                       Int       @map("squad_id")
-  fulltimePlayerId              Int       @map("fulltime_player_id")
-  replacementPlayerId           Int       @map("replacement_player_id")
-  startDate                     DateTime  @map("start_date") @db.Date
-  endDate                       DateTime  @map("end_date") @db.Date
-  createdByEmail                String    @map("created_by_email")
-  cancelledAt                   DateTime? @map("cancelled_at")
-  createdAt                     DateTime  @default(now()) @map("created_at")
-  cancellationRequestedAt       DateTime? @map("cancellation_requested_at")
-  cancellationRequestedEndDate  DateTime? @map("cancellation_requested_end_date") @db.Date
+  id                           Int       @id @default(autoincrement())
+  squadId                      Int       @map("squad_id")
+  fulltimePlayerId             Int       @map("fulltime_player_id")
+  replacementPlayerId          Int       @map("replacement_player_id")
+  startDate                    DateTime  @map("start_date") @db.Date
+  endDate                      DateTime  @map("end_date") @db.Date
+  createdByEmail               String    @map("created_by_email")
+  cancelledAt                  DateTime? @map("cancelled_at")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  cancellationRequestedAt      DateTime? @map("cancellation_requested_at")
+  cancellationRequestedEndDate DateTime? @map("cancellation_requested_end_date") @db.Date
 
   squad             Squad  @relation(fields: [squadId], references: [id])
   fulltimePlayer    Player @relation("SlotOwner", fields: [fulltimePlayerId], references: [id])
@@ -202,8 +205,14 @@ model Game {
   groups    Json // Store groups as JSON
   scores    Json     @default("{}") // Default empty object for scores
   status    String   @default("DRAFT") // DRAFT, IN_PROGRESS, COMPLETED
+  // The attendance vote this game was planned from (ATTENDANCE_VOTE_PLAN.md), stamped by POST
+  // /games when the planner seeds from a closed vote. Unique: one game per game day - a second
+  // create is a 400 naming the existing game rather than a unique-index 500. createdAt, not
+  // gameDay.gameDate, stays the encounter date for submit/process (see the plan).
+  gameDayId Int?     @unique @map("game_day_id")
 
-  squad Squad @relation(fields: [squadId], references: [id])
+  squad   Squad    @relation(fields: [squadId], references: [id])
+  gameDay GameDay? @relation(fields: [gameDayId], references: [id])
 
   // groups/scores are JSON blobs of player ids, not FK-joinable back to a squad - same reasoning
   // as Encounter.squadId above.
@@ -259,10 +268,22 @@ model Squad {
   // exist. 3 gives one full escalation cycle (-10/-20/-30) before the sweep stops, a -60 ceiling
   // per absence spell. Only read on the OPEN_SLOT-no-active-replacement sweep path, so existing
   // squads (all-FULLTIME rosters) are unaffected regardless of this default.
-  openSlotAbsenteeGraceDays   Int @default(3) @map("open_slot_absentee_grace_days")
+  openSlotAbsenteeGraceDays  Int @default(3) @map("open_slot_absentee_grace_days")
   // Deliberately longer than the grace window above - stop penalizing well before we stop
   // displaying, so a sporadic regular stays on the leaderboard/graph without bleeding points.
-  openSlotVisibilityGameDays  Int @default(10) @map("open_slot_visibility_game_days")
+  openSlotVisibilityGameDays Int @default(10) @map("open_slot_visibility_game_days")
+
+  // Game-day check-in operations config (ATTENDANCE_VOTE_PLAN.md). A single JSON blob, exactly
+  // like `schedule` above and for the same reason: nothing ever queries or filters by an
+  // individual piece (days-ahead, the minimum, a chat id), so separate columns bought nothing but
+  // column count. Shape: GameDayOpsData in lib/gameDayOps.ts, which is also its only writer.
+  //
+  // Null = check-in never configured for this squad: no game day instances are created and
+  // nothing is ever sent. Deliberately default-off, and deliberately the opposite default-shape
+  // from openSlotAbsenteeGraceDays - that setting protects a player from a penalty, so a
+  // disabled default was the worst outcome; this one POSTS TO TELEGRAM GROUPS, so silence until
+  // an admin opts in is the safe state.
+  gameDayOps Json? @map("game_day_ops")
 
   // Whether this squad is listed in the public directory and accepts self-service open-slot
   // join requests (SELF_REGISTRATION_PLAN.md). Deliberately NOT folded into isPublic above:
@@ -280,6 +301,7 @@ model Squad {
   encounters       Encounter[]
   games            Game[]
   slotReplacements SlotReplacement[]
+  gameDays         GameDay[]
   joinRequests     SquadJoinRequest[]
 }
 
@@ -296,4 +318,139 @@ model SquadAdmin {
   squad Squad @relation(fields: [squadId], references: [id])
 
   @@unique([squadId, email])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Game-day check-in & attendance vote (ATTENDANCE_VOTE_PLAN.md). Frontend-owned like Game/Squad.
+// ---------------------------------------------------------------------------------------------
+
+// Named for what it tracks: the 13:00 deadline closes the VOTE, not the session, which starts
+// hours later. The session's own upcoming/live/ended phase is derived from the clock, never
+// stored (Decision 4).
+enum GameDayStatus {
+  VOTING_OPEN
+  VOTING_CLOSED
+  CANCELLED
+}
+
+enum VoteChoice {
+  IN
+  OUT
+}
+
+enum OpenSlotEntryStatus {
+  WAITING
+  ASSIGNED
+  WITHDRAWN
+}
+
+enum OpenSlotClaimSource {
+  WAITING_LIST
+  DIRECT
+}
+
+// One squad's session on one playing date, created voteOpensDaysBefore days ahead by the
+// scheduler (lib/gameDay/scheduler.ts).
+model GameDay {
+  id       Int      @id @default(autoincrement())
+  squadId  Int      @map("squad_id")
+  gameDate DateTime @map("game_date") @db.Date
+
+  // Snapshot of the squad's schedule + gameDayOps AT CREATION, never re-read. A game day is a
+  // published promise: an admin editing the schedule, its timezone, or the minimum two days
+  // before a session must not silently move an announced deadline, or change the gap arithmetic
+  // under votes people already cast.
+  startTime  String        @map("start_time") @db.VarChar(5)
+  endTime    String        @map("end_time") @db.VarChar(5)
+  timezone   String        @db.VarChar(64)
+  minPlayers Int?          @map("min_players") // null = no open-slot flow on this game day
+  status     GameDayStatus @default(VOTING_OPEN)
+
+  // Absolute instants resolved from the snapshot at creation (lib/gameDay/clock.ts), so the
+  // scheduler compares two instants and never re-derives a wall clock.
+  votesCloseAt DateTime @map("votes_close_at")
+  slotLockAt   DateTime @map("slot_lock_at") // session start - 2h
+
+  // One nullable timestamp per one-shot message. The scheduler's guard is "threshold passed AND
+  // stamp is null" (bounded above by votesCloseAt), never "now == threshold".
+  announcedAt      DateTime? @map("announced_at")
+  remindedAt       DateTime? @map("reminded_at")
+  openSlotPingedAt DateTime? @map("open_slot_pinged_at")
+  votingClosedAt   DateTime? @map("voting_closed_at")
+  // openSlotPingedAt is stamped whether the 09:00 ping was sent or deliberately skipped (so a
+  // decided-not-to-send never retries). This records which: the vacancy sync's "filled up"
+  // message is only owed to an open-slot group that was actually asked for help.
+  openSlotPingSent Boolean   @default(false) @map("open_slot_ping_sent")
+
+  // The vacancy count the open-slot group has actually been told. Advanced only AFTER a
+  // successful send, so a failed send is retried by the next scheduler pass - see
+  // lib/gameDay/openSlots.ts.
+  announcedVacancies Int?      @map("announced_vacancies")
+  // When the group was last (successfully) told about vacancies. Waiting-list promotions after
+  // this instant have not been announced yet - so a retried post still names who got in, rather
+  // than only the count the failed one would have carried.
+  vacancyAnnouncedAt DateTime? @map("vacancy_announced_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  squad     Squad             @relation(fields: [squadId], references: [id])
+  votes     GameDayVote[]
+  openSlots GameDayOpenSlot[]
+  game      Game?
+
+  @@unique([squadId, gameDate])
+  @@index([squadId, status])
+  @@map("GAME_DAY")
+}
+
+// One slot holder's in/out answer for one game day. Only ever written for someone
+// getGameDayVoters returns - every write path re-resolves eligibility inside the game day's row
+// lock.
+model GameDayVote {
+  id                    Int         @id @default(autoincrement())
+  gameDayId             Int         @map("game_day_id")
+  playerId              Int         @map("player_id")
+  // Null only on a row with inheritedFromPlayerId set: the player gained a structural slot after
+  // voting closed from someone who had NOT voted in, so there was no reservation to inherit, but
+  // they still need the post-deadline right to confirm (the plan's vote table, second row).
+  // Counts in neither slotsHeld nor confirmedIn; shown as "not voted".
+  choice                VoteChoice?
+  // Non-null = this row came with a slot transferred after voting closed, rather than being cast
+  // by this player. With choice IN it is an inherited RESERVATION: it holds the slot (slotsHeld)
+  // but is not a confirmation (confirmedIn), exactly like an ASSIGNED open slot with no vote.
+  // Cleared the moment they vote for themselves. Without it a post-deadline transfer fills one
+  // slot twice - see the plan's "The transferred slot must be reserved".
+  inheritedFromPlayerId Int?        @map("inherited_from_player_id")
+  votedAt               DateTime    @default(now()) @map("voted_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  gameDay GameDay @relation(fields: [gameDayId], references: [id])
+  player  Player  @relation(fields: [playerId], references: [id])
+
+  @@unique([gameDayId, playerId])
+  @@index([gameDayId, choice])
+  @@map("GAME_DAY_VOTE")
+}
+
+// How an open-slot player came to hold (or queue for) a slot on this game day. Their in/out
+// answer lives in GameDayVote like everyone else's - this row is the slot, not the attendance
+// (Decision 6).
+model GameDayOpenSlot {
+  id        Int                  @id @default(autoincrement())
+  gameDayId Int                  @map("game_day_id")
+  playerId  Int                  @map("player_id")
+  status    OpenSlotEntryStatus  @default(WAITING)
+  source    OpenSlotClaimSource? // set when ASSIGNED
+
+  joinedAt    DateTime  @default(now()) @map("joined_at") // waiting-list order: strictly first-come
+  assignedAt  DateTime? @map("assigned_at")
+  withdrawnAt DateTime? @map("withdrawn_at")
+
+  gameDay GameDay @relation(fields: [gameDayId], references: [id])
+  player  Player  @relation(fields: [playerId], references: [id])
+
+  @@unique([gameDayId, playerId])
+  @@index([gameDayId, status])
+  @@map("GAME_DAY_OPEN_SLOT")
 }

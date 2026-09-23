@@ -46,6 +46,16 @@ async function resolveSquadAndAccess(
   return { squad, session, access };
 }
 
+// Where a signed-out request is sent: the login page, told to come back here afterwards. The
+// redirect happens server-side, before any client hook runs, so this is what makes a shared link
+// (a game-day vote posted to Telegram) land back on the page it pointed at after sign-in -
+// login.tsx already honours callbackUrl, via utils/loginAuth.ts's safeCallbackUrl.
+export function loginRedirectFor(context: Pick<GetServerSidePropsContext, 'resolvedUrl'>): string {
+  const target = context.resolvedUrl;
+  if (!target || target === '/' || target.startsWith('/login')) return '/login';
+  return `/login?callbackUrl=${encodeURIComponent(target)}`;
+}
+
 // Shared getServerSideProps step for every public, no-login page under pages/s/[squad]/**:
 // resolve the Squad by its slug, 404 on a missing/disabled squad, and hand back the { squad }
 // prop that _app.tsx looks for to set up SquadContext for the whole page tree (including the
@@ -74,7 +84,7 @@ export async function resolveSquadAdminOrRedirect(
   if ('notFound' in result) return result;
 
   if (!result.session?.user?.email) {
-    return { redirect: { destination: '/login', permanent: false } };
+    return { redirect: { destination: loginRedirectFor(context), permanent: false } };
   }
   if (!result.squad.isSquadAdmin) {
     return { redirect: { destination: `/s/${result.squad.slug}`, permanent: false } };
@@ -98,7 +108,7 @@ export async function resolveSquadUserOrRedirect(
   if ('notFound' in result) return result;
 
   if (!result.session?.user?.email) {
-    return { redirect: { destination: '/login', permanent: false } };
+    return { redirect: { destination: loginRedirectFor(context), permanent: false } };
   }
   if (!result.access.player && !result.session.user.isSuperAdmin) {
     return { redirect: { destination: `/s/${result.squad.slug}`, permanent: false } };

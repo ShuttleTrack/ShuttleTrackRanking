@@ -6,6 +6,9 @@ import { PlayerType, type SlotReplacement } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { countPlayingDaysBetween, getPlayingDatesInRange } from '@/lib/scheduling/playingDayCalculator';
 import type { SquadScheduleData } from '@/lib/squadSchedule';
+import { GAME_DAY_TX_OPTIONS } from '@/lib/gameDay/lock';
+import { deliverVacancyPlans, type VacancyPlan } from '@/lib/gameDay/openSlots';
+import { reconcileSlotTransfer } from '@/lib/gameDay/reconcile';
 
 export const MIN_REPLACEMENT_PLAYING_DAYS = 3;
 export const MAX_REPLACEMENT_MONTHS = 4;
@@ -208,7 +211,11 @@ export async function createSlotReplacement(
 
   // Overlap check + insert in one transaction (MySQL can't express "no overlapping ranges" as a
   // constraint) so two concurrent nominations for the same slot/player can't both pass.
-  return prisma.$transaction(async (tx) => {
+  //
+  // The same transaction reconciles any live game-day check-in covering the window
+  // (ATTENDANCE_VOTE_PLAN.md, "Eligibility is live"): the owner's slot - and so their right to
+  // vote - moves to the replacement on those dates. Its vacancy posts go out after commit.
+  const { replacement, plans } = await prisma.$transaction(async (tx) => {
     const overlapping = await tx.slotReplacement.findFirst({
       where: {
         squadId,
@@ -222,7 +229,7 @@ export async function createSlotReplacement(
       throw new Error('One of these players already has an overlapping replacement window');
     }
 
-    return tx.slotReplacement.create({
+    const created = await tx.slotReplacement.create({
       data: {
         squadId,
         fulltimePlayerId,
@@ -232,7 +239,17 @@ export async function createSlotReplacement(
         createdByEmail: createdByEmail.toLowerCase(),
       },
     });
-  });
+    const plans = await reconcileSlotTransfer(tx, {
+      squadId,
+      outgoingPlayerId: fulltimePlayerId,
+      incomingPlayerId: replacementPlayerId,
+      fromDate: startDate,
+      toDate: endDate,
+    });
+    return { replacement: created, plans };
+  }, GAME_DAY_TX_OPTIONS);
+  await deliverVacancyPlans(plans);
+  return replacement;
 }
 
 // Only the nominating fulltime player can request to end their own nomination early - creation
@@ -326,18 +343,39 @@ async function pendingRequestOrThrow(squadId: number, id: number) {
 // Admin-only (enforced by the API route, not here - matches the rest of this module leaving
 // authorization to the caller). Applies the player's pending request: outright cancellation if
 // no shortened end date was requested, otherwise pulls the end date in.
+//
+// Both outcomes hand the slot back to its owner on the dates the window no longer covers - every
+// date for a cancellation, only those after the new end date for a shorten (which never sets
+// cancelledAt, so it has to be reconciled explicitly too) - and reconcile any live game-day
+// check-in on those dates in the same transaction.
 export async function approveCancellationRequest(squadId: number, id: number): Promise<SlotReplacement> {
   const replacement = await pendingRequestOrThrow(squadId, id);
   const isShortenRequest = replacement.cancellationRequestedEndDate !== null;
-  return prisma.slotReplacement.update({
-    where: { id },
-    data: {
-      cancelledAt: isShortenRequest ? undefined : new Date(),
-      endDate: isShortenRequest ? replacement.cancellationRequestedEndDate! : undefined,
-      cancellationRequestedAt: null,
-      cancellationRequestedEndDate: null,
-    },
-  });
+  const { updated, plans } = await prisma.$transaction(async (tx) => {
+    const updated = await tx.slotReplacement.update({
+      where: { id },
+      data: {
+        cancelledAt: isShortenRequest ? undefined : new Date(),
+        endDate: isShortenRequest ? replacement.cancellationRequestedEndDate! : undefined,
+        cancellationRequestedAt: null,
+        cancellationRequestedEndDate: null,
+      },
+    });
+    let plans: VacancyPlan[] = [];
+    const fromDate = isShortenRequest ? addUtcDays(replacement.cancellationRequestedEndDate!, 1) : replacement.startDate;
+    if (replacement.cancelledAt === null && fromDate.getTime() <= replacement.endDate.getTime()) {
+      plans = await reconcileSlotTransfer(tx, {
+        squadId,
+        outgoingPlayerId: replacement.replacementPlayerId,
+        incomingPlayerId: replacement.fulltimePlayerId,
+        fromDate,
+        toDate: replacement.endDate,
+      });
+    }
+    return { updated, plans };
+  }, GAME_DAY_TX_OPTIONS);
+  await deliverVacancyPlans(plans);
+  return updated;
 }
 
 // Admin-only. Declines the player's pending request - the replacement continues on its original

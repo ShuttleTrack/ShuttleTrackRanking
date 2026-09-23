@@ -13,6 +13,7 @@ import {
 } from './absenteeManager';
 import { absenteeSpellDays, gameDaysSinceLastPlay } from './absenteeSpell';
 import { computeActivationScore } from './activation';
+import { removeDisabledPlayerFromGameDays } from '@/lib/gameDay/lifecycle';
 
 // Ported from backend core/ScorePersister.java + CommonAbsenteeManager.java + PlayerService.java
 // (MIGRATION_PLAN.md Phase 3). DB-orchestrating wrappers around the pure logic in
@@ -171,6 +172,8 @@ async function applyLegacyAbsenteeLadder(player: PrismaPlayer, today: Date): Pro
       });
       await insertScoreHistory(tx, player, DISABLE_PLAYER_ENCOUNTER_ID, today, player.rankScore!, player.rankScore!);
     });
+    // After the ranking transaction, never inside it - see removeDisabledPlayerFromGameDays.
+    await removeDisabledPlayerFromGameDays(player.squadId, player.id);
   } else {
     const newRankScore = player.rankScore! + decision.points;
     await prisma.$transaction(async (tx) => {
@@ -323,6 +326,7 @@ export async function deactivatePlayer(squadId: number, playerId: number): Promi
     });
     await insertScoreHistory(tx, player, DISABLE_PLAYER_ENCOUNTER_ID, today, player.rankScore!, player.rankScore!);
   });
+  await removeDisabledPlayerFromGameDays(squadId, player.id);
 }
 
 // PlayerService.updatePlayerRanking: re-rank all active players by rankScore desc (playerRank

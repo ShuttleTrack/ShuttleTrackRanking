@@ -1,7 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
-import { getSquadAccess } from '@/lib/auth/squadAccess';
+import { requireSquadMember } from '@/lib/auth';
 import { previewReplacementWindow } from '@/lib/replacements';
 import { parseSquadId } from '@/lib/api/squadParam';
 
@@ -18,14 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const squadId = parseSquadId(req, res);
   if (squadId === null) return;
 
-  const session = await getServerSession(req, res, authOptions);
-  if (!session?.user?.email) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-  const { player, isSquadAdmin } = await getSquadAccess(session.user.email, squadId);
-  if (!player && !isSquadAdmin && !session.user.isSuperAdmin) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
+  if (!(await requireSquadMember(req, res, squadId))) return;
 
   const { startDate, endDate } = req.query;
   if (typeof startDate !== 'string' || typeof endDate !== 'string') {

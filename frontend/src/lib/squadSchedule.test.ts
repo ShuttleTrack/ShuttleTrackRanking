@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateScheduleInput } from './squadSchedule';
+import { scheduleTimezone, validateScheduleInput } from './squadSchedule';
 
 describe('validateScheduleInput', () => {
   it('one-off (isRecurring false) clears every schedule field regardless of what else is sent', () => {
@@ -20,6 +20,7 @@ describe('validateScheduleInput', () => {
         startDate: null,
         endDate: null,
         skipDates: [],
+        timezone: null,
       },
     });
   });
@@ -98,5 +99,39 @@ describe('validateScheduleInput', () => {
       skipDates: ['25 Dec 2026'],
     });
     expect(result).toEqual({ error: 'Invalid skip date: "25 Dec 2026" (expected YYYY-MM-DD)' });
+  });
+
+  it('defaults the timezone to Europe/Amsterdam and keeps a valid one', () => {
+    const base = {
+      isRecurring: true,
+      dayOfWeek: 'WEDNESDAY' as const,
+      startTime: '18:00',
+      endTime: '20:00',
+      startDate: '2026-01-01',
+    };
+    const defaulted = validateScheduleInput(base);
+    expect('data' in defaulted && defaulted.data.timezone).toBe('Europe/Amsterdam');
+    const london = validateScheduleInput({ ...base, timezone: 'Europe/London' });
+    expect('data' in london && london.data.timezone).toBe('Europe/London');
+  });
+
+  it('rejects an unknown timezone', () => {
+    const result = validateScheduleInput({
+      isRecurring: true,
+      dayOfWeek: 'WEDNESDAY',
+      startTime: '18:00',
+      endTime: '20:00',
+      startDate: '2026-01-01',
+      timezone: 'Mars/Olympus_Mons',
+    });
+    expect('error' in result && result.error).toContain('Unknown timezone');
+  });
+});
+
+describe('scheduleTimezone', () => {
+  it('falls back to Europe/Amsterdam for a row written before the field existed', () => {
+    expect(scheduleTimezone(null)).toBe('Europe/Amsterdam');
+    expect(scheduleTimezone({})).toBe('Europe/Amsterdam');
+    expect(scheduleTimezone({ timezone: 'Asia/Colombo' })).toBe('Asia/Colombo');
   });
 });

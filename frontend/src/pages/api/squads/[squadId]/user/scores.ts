@@ -1,9 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
 import prisma from '@/lib/prisma';
 import { isValidMatchScore } from '@/utils/scoreValidation';
-import { getSquadAccess } from '@/lib/auth/squadAccess';
+import { requireSquadMember } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
 
 export default async function handler(
@@ -17,14 +15,11 @@ export default async function handler(
   const squadId = parseSquadId(req, res);
   if (squadId === null) return;
 
-  // Check authentication
-  const session = await getServerSession(req, res, authOptions);
-  if (!session?.user?.email) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-
-  // Resolved per request, per squad - see games/my-matches.ts for why.
-  const { player } = await getSquadAccess(session.user.email, squadId);
+  // Resolved per request, per squad - see games/my-matches.ts for why. Acts as a player, so an
+  // admin the member gate admits without a Player row is still refused.
+  const member = await requireSquadMember(req, res, squadId);
+  if (!member) return;
+  const { player } = member;
   if (!player) {
     return res.status(401).json({ message: 'Unauthorized' });
   }
