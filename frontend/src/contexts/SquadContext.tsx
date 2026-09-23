@@ -13,6 +13,12 @@ export interface SquadSummary {
   // can show squad-aware links without a client-side fetch. Both false for a signed-out visitor.
   isSquadAdmin: boolean;
   isPlayerHere: boolean;
+  // Whether this squad accepts self-service join requests (SELF_REGISTRATION_PLAN.md). Carried
+  // on the summary so the public board can offer a "Request to join" CTA to a signed-in
+  // non-member without a second fetch - that board is where someone handed a share link
+  // actually lands, so sending them to the directory to find the squad they're looking at
+  // would be silly.
+  openForOpenSlot: boolean;
 }
 
 const SquadContext = createContext<SquadSummary | null>(null);

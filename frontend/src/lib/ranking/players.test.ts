@@ -62,6 +62,35 @@ describe('toPlayerInfo (ported PlayerService.getPlayerInfoByStatus mapping)', ()
     expect(info.email).toBe('x@y.com');
     expect(info.name).toBe('chathura');
   });
+
+  // Regression: timeInHighestRankLabel throws on a null rankSince by design (it mirrors the
+  // Java Period.between NPE - see period.ts), on the assumption that real data always has the
+  // column populated. Open-slot players broke that: addPlayer leaves rankSince null for anyone
+  // created without a starting score. Because every caller maps toPlayerInfo over the whole
+  // roster, one such row took down the entire players response with a 500 - the squad roster
+  // and the public player list both.
+  it('returns a null timeInHighestRank for a scoreless player rather than throwing', () => {
+    const scoreless = player({
+      rankScore: null,
+      playerRank: null,
+      highestRank: null,
+      rankSince: null,
+      playerStatus: null,
+      playerType: PlayerType.OPEN_SLOT,
+    });
+
+    expect(() => toPlayerInfo(scoreless, null)).not.toThrow();
+
+    const info = toPlayerInfo(scoreless, null);
+    expect(info.timeInHighestRank).toBeNull();
+    expect(info.hasScore).toBe(false);
+    expect(info.status).toBe('ENABLED');
+  });
+
+  it('still labels time in highest rank when rankSince is present', () => {
+    const info = toPlayerInfo(player(), null);
+    expect(info.timeInHighestRank).toMatch(/day\(s\)/);
+  });
 });
 
 describe('buildPlayerHistory (ported ScoreHistoryService.getPlayerHistory)', () => {

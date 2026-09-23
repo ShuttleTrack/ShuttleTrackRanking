@@ -6,6 +6,12 @@ import { parseSquadId } from '@/lib/api/squadParam';
 // Editable by the squad's own admins (not superadmin-only, matching schedule.ts/visibility.ts -
 // unlike enabled/maxPlayers on the squad index route). OPEN_SLOT_PLAYERS_PLAN.md: these are two
 // independent settings ("stop penalizing" vs "stop displaying"), never locked together.
+//
+// Also carries openForOpenSlot (SELF_REGISTRATION_PLAN.md) - the opt-in that lists this squad in
+// the public directory and lets people request to join it as open-slot players. It lives here
+// rather than on visibility.ts because it gates open-slot registration, not leaderboard display:
+// isPublic answers 'does this board feed the site-root aggregate', which is a different question,
+// and a squad wanting a public board with a closed roster has to stay able to say so.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'PATCH') {
     return res.status(405).json({ message: 'Method not allowed' });
@@ -17,8 +23,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const session = await requireSquadAdmin(req, res, squadId);
   if (!session) return;
 
-  const { openSlotAbsenteeGraceDays, openSlotVisibilityGameDays } = req.body;
-  const data: { openSlotAbsenteeGraceDays?: number; openSlotVisibilityGameDays?: number } = {};
+  const { openSlotAbsenteeGraceDays, openSlotVisibilityGameDays, openForOpenSlot } = req.body;
+  const data: {
+    openSlotAbsenteeGraceDays?: number;
+    openSlotVisibilityGameDays?: number;
+    openForOpenSlot?: boolean;
+  } = {};
 
   if (openSlotAbsenteeGraceDays !== undefined) {
     if (!Number.isInteger(openSlotAbsenteeGraceDays) || openSlotAbsenteeGraceDays < 0) {
@@ -31,6 +41,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: 'openSlotVisibilityGameDays must be a non-negative integer' });
     }
     data.openSlotVisibilityGameDays = openSlotVisibilityGameDays;
+  }
+  if (openForOpenSlot !== undefined) {
+    if (typeof openForOpenSlot !== 'boolean') {
+      return res.status(400).json({ message: 'openForOpenSlot must be a boolean' });
+    }
+    data.openForOpenSlot = openForOpenSlot;
   }
 
   try {

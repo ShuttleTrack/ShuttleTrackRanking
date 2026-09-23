@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ChevronDownIcon, UserCircleIcon, PencilSquareIcon, Squares2X2Icon, ArrowRightOnRectangleIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
+import {
+  ChevronDownIcon,
+  UserCircleIcon,
+  PencilSquareIcon,
+  Squares2X2Icon,
+  ArrowRightOnRectangleIcon,
+  ArrowsRightLeftIcon,
+} from '@heroicons/react/24/outline';
 import { signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
 import type { Player } from '@/types/player';
@@ -12,6 +19,7 @@ import { classNames, buildHistoryLinks } from './navUtils';
 import { useOptionalSquad } from '@/contexts/SquadContext';
 import { useMySquads } from '@/hooks/useMySquads';
 import { SquadSwitcherLinks } from './SquadSwitcherLinks';
+import { JoinSquadMenuSection } from './JoinSquadMenuSection';
 
 const tileClass = (active: boolean) =>
   classNames(
@@ -135,38 +143,62 @@ export function MobileScoreboardMenu({
         </Link>
       ) : (
         <div className="border-t border-white/10 pt-4 space-y-1">
-          {/* Identity header */}
-          <div className="flex items-center gap-3 px-3 py-2 mb-1">
-            {session.user?.image ? (
-              <Image
-                src={session.user.image}
-                alt=""
-                width={36}
-                height={36}
-                className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-primary/30"
-              />
-            ) : (
-              <UserCircleIcon className="h-9 w-9 shrink-0 text-white/60 ring-1 ring-primary/30 rounded-full" />
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-headline text-base font-semibold text-on-surface leading-tight">
-                {session.user?.name ?? 'Account'}
-              </p>
-              <p className="truncate text-xs text-on-surface-variant leading-tight mt-0.5">
-                {session.user?.email}
-              </p>
+          {squad?.isPlayerHere ? (
+            <Link
+              href={`/s/${squad.slug}/user/profile`}
+              className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 mb-1 transition-colors hover:bg-white/5"
+              onClick={onClose}
+              aria-label="Your profile"
+            >
+              {session.user?.image ? (
+                <Image
+                  src={session.user.image}
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-primary/30"
+                />
+              ) : (
+                <UserCircleIcon className="h-9 w-9 shrink-0 text-white/60 ring-1 ring-primary/30 rounded-full" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-headline text-base font-semibold text-on-surface leading-tight">
+                  {session.user?.name ?? 'Account'}
+                </p>
+                <p className="truncate text-xs text-on-surface-variant leading-tight mt-0.5">
+                  {session.user?.email}
+                </p>
+              </div>
+            </Link>
+          ) : (
+            <div className="flex items-center gap-3 px-3 py-2 mb-1">
+              {session.user?.image ? (
+                <Image
+                  src={session.user.image}
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-primary/30"
+                />
+              ) : (
+                <UserCircleIcon className="h-9 w-9 shrink-0 text-white/60 ring-1 ring-primary/30 rounded-full" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-headline text-base font-semibold text-on-surface leading-tight">
+                  {session.user?.name ?? 'Account'}
+                </p>
+                <p className="truncate text-xs text-on-surface-variant leading-tight mt-0.5">
+                  {session.user?.email}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Squad-scoped links */}
+          {(squad?.isPlayerHere || squad?.isSquadAdmin) && (
+            <div className="my-1 border-t border-white/10" role="separator" />
+          )}
           {squad?.isPlayerHere && (
             <>
-              <Link href={`/s/${squad.slug}/user/profile`} className={mobileRowClass} onClick={onClose}>
-                <span className="flex items-center gap-3">
-                  <UserCircleIcon className="h-5 w-5 text-on-surface-variant" aria-hidden />
-                  Profile
-                </span>
-              </Link>
               <Link href={`/s/${squad.slug}/user/matches`} className={mobileRowClass} onClick={onClose}>
                 <span className="flex items-center gap-3">
                   <PencilSquareIcon className="h-5 w-5 text-on-surface-variant" aria-hidden />
@@ -190,7 +222,6 @@ export function MobileScoreboardMenu({
             </Link>
           )}
 
-          {/* Squad switcher */}
           <div className="pt-1 border-t border-white/10">
             <SquadSwitcherLinks
               squads={mySquads}
@@ -199,6 +230,7 @@ export function MobileScoreboardMenu({
               onNavigate={onClose}
             />
           </div>
+          <JoinSquadMenuSection variant="mobile" onNavigate={onClose} />
 
           {/* Sign out */}
           <div className="pt-1 border-t border-white/10">

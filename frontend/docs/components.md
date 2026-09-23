@@ -22,9 +22,9 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 - Encounters → searchable player list (color dot + `#` rank) → `/s/{slug}/player/{id}/encounters`
 - History → Ranking History, Encounter History (card rows with short hints) under `/s/{slug}/`
 - Live → `/s/{slug}/game-viewer` with progress (hidden when no live games)
-- Session: avatar menu → identity header, Profile, Matches (when player in squad), Admin Dashboard (squad admin), **Squads** switcher rows (`SquadSwitcherLinks`), Sign out
+- Session: avatar menu → identity header (links to profile when player in current squad), Matches, Replacement (when player in squad), Admin Dashboard (squad admin), **Squads** switcher (`SquadSwitcherLinks`), **Join a squad** (`JoinSquadMenuSection` → `/squads/browse`), Sign out
 
-**Visual:** active desktop segment uses `bg-primary/15` orange chip (`aria-current="page"`); dark dropdown surfaces (`surface-container`); kinetic gradient hairline on the nav band. **Avatar menu:** `w-72`, identity block (avatar, name, email), icon + label rows (`min-h-[44px]`); squad switcher monogram rows + check on current; `ring-primary/40` on photo; dividers; **Sign Out** (`text-red-400`). Mobile overlay uses the same identity + switcher pattern.
+**Visual:** active desktop segment uses `bg-primary/15` orange chip (`aria-current="page"`); dark dropdown surfaces (`surface-container`); kinetic gradient hairline on the nav band. **Avatar menu:** `w-72`, identity block (avatar, name, email; whole row links to profile when the user is a player in the current squad), icon + label rows (`min-h-[44px]`); squad switcher monogram rows + check on current; `ring-primary/40` on photo; dividers; **Sign Out** (`text-red-400`). Mobile overlay uses the same identity + switcher pattern.
 
 ---
 
@@ -88,6 +88,16 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 ---
 
+### JoinSquadMenuSection
+
+**File:** `src/components/nav/JoinSquadMenuSection.tsx`
+
+**Props:** `variant` (`account-menu` | `mobile`), optional `onNavigate`
+
+**Purpose:** Divider plus a single **Join a squad** row to `/squads/browse` below `SquadSwitcherLinks` in `AccountMenu` and `MobileScoreboardMenu` (no section heading).
+
+---
+
 ### Squad picker & platform admin
 
 **Files:** `src/pages/squads.tsx`, `src/pages/platform/squads.tsx`
@@ -95,6 +105,22 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 **`/squads`:** `PageHeader` + monogram squad rows (dark cards). Single-squad users redirect to `/s/{slug}`.
 
 **`/platform/squads`:** Superadmin only; card rows (no DaisyUI table), dark modals, status chips — same tokens as squad admin settings.
+
+---
+
+### Squad directory & join requests
+
+**Files:** `src/pages/squads/browse.tsx`, `src/components/squads/{JoinRequestModal,JoinSquadCallout}.tsx`, `src/components/player-management/JoinRequestOversight.tsx`
+
+**`/squads/browse`:** Gated-page shell (inline **Join a squad** title + primary accent, `max-w-3xl` content). **Your requests** when pending (withdraw; closed squads show *This squad closed join requests*). **Open squads** list only when non-empty; otherwise a centered empty card (*No open squads*). Each open squad card is stacked: monogram + name, one meta line (schedule · roster), then a full-width equal button row (*View Leaderboard* + *Request to join* or status chip) — no back link to `/squads`. Signed-out: *Sign in to join a squad* + Google. Uses `PageLoader` while loading; no DaisyUI on this page.
+
+**`JoinSquadCallout`:** quiet secondary row on `/s/[slug]` for a non-member when the squad is open (`useJoinSquadCallout` in `RankingsComponent`, passed as `SquadBoardSelector`'s `trailing` slot) — always inside the striped `SelectorBand`: stacked under the squad selector, centered, on mobile; to its right on `md+`. No border, `bg-surface-container-high`, `font-label` uppercase copy so it stays secondary to the selector's orange-ringed control. *Want to play here?* + *Request a spot* / *Request pending* / *Sign in*; no DaisyUI.
+
+**`JoinRequestModal`:** short intro (*Subject to squad admin approval. If the roster is full, you'll be added as an open-slot player.*). Name prefilled from the Google profile (capped at `Player.name`'s 32 chars) with its counter on the label row, not below the field; optional message with the same counter treatment. *Applying as {email}* — never an editable field, since identity comes from the session server-side. Gated-page field/button styles (`fieldClass`/`outlineBtn`/`primaryBtn`), no DaisyUI.
+
+**`JoinRequestOversight`:** admin table on `/s/[squad]/admin/players`, styled like `ReplacementOversight` — all statuses with badges, actions only on pending rows, so a re-request after a rejection is visibly that. Approve modal defaults to **Open slot** with an optional score.
+
+**Data:** `useOpenSquads` / `useMyJoinRequests` → `GET /api/squads/open` and `GET /api/squads/join-requests`.
 
 ---
 
@@ -348,7 +374,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Nav:** `AccountMenu` and mobile overlay mark **Sign In** active when `pathname === '/login'`.
 
-**Helpers:** `src/utils/loginAuth.ts` (`safeCallbackUrl`, `getLoginErrorMessage`).
+**Helpers:** `src/utils/loginAuth.ts` (`safeCallbackUrl`, `getLoginErrorMessage`). `safeCallbackUrl` defaults to **`/squads`**, not `/` — a session with no squad is a real state now, and the public board tells such a person nothing about what to do next. An explicit `?callbackUrl=` still wins. `getLoginErrorMessage`'s `AccessDenied` copy is about *token verification*, not roster membership: not being on a roster no longer blocks sign-in, so "ask a squad admin to add you" would send people away from the join-request flow meant for them.
 
 ---
 

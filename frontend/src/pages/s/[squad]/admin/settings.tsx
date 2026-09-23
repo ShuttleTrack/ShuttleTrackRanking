@@ -80,6 +80,7 @@ const SquadSettingsPage = () => {
 
   const [openSlotAbsenteeGraceDays, setOpenSlotAbsenteeGraceDays] = useState(3);
   const [openSlotVisibilityGameDays, setOpenSlotVisibilityGameDays] = useState(10);
+  const [openForOpenSlot, setOpenForOpenSlot] = useState(false);
   const [openSlotError, setOpenSlotError] = useState<string | null>(null);
   const [isSavingOpenSlot, setIsSavingOpenSlot] = useState(false);
   const [openSlotSaved, setOpenSlotSaved] = useState(false);
@@ -96,6 +97,7 @@ const SquadSettingsPage = () => {
     setSkipDates(settings.scheduleSkipDates ?? []);
     setOpenSlotAbsenteeGraceDays(settings.openSlotAbsenteeGraceDays);
     setOpenSlotVisibilityGameDays(settings.openSlotVisibilityGameDays);
+    setOpenForOpenSlot(settings.openForOpenSlot);
   }, [settings]);
 
   if (isLoading || !settings) {
@@ -152,7 +154,7 @@ const SquadSettingsPage = () => {
       const response = await fetch(`/api/squads/${squadId}/open-slot-settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ openSlotAbsenteeGraceDays, openSlotVisibilityGameDays }),
+        body: JSON.stringify({ openSlotAbsenteeGraceDays, openSlotVisibilityGameDays, openForOpenSlot }),
       });
       if (!response.ok) {
         const body = await response.json();
@@ -232,11 +234,19 @@ const SquadSettingsPage = () => {
           </div>
           <div className={statusFactTileClass}>
             <p className="font-numeric text-xs leading-snug tabular-nums sm:text-sm">
-              <span className={statusFactLabelClass}>Roster </span>
+              {/*
+                maxPlayers caps the FULL-TIME roster only, so the cap is shown against the
+                full-time count - rendering the whole roster against it would misreport how full
+                the squad is, since open-slot players consume no slot.
+              */}
+              <span className={statusFactLabelClass}>Full-time </span>
               <span className="font-medium text-on-surface">
                 {settings.maxPlayers !== null
-                  ? `${settings.playerCount}/${settings.maxPlayers}`
-                  : `${settings.playerCount} · ∞`}
+                  ? `${settings.fulltimePlayerCount}/${settings.maxPlayers}`
+                  : `${settings.fulltimePlayerCount} · ∞`}
+              </span>
+              <span className="block text-[10px] text-on-surface-variant">
+                {settings.playerCount} on the roster in total
               </span>
             </p>
           </div>
@@ -322,6 +332,37 @@ const SquadSettingsPage = () => {
           absentee treatment and leaderboard visibility taper off differently from a fulltime
           player&apos;s - both counted in playing days since their last game.
         </p>
+
+        {/*
+          Unlike the Visibility toggle above, this form has an explicit Save button, so the
+          change is already deliberate - the explanation lives inline rather than in a
+          confirmation modal. What it must not do is stay vague: turning this on lists the squad
+          publicly and starts a request queue, which is exactly the kind of second-order effect
+          the isPublic toggle needed visibilityConfirmCopy() to spell out.
+        */}
+        <div className="mb-5 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              className="toggle toggle-primary mt-0.5"
+              checked={openForOpenSlot}
+              onChange={(e) => setOpenForOpenSlot(e.target.checked)}
+            />
+            <span>
+              <span className="block text-sm font-medium text-on-surface">
+                Open for open-slot registration
+              </span>
+              <span className="mt-1 block text-xs text-on-surface-variant">
+                Lists this squad publicly at <code>/squads/browse</code> so signed-in players can
+                ask to join. You approve or reject each request on the Players page - nobody is
+                added automatically. This is separate from Visibility above: a private squad can
+                still recruit, and a public one can stay closed. Approved players join as
+                open-slot, so they don&apos;t take a full-time roster place.
+              </span>
+            </span>
+          </label>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-on-surface-variant mb-1">

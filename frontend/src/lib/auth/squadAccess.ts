@@ -22,17 +22,10 @@ export async function getSquadAccess(email: string, squadId: number): Promise<Sq
   return { isSquadAdmin: admin !== null, player };
 }
 
-// Whether this email is known to the system at all, across any squad - the coarse gate used by
-// NextAuth's signIn callback. Being a platform superadmin, a SquadAdmin of any squad, or a
-// Player in any squad all count.
-export async function isKnownToAnySquad(email: string): Promise<boolean> {
-  const lowerEmail = email.toLowerCase();
-  const [admin, player] = await Promise.all([
-    prisma.squadAdmin.findFirst({ where: { email: lowerEmail } }),
-    prisma.player.findFirst({ where: { email: lowerEmail } }),
-  ]);
-  return admin !== null || player !== null;
-}
+// isKnownToAnySquad used to live here as the coarse gate for NextAuth's signIn callback.
+// Removed by self-registration (SELF_REGISTRATION_PLAN.md): a verified Google identity is now
+// enough to hold a session whether or not it belongs to any squad, since the whole flow is
+// "sign in first, then ask to join". See lib/auth/validateUserAccess.ts for the full reasoning.
 
 export async function getSquadBySlug(slug: string): Promise<Squad | null> {
   return prisma.squad.findUnique({ where: { slug } });
