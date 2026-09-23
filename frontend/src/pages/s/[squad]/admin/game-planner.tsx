@@ -16,16 +16,13 @@ import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
 
 const MAX_PLAYERS = 20;
 
-// Deterministically distribute players into group sizes for a game day.
+// Distribute players into group sizes for a game day.
 //
 // The size *composition* (how many groups of 4 vs 5) is fixed by the player
-// count, but their *order* is shuffled using a Fisher-Yates shuffle seeded by
-// the caller-supplied `seed` (typically the game day's date). This means the
-// larger (5-player) groups no longer always land in the lowest-ranked group,
-// while still being stable for a given seed: recreating the game on the same
-// day with the same player count always yields the same distribution, so the
-// creator cannot re-roll for a more favourable grouping.
-export const calculateGroupDistribution = (totalPlayers: number, seed: string): number[] => {
+// count, but their *order* is randomly shuffled (Fisher-Yates) on every call, so
+// the larger (5-player) groups don't always land in the lowest-ranked group.
+// `rng` is injectable for tests; it defaults to Math.random.
+export const calculateGroupDistribution = (totalPlayers: number, rng: () => number = Math.random): number[] => {
   if (totalPlayers < 4) return [];
 
   // Base composition of group sizes for the supported player counts.
@@ -61,27 +58,7 @@ export const calculateGroupDistribution = (totalPlayers: number, seed: string): 
     }
   }
 
-  // Hash the seed string into a 32-bit unsigned int.
-  const hashSeed = (str: string): number => {
-    let h = 1779033703 ^ str.length;
-    for (let i = 0; i < str.length; i++) {
-      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
-      h = (h << 13) | (h >>> 19);
-    }
-    return h >>> 0;
-  };
-
-  // mulberry32: small, fast seeded PRNG returning values in [0, 1).
-  const mulberry32 = (a: number): (() => number) => () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-
-  // Seeded Fisher-Yates shuffle of the group sizes.
-  const rng = mulberry32(hashSeed(seed));
+  // Fisher-Yates shuffle of the group sizes.
   for (let i = distribution.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [distribution[i], distribution[j]] = [distribution[j], distribution[i]];
@@ -173,14 +150,8 @@ const GamePlannerPage = () => {
   const createGameDayFor = async (selectedPlayerDetails: GamePlannerPlayer[]) => {
     const totalPlayers = selectedPlayerDetails.length;
 
-    // Use the local calendar date as a deterministic seed so the group-size
-    // ordering is fixed for the day but varies day to day. Folding in the
-    // player count keeps different counts decorrelated.
-    const today = new Date();
-    const dateSeed = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
-
     // Calculate number of groups and distribution
-    const distribution = calculateGroupDistribution(totalPlayers, `${dateSeed}:${totalPlayers}`);
+    const distribution = calculateGroupDistribution(totalPlayers);
     const groups: Record<string, number[]> = {};
 
     let playerIndex = 0;
