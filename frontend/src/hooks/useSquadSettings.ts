@@ -17,8 +17,15 @@ export interface SquadSettings {
   scheduleStartDate: string | null;
   scheduleEndDate: string | null;
   scheduleSkipDates: string[] | null;
+  scheduleTimezone: string;
   openSlotAbsenteeGraceDays: number;
   openSlotVisibilityGameDays: number;
+  // Squad.gameDayOps, unpacked (lib/gameDayOps.ts's gameDayOpsToWire).
+  gameDayOpsEnabled: boolean;
+  gameDayVoteOpensDaysBefore: number;
+  gameDayMinPlayersForOpenSlot: number | null;
+  gameDayTelegramMainChatId: string | null;
+  gameDayTelegramOpenSlotChatId: string | null;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());

@@ -2,7 +2,9 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { requireSquadAdmin, requireSuperAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
-import type { SquadScheduleData } from '@/lib/squadSchedule';
+import { scheduleTimezone, type SquadScheduleData } from '@/lib/squadSchedule';
+import { gameDayOpsToWire } from '@/lib/gameDayOps';
+import { cancelOpenGameDays } from '@/lib/gameDay/lifecycle';
 
 // GET: squad settings (enabled, maxPlayers, current roster size) - visible to that squad's own
 // admins, not just a superadmin, since they need to see the cap even though only a superadmin
@@ -43,8 +45,11 @@ export default async function handler(
         scheduleStartDate: schedule?.startDate ?? null,
         scheduleEndDate: schedule?.endDate ?? null,
         scheduleSkipDates: schedule?.skipDates ?? [],
+        scheduleTimezone: scheduleTimezone(schedule),
         openSlotAbsenteeGraceDays: squad.openSlotAbsenteeGraceDays,
         openSlotVisibilityGameDays: squad.openSlotVisibilityGameDays,
+        // Squad.gameDayOps unpacked the same way (ATTENDANCE_VOTE_PLAN.md).
+        ...gameDayOpsToWire(squad.gameDayOps),
       });
     } catch (error) {
       console.error('Get Squad API Error:', error);
@@ -66,6 +71,12 @@ export default async function handler(
 
     try {
       const squad = await prisma.squad.update({ where: { id: squadId }, data });
+      // A disabled squad's open game-day votes must not be left accepting votes that nothing
+      // closes - the same cancellation turning gameDayOps off performs, from this (different)
+      // handler (ATTENDANCE_VOTE_PLAN.md, "Disabling a squad must not strand open rows").
+      if (data.enabled === false) {
+        await cancelOpenGameDays(squadId, 'The squad was disabled.');
+      }
       res.status(200).json(squad);
     } catch (error) {
       console.error('Update Squad API Error:', error);

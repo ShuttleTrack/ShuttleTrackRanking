@@ -6,6 +6,8 @@ import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
 import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
 import { useSquadSettings } from '@/hooks/useSquadSettings';
+import { DEFAULT_TIMEZONE } from '@/lib/gameDay/clock';
+import { TimezonePicker } from '@/components/common/TimezonePicker';
 
 const cardClass = 'rounded-xl bg-surface-container/90 border border-gray-600 p-4 sm:p-6';
 const sectionTitleClass = 'font-headline text-base sm:text-lg font-semibold text-on-surface mb-4';
@@ -73,6 +75,7 @@ const SquadSettingsPage = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [skipDates, setSkipDates] = useState<string[]>([]);
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [newSkipDate, setNewSkipDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -84,6 +87,15 @@ const SquadSettingsPage = () => {
   const [isSavingOpenSlot, setIsSavingOpenSlot] = useState(false);
   const [openSlotSaved, setOpenSlotSaved] = useState(false);
 
+  const [checkInEnabled, setCheckInEnabled] = useState(false);
+  const [voteOpensDaysBefore, setVoteOpensDaysBefore] = useState(2);
+  const [minPlayersForOpenSlot, setMinPlayersForOpenSlot] = useState('');
+  const [telegramMainChatId, setTelegramMainChatId] = useState('');
+  const [telegramOpenSlotChatId, setTelegramOpenSlotChatId] = useState('');
+  const [checkInError, setCheckInError] = useState<string | null>(null);
+  const [isSavingCheckIn, setIsSavingCheckIn] = useState(false);
+  const [checkInSaved, setCheckInSaved] = useState<string | null>(null);
+
   useEffect(() => {
     if (!settings) return;
     setIsPublic(settings.isPublic);
@@ -94,6 +106,12 @@ const SquadSettingsPage = () => {
     setStartDate(toDateInputValue(settings.scheduleStartDate));
     setEndDate(toDateInputValue(settings.scheduleEndDate));
     setSkipDates(settings.scheduleSkipDates ?? []);
+    setTimezone(settings.scheduleTimezone ?? DEFAULT_TIMEZONE);
+    setCheckInEnabled(settings.gameDayOpsEnabled);
+    setVoteOpensDaysBefore(settings.gameDayVoteOpensDaysBefore);
+    setMinPlayersForOpenSlot(settings.gameDayMinPlayersForOpenSlot?.toString() ?? '');
+    setTelegramMainChatId(settings.gameDayTelegramMainChatId ?? '');
+    setTelegramOpenSlotChatId(settings.gameDayTelegramOpenSlotChatId ?? '');
     setOpenSlotAbsenteeGraceDays(settings.openSlotAbsenteeGraceDays);
     setOpenSlotVisibilityGameDays(settings.openSlotVisibilityGameDays);
   }, [settings]);
@@ -167,6 +185,38 @@ const SquadSettingsPage = () => {
     }
   };
 
+  const handleSaveCheckIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingCheckIn(true);
+    setCheckInError(null);
+    setCheckInSaved(null);
+    try {
+      const response = await fetch(`/api/squads/${squadId}/game-day-ops`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: checkInEnabled,
+          voteOpensDaysBefore,
+          minPlayersForOpenSlot: minPlayersForOpenSlot.trim() === '' ? null : Number(minPlayersForOpenSlot),
+          telegramMainChatId,
+          telegramOpenSlotChatId,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.message || 'Failed to save check-in settings');
+      }
+      await mutate();
+      setCheckInSaved(
+        body.cancelledGameDays > 0 ? `Saved. ${body.cancelledGameDays} open game day(s) were cancelled.` : 'Saved.'
+      );
+    } catch (err) {
+      setCheckInError(err instanceof Error ? err.message : 'Failed to save check-in settings');
+    } finally {
+      setIsSavingCheckIn(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -184,6 +234,7 @@ const SquadSettingsPage = () => {
           startDate: isRecurring ? startDate : null,
           endDate: isRecurring ? (endDate || null) : null,
           skipDates: isRecurring ? skipDates : [],
+          timezone: isRecurring ? timezone : null,
         }),
       });
       if (!response.ok) {
@@ -364,6 +415,82 @@ const SquadSettingsPage = () => {
         </div>
       </form>
 
+      <form onSubmit={handleSaveCheckIn} className={`${cardClass} mb-6`}>
+        <h2 className={sectionTitleClass}>Game day check-in</h2>
+        <p className="text-sm text-on-surface-variant mb-4">
+          Opens an in/out vote for each playing day, runs an open-slot waiting list, closes voting at
+          13:00 on the day and fills any gap from the waiting list - announced to your Telegram
+          groups. Needs a recurring play schedule below. Turning it off cancels any vote still open.
+        </p>
+        <label className="mb-4 flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            className="toggle toggle-primary"
+            checked={checkInEnabled}
+            onChange={(e) => setCheckInEnabled(e.target.checked)}
+          />
+          <span className="text-sm font-medium text-on-surface">{checkInEnabled ? 'On' : 'Off'}</span>
+        </label>
+        {checkInEnabled && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className={scheduleFieldLabelClass}>Vote opens (days before)</label>
+              <input
+                type="number"
+                min={1}
+                max={14}
+                className={inputFieldClass}
+                value={voteOpensDaysBefore}
+                onChange={(e) => setVoteOpensDaysBefore(Number(e.target.value))}
+              />
+            </div>
+            <div>
+              <label className={scheduleFieldLabelClass}>Open-slot minimum (players)</label>
+              <input
+                type="number"
+                min={4}
+                max={20}
+                className={inputFieldClass}
+                value={minPlayersForOpenSlot}
+                placeholder="Off"
+                onChange={(e) => setMinPlayersForOpenSlot(e.target.value)}
+              />
+              <p className="text-xs text-on-surface-variant mt-1">
+                Below this, open-slot players are pinged at 09:00 and the waiting list fills the gap
+                at 13:00. Leave empty to turn the open-slot flow off.
+              </p>
+            </div>
+            <div>
+              <label className={scheduleFieldLabelClass}>Main group chat id</label>
+              <input
+                className={inputFieldClass}
+                value={telegramMainChatId}
+                placeholder="-1001234567890"
+                onChange={(e) => setTelegramMainChatId(e.target.value)}
+              />
+              <p className="text-xs text-on-surface-variant mt-1">Gets the vote link, the reminder and cancellations.</p>
+            </div>
+            <div>
+              <label className={scheduleFieldLabelClass}>Open-slot group chat id</label>
+              <input
+                className={inputFieldClass}
+                value={telegramOpenSlotChatId}
+                placeholder="-1001234567890"
+                onChange={(e) => setTelegramOpenSlotChatId(e.target.value)}
+              />
+              <p className="text-xs text-on-surface-variant mt-1">Gets the players-needed ping and slot updates.</p>
+            </div>
+          </div>
+        )}
+        {checkInError && <p className="text-sm text-red-400 mt-4">{checkInError}</p>}
+        {checkInSaved && !checkInError && <p className="text-sm text-primary mt-4">{checkInSaved}</p>}
+        <div className="mt-4">
+          <button type="submit" className={primaryBtn} disabled={isSavingCheckIn}>
+            {isSavingCheckIn ? 'Saving…' : 'Save check-in settings'}
+          </button>
+        </div>
+      </form>
+
       <form onSubmit={handleSave} className={cardClass}>
         <h2 className={sectionTitleClass}>Play schedule</h2>
 
@@ -420,6 +547,14 @@ const SquadSettingsPage = () => {
                   required
                 />
               </div>
+            </div>
+
+            <div>
+              <label className={scheduleFieldLabelClass}>Timezone</label>
+              <TimezonePicker value={timezone} onChange={setTimezone} label="Timezone" />
+              <p className="text-xs text-on-surface-variant mt-1">
+                The start and end times above are in this zone, as are the check-in vote&apos;s 09:00 / 10:00 / 13:00.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

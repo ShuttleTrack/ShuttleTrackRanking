@@ -6,6 +6,7 @@ import { useRequireUser } from '@/hooks/useRequireUser';
 import { capitalizeFirstLetter } from '@/utils/string';
 import TrendIndicator from '@/components/leaderboard/TrendIndicator';
 import { PageLoader } from '@/components/common/GameLoader';
+import { UpcomingSessionsList } from '@/components/check-in/UpcomingSessionsList';
 import { resolveSquadUserOrRedirect } from '@/lib/squadPage';
 import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
 
@@ -149,6 +150,8 @@ const UserProfilePage = ({ playerId }: UserProfilePageProps) => {
           </button>
         </section>
       )}
+
+      <UpcomingSessionsList />
     </div>
   );
 };

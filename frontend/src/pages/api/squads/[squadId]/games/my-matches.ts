@@ -1,9 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { getMatchCombinations } from '@/utils/match';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
-import { getSquadAccess } from '@/lib/auth/squadAccess';
+import { requireSquadMember } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
 
 interface PlayerMatch {
@@ -36,14 +34,12 @@ export default async function handler(
   if (squadId === null) return;
 
   try {
-    const session = await getServerSession(req, res, authOptions);
-    if (!session?.user?.email) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
     // Resolved per request, per squad - a session carries no static playerId now, since the
-    // same email can have a different Player row (or none) in every squad.
-    const { player } = await getSquadAccess(session.user.email, squadId);
+    // same email can have a different Player row (or none) in every squad. The member gate
+    // admits an admin with no Player row; this route acts as a player, so it requires one.
+    const member = await requireSquadMember(req, res, squadId);
+    if (!member) return;
+    const { player } = member;
     if (!player) {
       return res.status(401).json({ message: 'Unauthorized' });
     }

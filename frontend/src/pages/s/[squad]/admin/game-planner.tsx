@@ -7,6 +7,8 @@ import { gameService } from '@/services/gameService';
 import { PlayerCard } from '@/components/game-planner/PlayerCard';
 import { ActionPanel } from '@/components/game-planner/ActionPanel';
 import { BulkScorePanel } from '@/components/game-planner/BulkScorePanel';
+import { AttendanceBanner } from '@/components/game-planner/AttendanceBanner';
+import { useTodaysAttendance } from '@/hooks/useTodaysAttendance';
 import { isValidPlayerCount } from '@/utils/game-validation';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadAdminOrRedirect } from '@/lib/squadPage';
@@ -111,6 +113,13 @@ const GamePlannerPage = () => {
   const [createError, setCreateError] = useState('');
   const gameId = router.query.gameId as string;
   const { game, isLoading: gameLoading } = useGame(gameId as string);
+  // ATTENDANCE_VOTE_PLAN.md: once today's check-in vote has closed, a NEW game day opens with the
+  // confirmed players pre-ticked. Only a seed - the admin can still change anything, and group
+  // distribution, rank-order slicing and the scoreless gate below are all unchanged. Never on the
+  // edit path, which keeps the selection the existing game already has.
+  const { attendance, isLoading: attendanceLoading, releaseSlot } = useTodaysAttendance(!gameId);
+  const [seededFromGameDayId, setSeededFromGameDayId] = useState<number | null>(null);
+  const [releasing, setReleasing] = useState(false);
 
   // Load existing game data if editing
   useEffect(() => {
@@ -123,9 +132,18 @@ const GamePlannerPage = () => {
     }
   }, [game]);
 
+  useEffect(() => {
+    if (gameId || !attendance || players.length === 0 || seededFromGameDayId === attendance.gameDayId) return;
+    // Filtered through today's roster: a confirmed id the planner cannot offer (disabled since)
+    // is dropped here and counted in the banner, rather than silently selected.
+    const available = new Set(players.map((p) => p.id));
+    setSelectedPlayers(attendance.confirmed.map((p) => p.id).filter((id) => available.has(id)).slice(0, MAX_PLAYERS));
+    setSeededFromGameDayId(attendance.gameDayId);
+  }, [gameId, attendance, players, seededFromGameDayId]);
+
   const isGameLoadPending = Boolean(gameId) && gameLoading;
 
-  if (playersLoading || isGameLoadPending) {
+  if (playersLoading || isGameLoadPending || attendanceLoading) {
     return <PageLoader variant="compact" label="Loading game planner" />;
   }
 
@@ -183,7 +201,12 @@ const GamePlannerPage = () => {
       await gameService.updateGame(squadId, gameId, gameData);
       router.push(`/s/${slug}/admin/game-day?gameId=${gameId}`);
     } else {
-      const newGame = await gameService.createGame(squadId, gameData);
+      // Links the throwaway Game back to the attendance that produced it; a second create for the
+      // same game day is refused server-side with a 400 naming the existing game.
+      const newGame = await gameService.createGame(squadId, {
+        ...gameData,
+        gameDayId: attendance && !attendance.gameId ? attendance.gameDayId : undefined,
+      });
       router.push(`/s/${slug}/admin/game-day?gameId=${newGame.id}`);
     }
   };
@@ -258,6 +281,21 @@ const GamePlannerPage = () => {
     return activeScores.length === 0 ? DEFAULT_STARTING_RANK_SCORE : Math.min(...activeScores);
   })();
 
+  const handleReleaseSlot = async (playerId: number) => {
+    setReleasing(true);
+    setCreateError('');
+    try {
+      await releaseSlot(playerId);
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Failed to release the slot');
+    } finally {
+      setReleasing(false);
+    }
+  };
+
+  const availableIds = new Set(players.map((p) => p.id));
+  const preTickedCount = attendance ? attendance.confirmed.filter((p) => availableIds.has(p.id)).length : 0;
+
   const validationMessage = getValidationMessage(selectedPlayers.length);
   const isValid = !validationMessage;
 
@@ -277,6 +315,15 @@ const GamePlannerPage = () => {
           </p>
         )}
       </section>
+
+      {!isEditing && attendance && (
+        <AttendanceBanner
+          attendance={attendance}
+          preTickedCount={preTickedCount}
+          onReleaseSlot={handleReleaseSlot}
+          releasing={releasing}
+        />
+      )}
 
       <section className="mb-6">
         <h2 className="font-headline text-sm font-bold uppercase tracking-wide text-on-surface-variant mb-3">

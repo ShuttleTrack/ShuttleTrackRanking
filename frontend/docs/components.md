@@ -274,6 +274,8 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **ActionPanel:** Opaque `fixed` mobile bar (`bg-background`, `border-white/5`); desktop count left, orange CTA right. Validation `text-red-400`; disabled CTA via opacity.
 
+**AttendanceBanner** (`src/components/game-planner/AttendanceBanner.tsx`, via `useTodaysAttendance`): once today's check-in vote has closed, a new game day opens with the confirmed players pre-ticked and a `border-primary/30 bg-primary/5` banner above the roster — pre-selected count, anyone who dropped out after the deadline, and chips for everyone holding a slot without having confirmed (from waiting list / claimed / slot passed on), with **Release** on open-slot holders. Not shown on the edit path.
+
 **Loading:** `PageLoader` (`compact`) (session, players, and game when `gameId` present).
 
 ---
@@ -316,9 +318,31 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Purpose:** Signed-in players see identity and ranking snapshot at `/s/{slug}/user/profile`.
 
-**Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name, email, muted uppercase squad name, outline sign-out; four-column stats (Rank, Change, Score, Highest).
+**Layout:** `max-w-7xl` shell; **Your profile** title + orange rule. `max-w-3xl` card: avatar (`border-primary`), name, email, muted uppercase squad name, outline sign-out; four-column stats (Rank, Change, Score, Highest). **Upcoming sessions** list below (`UpcomingSessionsList`, fed by `GET /api/squads/{id}/game-days` via `useUpcomingGameDays`): each game day that has not ended yet with the viewer's own state chip (In / Out / Not voted / Waiting list / Slot assigned / Slot passed to you / No slot) and a **Check in** CTA → `/s/{slug}/game-day/{YYYY-MM-DD}`. Empty state explains the vote opens a couple of days ahead.
 
 **Loading:** `PageLoader` (`tall`) (session + rankings).
+
+**Player tab bar:** `UserTabBar` in `Layout.tsx` — fixed bottom nav on `/s/{slug}/user/profile`, `/s/{slug}/user/matches`, and `/s/{slug}/game-day/*` for signed-in players of that squad. Tabs: **Profile**, **Check-in** (the nearest upcoming game day from the same endpoint; falls back to the profile page when none is open), **Matches**. Active tab uses `text-primary` + solid Heroicons. Hides `SiteFooter` and adds bottom safe-area padding on these routes.
+
+---
+
+### Game-day check-in
+
+**Files:** `src/pages/s/[squad]/game-day/[date].tsx`, `src/components/check-in/*`, `src/hooks/useGameDayCheckIn.ts`, `src/lib/check-in/*`
+
+**Design status:** built from the `feature/ui/cself-serve` mockup, but several states had no design and were invented during implementation — see `docs/check-in-ui-review.md` for the list awaiting UX/UI review.
+
+**Purpose:** The attendance vote for one session (ATTENDANCE_VOTE_PLAN.md) — the link the Telegram "vote is open" post carries. Not the admin `Game` planner table. URL is the readable game date (`/s/{slug}/game-day/2026-09-23`). Data is `GET /api/squads/{id}/game-days/{date}` (SWR, 60s refresh); every action revalidates, the vote optimistically.
+
+**Layout:** `max-w-7xl` shell; **Check in** title + orange rule. Hero card: session title, `font-numeric` time range and zone (from the game day's own snapshot, not a hardcoded schedule), status chip (countdown / live / ended / cancelled), and a voting line ("Voting closes at 13:00 on the day · 11 of 16 in").
+
+**By role** (from the API): **voter** — **I'm in** / **I'm out** (stacked on mobile, side-by-side `sm+`; orange fill for In, red tint for Out), each disabled from the server's own rule table with its reason shown (e.g. "Voting has closed"); a direct claimer sees **I'm in** only; an assignee or a holder of a slot passed on after the deadline gets a one-line prompt to confirm. **Open-slot player** — **Join waiting list** / **Leave waiting list** (with their position) before the deadline, **Claim a slot** after, in the same two-button geometry. **Observer** (a covered fulltime owner, a superadmin with no player row) — roster plus one line saying why they cannot act.
+
+**Roster:** `CheckInRoster` reveals with `animate-slideUp` — segmented In/Out tabs on mobile, two columns on `md+`, plus a **Holding a slot · awaiting confirmation** group (unconfirmed assignees and passed-on slots, deliberately not counted as In) and the waiting-list count. Rows: `colorHex` disc (Google avatar + **You** chip for self), name, rank, optional badge (**Open slot** / **Slot passed on**). Hidden from a voter until they have voted (withheld server-side too); anyone who cannot vote sees it straight away.
+
+**Auth:** Signed-out requests redirect server-side to `/login?callbackUrl=` (`lib/squadPage.ts`'s `loginRedirectFor`), and `useRequireUser` does the same on client-side session expiry.
+
+**Loading / not found:** `PageLoader` (`tall`); a date with no game day → dark copy + **Go to profile**.
 
 ---
 
@@ -330,7 +354,7 @@ Icons: trending up/down or flat; prefix `+`, `-`, or `0`.
 
 **Layout:** **Your matches** title + orange rule; `MatchResultLegend`; `max-w-3xl` game cards (live pulse, **Game #{id}**, date). `MatchScoreRow` (`showResultChips={false}`); `interactive` only when unscored. Score modal matches Score Keeper pattern.
 
-**Redirect:** `/user/management` → `/user/profile`.
+**Redirect:** `/s/{slug}/user/management` → `/s/{slug}/user/profile`.
 
 **Loading:** `PageLoader` (`tall`) (session, players, my-matches).
 

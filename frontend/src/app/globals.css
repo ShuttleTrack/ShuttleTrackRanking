@@ -154,7 +154,11 @@
   .game-loader-racket-spin,
   .game-loader-racket-rally,
   .game-loader-shuttle-orbit,
-  .game-loader-court {
+  .game-loader-court,
+  .animate-fadeIn,
+  .animate-slideUp,
+  .animate-slideInFromRight,
+  .animate-shimmer {
     animation: none;
   }
 }

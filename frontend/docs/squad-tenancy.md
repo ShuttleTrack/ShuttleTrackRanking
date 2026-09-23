@@ -37,12 +37,15 @@ supersedes those now that the feature is built and in production.
     `team1`/`team2`/`groups`/`scores` are opaque encoded-player-id strings/JSON, not FK-joinable.
   - `ScoreHistory` is **unchanged** - always queried by `playerId`, which already pins a squad
     once `Player` is squad-scoped, so no denormalized `squadId` needed there.
-- **Recurrence schedule** (on `Squad`, informational only - see "Squad schedule" below):
+- **Recurrence schedule** (on `Squad`, one JSON blob - see "Squad schedule" below):
   `isRecurring`, `scheduleDayOfWeek` (`DayOfWeek` enum), `scheduleStartTime`/`scheduleEndTime`
   (`"HH:mm"` strings), `scheduleStartDate`/`scheduleEndDate` (recurrence validity window, end
-  nullable = ongoing), `scheduleSkipDates` (JSON array of `"YYYY-MM-DD"` strings, holidays etc.).
+  nullable = ongoing), `scheduleSkipDates` (JSON array of `"YYYY-MM-DD"` strings, holidays etc.),
+  `scheduleTimezone` (IANA zone the times are in).
 - **`Player.playerType`** (`FULLTIME` default / `OPEN_SLOT`) and **`SlotReplacement`** - see
   "Open-slot & replacement players" below.
+- **`GameDay`**, **`GameDayVote`**, **`GameDayOpenSlot`**, `Squad.gameDayOps` and
+  `Game.gameDayId` - see "Game day check-in & attendance vote" below.
 
 ## Auth & access model
 
@@ -60,13 +63,24 @@ flag:
   nobody) in squad B.
 - API-route gates (`lib/auth.ts`): `requireSquadAdmin(req, res, squadId)`,
   `requireSuperAdmin(req, res)`. These replaced the old single `requireAuth`.
+  `requireSquadMember(req, res, squadId)` is the member-level gate: "signed in and connected to
+  this squad somehow" - a `Player` row **or** admin rights. It returns the resolved `player` and
+  deliberately does **not** guarantee one (an admin with no `Player` row passes), so a route that
+  acts *as a player* checks `player` itself. The five routes that used to inline this check
+  (`replacements/index`, `replacements/preview`, `players/open-slot`, `games/my-matches`,
+  `user/scores`) now use it with unchanged behaviour, as do the new game-day routes.
 - Page-level gates (`lib/squadPage.ts`, used in `getServerSideProps`):
   `resolveSquadOrNotFound` (public pages - 404s a missing/disabled squad, and if signed in also
   resolves `isSquadAdmin`/`isPlayerHere` purely so nav links can reflect it),
-  `resolveSquadAdminOrRedirect` (admin pages - redirects to `/login` or the squad root),
+  `resolveSquadAdminOrRedirect` (admin pages - redirects to `/login?callbackUrl=<this page>` or
+  the squad root),
   `resolveSquadUserOrRedirect` (user pages - also returns the caller's `playerId` in *this*
   squad, since a static session-wide `playerId` no longer makes sense once one person can have a
-  different `Player` row per squad).
+  different `Player` row per squad). Both redirect a signed-out request to
+  `/login?callbackUrl=<this page>` (`loginRedirectFor`), so a shared link - the game-day vote
+  posted to Telegram - lands back where it pointed after sign-in. The redirect is server-side,
+  before any client hook runs; `useRequireUser` carries the same `callbackUrl` for client-side
+  session expiry.
 - `SquadContext` (`contexts/SquadContext.tsx`) - React context carrying `{ id, slug, name,
   isSquadAdmin, isPlayerHere }`. `_app.tsx` sets it up from the page's `squad` prop (pulled out of
   `pageProps` before `<Layout>`, so the global nav - which renders outside any single page's own
@@ -80,6 +94,9 @@ flag:
 - **User** (signed-in + registered player in that squad): `/s/[squad]/user/{profile,matches,management}`.
 - **User**, continued: `/s/[squad]/user/replacement` - self-service replacement nomination (see
   "Open-slot & replacement players" below).
+- **User**, continued: `/s/[squad]/game-day/[date]` (`YYYY-MM-DD`) - the game-day check-in page
+  (see "Game day check-in & attendance vote" below). Gated by `resolveSquadUserOrRedirect`; a
+  superadmin with no `Player` row gets a read-only observer view.
 - **Admin** (signed-in + squad admin, or superadmin): `/s/[squad]/admin/{dashboard,game-day,game-planner,players,score-keeper,settings}`.
 - **Platform** (superadmin only): `/platform/squads` - create squads, manage each squad's admins,
   edit `enabled`/`maxPlayers`.
@@ -108,7 +125,11 @@ flag:
   `/replacements/preview` (GET, squad-member-readable), `/replacements/[id]` (PATCH to request
   cancelling or shortening) and `/replacements/[id]/cancellation` (PATCH to approve/reject a
   pending request, squad-admin-only) - see "Open-slot & replacement players" below for all of
-  these.
+  these. `/api/squads/[squadId]/game-days` (GET), `/game-days/[date]` (GET),
+  `/game-days/[date]/vote` (PUT), `/game-days/[date]/open-slot` (POST/DELETE),
+  `/game-days/[date]/admin` (GET/PATCH, squad-admin-only), `/api/squads/[squadId]/game-day-ops`
+  (PATCH, squad-admin-only) and `/api/admin/game-day-tick` (POST, superadmin-only) - see "Game day
+  check-in & attendance vote" below.
 - `middleware.ts` matcher: `/s/:squad/admin/:path*`, `/s/:squad/user/:path*`, `/platform/:path*`
   (signed-in-at-all gate only - the real per-squad-admin/per-player boundary is the
   `resolveSquad*` calls above and each API route's `requireSquadAdmin`/`requireSuperAdmin`).
@@ -179,11 +200,16 @@ One recurrence rule per squad (day of week, start/end time, effective start/end 
 list for holidays), stored as a **single JSON blob** on `Squad.schedule` (`SquadScheduleData` in
 `lib/squadSchedule.ts`) rather than separate columns - nothing ever queries/filters by any
 individual field (day, a time, a date), so separate columns bought nothing but column count.
-`null` = never configured; an object with `isRecurring: false` = explicitly one-off. **Still
-informational only**: nothing reads it to auto-create a game day or drive the Telegram poll.
-Validated by `validateScheduleInput` (unit tested); turning `isRecurring` off clears every other
-field inside the JSON, so a squad can't be left with stale recurrence data contradicting its own
-flag. Editable by a squad's **own admins** (`requireSquadAdmin`, not superadmin-only like
+`null` = never configured; an object with `isRecurring: false` = explicitly one-off. **No longer
+informational only**: the game-day check-in scheduler (below) reads it to create each session's
+`GameDay`, and an admin cancelling a session adds its date to `skipDates`. It still does not drive
+the old 17:00 Telegram poll. Carries a `timezone` (IANA, e.g. `Europe/Amsterdam`) qualifying
+`startTime`/`endTime` - a start time without a zone is incomplete, and every clock in the check-in
+feature is a wall-clock time in it. Optional on the stored type because rows written before it
+have no such key; read it via `scheduleTimezone()`, which defaults to `Europe/Amsterdam`. No
+migration was needed (`schedule` was already `Json?`). Validated by `validateScheduleInput` (unit
+tested, including the zone); turning `isRecurring` off clears every other field inside the JSON,
+so a squad can't be left with stale recurrence data contradicting its own flag. Editable by a squad's **own admins** (`requireSquadAdmin`, not superadmin-only like
 enabled/maxPlayers - this is day-to-day squad management), via
 `PATCH /api/squads/[squadId]/schedule` and the form on `/s/[squad]/admin/settings`.
 
@@ -298,6 +324,87 @@ Full design doc: `OPEN_SLOT_PLAYERS_PLAN.md` at the repo root. Summary of what's
   join as open-slot" self-service flow, and migrating the fulltime pool's deactivation logic onto
   the day-based playing-day calculator instead of its current row-based counter.
 
+## Game day check-in & attendance vote
+
+Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including an
+"Implementation notes" section listing where the build refined it. Summary of what's built:
+
+- **Models.** `GameDay` - one squad's session on one playing date (`@@unique([squadId,
+  gameDate])`), created `voteOpensDaysBefore` days ahead by the scheduler. It **snapshots**
+  `startTime`/`endTime`/`timezone`/`minPlayers` at creation and stores the resolved
+  `votesCloseAt` (13:00 on the day) and `slotLockAt` (start - 2h) instants - a game day is a
+  published promise, so editing the schedule later never moves an announced deadline.
+  `GameDayVote` - one slot holder's in/out answer. `GameDayOpenSlot` - an open-slot player's place
+  on the waiting list (`WAITING`) or assigned slot (`ASSIGNED`, `source` `WAITING_LIST` or
+  `DIRECT`), or a slot they gave back (`WITHDRAWN`, terminal for that game day).
+  `Game.gameDayId` (nullable, unique) links a planned game back to its vote.
+- **Status is `VOTING_OPEN` / `VOTING_CLOSED` / `CANCELLED`, not `OPEN`/`CLOSED`**: the 13:00
+  deadline closes the *vote*, not the session, which starts hours later. The session's own
+  upcoming/live/ended phase is derived from the clock (`lib/gameDay/voteWindow.ts`), never stored.
+- **Eligibility** (`lib/gameDay/eligibility.ts`), resolved against the **game date, not today** -
+  a vote opens days ahead, so a replacement window starting tomorrow already moves the slot:
+  structural holders = `FULLTIME` minus replacement owners, plus `OPEN_SLOT` replacement
+  fillers; open-slot pool = the other `OPEN_SLOT` players; voters = structural holders plus
+  anyone `ASSIGNED` an open slot that day; all excluding `DISABLED`. The first two are disjoint.
+- **`slotsHeld` vs `confirmedIn`** (`lib/gameDay/counts.ts`), which must stay separate:
+  `slotsHeld` (structural INs + `ASSIGNED` open slots) governs how many more people may be let
+  in; `confirmedIn` (INs the voter cast themselves) is attendance - the 09:00 check, the roster,
+  the planner's pre-tick. Two ways to hold a slot without confirming: an assignee who has not
+  voted, and an **inherited reservation** - after the deadline a transferred IN moves to the
+  incoming holder (`GameDayVote.inheritedFromPlayerId`) so the sync cannot promote a waiting-list
+  player into it and fill one physical slot twice. A transfer after the deadline of an OUT/absent
+  vote reserves nothing, but leaves a choice-less inherited row so the new holder may still
+  confirm until `slotLockAt`.
+- **Vote rules** (`lib/gameDay/votes.ts`'s `evaluateVote`, one pure table used by the write path
+  and by the page to decide which buttons to offer): free switching while open; after the
+  deadline a holder cannot vote IN (unless they gained the slot after it) and can vote OUT only
+  from an IN; a `WAITING_LIST` assignee can give the slot back until `slotLockAt`; a `DIRECT`
+  claimer never can (an admin can release it).
+- **The vacancy sync** (`lib/gameDay/openSlots.ts`): `planVacancySync(tx, id)` runs inside the
+  caller's locked transaction and always promotes waiting-list players, strictly by `joinedAt`,
+  up to the gap; `deliverVacancyPlan` posts to the open-slot group *after* commit and only then
+  advances `announcedVacancies`/`vacancyAnnouncedAt`, so a failed send is retried (names
+  included) by the scheduler's next pass. No-op past `slotLockAt` or without a minimum. Every
+  write takes `SELECT ... FOR UPDATE` on the `GameDay` row first (`withGameDayLock`, READ
+  COMMITTED), and nothing inside opens a second transaction.
+- **Eligibility is live** (`lib/gameDay/reconcile.ts`): `createSlotReplacement` and
+  `approveCancellationRequest` (outright cancel *and* shorten) call `reconcileSlotTransfer` in
+  their own transaction for every existing, not-yet-ended `VOTING_OPEN`/`VOTING_CLOSED` game day
+  in range - today's included; it never creates a row. The incoming holder's open-slot row is
+  *deleted*, never `WITHDRAWN`. A player auto-deactivated by the absentee sweep is cleared from
+  live game days afterwards (`removeDisabledPlayerFromGameDays`, best-effort, outside the ranking
+  transaction).
+- **Scheduler** (`lib/gameDay/scheduler.ts`, every 5 minutes from `instrumentation.ts`, beside the
+  untouched 17:00 poll). Pass A, per squad with a recurring schedule and check-in on: scan every
+  squad-local date from today to today + `voteOpensDaysBefore` (recovers a missed day), create
+  missing rows with a no-op conflict path, cancel open rows no longer on the schedule, and
+  re-create a cancelled one in place (fresh vote) once its date is back. Pass B, over every live
+  row: announce, 09:00 open-slot ping (only when `confirmedIn` is short), 10:00 reminder - each
+  stamped once, bounded above by the deadline so an outage never sends them late - then close
+  voting and sync; and retry the sync on closed rows until `slotLockAt`. One squad's (and one
+  row's) failure never stops another's. A superadmin can run a tick now from the admin dashboard.
+- **`Squad.gameDayOps`** (`lib/gameDayOps.ts`, one JSON blob like `schedule`): `enabled`,
+  `voteOpensDaysBefore` (1-14, default 2), `minPlayersForOpenSlot` (4-20 or null = no open-slot
+  flow), `telegramMainChatId`, `telegramOpenSlotChatId`. **Default off** (null = nothing created,
+  nothing sent) - deliberately the opposite of `openSlotAbsenteeGraceDays`, because this one posts
+  to Telegram groups. Squad-admin-editable via `PATCH /game-day-ops` and a card on the settings
+  page; turning it off cancels every open vote in the same request, and so does disabling the
+  squad from platform admin (`PATCH /api/squads/[squadId]`, a different handler) - both via
+  `cancelOpenGameDays`. The bot token stays the one shared `TELEGRAM_BOT_TOKEN`; only chat ids are
+  per-squad. `GET /api/squads/[squadId]` unpacks it into flat `gameDayXxx` fields.
+- **Routes**: `GET /game-days` (upcoming = not ended and not cancelled - *not* "voting open",
+  which would drop today's row at 13:00), `GET /game-days/[date]` (the caller's view: role, vote,
+  allowed actions, and the roster - withheld from a voter who has not voted yet), `PUT
+  /game-days/[date]/vote`, `POST|DELETE /game-days/[date]/open-slot`, `GET|PATCH
+  /game-days/[date]/admin` (`close` / `cancel` / `release`). `[date]` is `YYYY-MM-DD` or 400;
+  no row is 404. **Identity rule**: the acting player always comes from the session, never a
+  body - except the admin `release`, where an admin acting on another player is the point.
+- **Game Planner** pre-ticks today's `confirmedIn` players once voting has closed and shows a
+  banner of post-deadline dropouts and everyone holding a slot unconfirmed (with a release
+  action); it only seeds the selection - distribution, rank-order slicing and the scoreless gate
+  are unchanged. `POST /games` stamps `gameDayId` (400 naming the existing game on a second
+  create). `Game.createdAt` stays the encounter date for submit/process.
+
 ## Production migration (history)
 
 Squad tenancy needed a real data migration (existing single-squad data → one `Squad`), done in
@@ -334,10 +441,12 @@ schema.
 
 ## Explicitly out of scope so far
 
-- Making the Telegram "who's in" scheduler (`lib/telegram/`, `instrumentation.ts`) per-squad
-  configurable - it's still a single global cron job.
-- Anything reading the recurrence schedule to *do* something (auto-create a `DRAFT` game day,
-  drive the Telegram poll) - schedule storage/editing is built, automation isn't.
+- Making the old Telegram "who's in" poll (`lib/telegram/`, the 17:00 cron in
+  `instrumentation.ts`) per-squad configurable, or having the schedule drive it - it's still a
+  single global cron job, now running beside the game-day check-in rather than replaced by it.
+- Retiring that old poll once the check-in has proven itself (ATTENDANCE_VOTE_PLAN.md, Decision 2).
+- Per-squad Telegram bot tokens, more than one playing day per week, per-player notifications,
+  and auto-creating the `Game` row when voting closes (the planner pre-ticks instead).
 - Getting Pasan's real email.
 - Folding the separate `apl-aragorn-duckdns` deployment into this squad model.
 - The public "browse squads / request to join as open-slot" self-service flow (open-slot players
@@ -367,3 +476,6 @@ schema.
    open-slot/replacement players (`OPEN_SLOT_PLAYERS_PLAN.md`).
 10. [#203](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/203) - open-slot/replacement
     players implementation (see "Open-slot & replacement players" above).
+11. [#210](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/210) - design doc for the
+    game-day check-in & attendance vote (`ATTENDANCE_VOTE_PLAN.md`); implemented in the PR that
+    follows it (see "Game day check-in & attendance vote" above).

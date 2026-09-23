@@ -3,6 +3,8 @@ import * as Sentry from '@sentry/nextjs';
 declare global {
   // eslint-disable-next-line no-var
   var __telegramCronRegistered: boolean | undefined;
+  // eslint-disable-next-line no-var
+  var __gameDayCronRegistered: boolean | undefined;
 }
 
 export async function register() {
@@ -33,6 +35,33 @@ export async function register() {
       }, { timezone: 'Europe/Amsterdam' });
 
       console.log('[telegram-scheduler] Registered daily encounter poll cron (17:00 Europe/Amsterdam)');
+    }
+
+    // Game-day check-in scheduler (ATTENDANCE_VOTE_PLAN.md) - every 5 minutes rather than at a
+    // fixed time, because its thresholds (09:00 / 10:00 / 13:00) are wall-clock times in each
+    // squad's own zone, which no single cron time can hit across squads or across DST. Runs
+    // beside the 17:00 poll above, which it deliberately does not replace yet (the plan's
+    // Decision 2). Same placement rule: inside this NEXT_RUNTIME === 'nodejs' block, never
+    // beside it, with its own registered flag.
+    if (!global.__gameDayCronRegistered) {
+      global.__gameDayCronRegistered = true;
+
+      const cron = await import('node-cron');
+      const { runGameDayTick } = await import('./lib/gameDay/scheduler');
+
+      cron.schedule('*/5 * * * *', () => {
+        runGameDayTick()
+          .then((summary) => {
+            if (summary.created || summary.recreated || summary.cancelled || summary.closed || summary.errors) {
+              console.log('[game-day] Tick', summary);
+            }
+          })
+          .catch((error) => {
+            console.error('[game-day] Unhandled error in scheduled tick', error);
+          });
+      });
+
+      console.log('[game-day] Registered game-day check-in scheduler (every 5 minutes)');
     }
   }
 

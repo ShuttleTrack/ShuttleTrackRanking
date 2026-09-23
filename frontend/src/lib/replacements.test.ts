@@ -9,6 +9,9 @@ vi.mock('@/lib/prisma', () => {
     player: { findUnique: vi.fn(), findMany: vi.fn() },
     squad: { findUniqueOrThrow: vi.fn() },
     slotReplacement: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    // No live game days: the check-in reconciliation these write paths now run is covered by
+    // lib/gameDay/reconcile.test.ts against a stateful fake.
+    gameDay: { findMany: vi.fn(async () => []) },
     $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(client)),
   };
   return { default: client };

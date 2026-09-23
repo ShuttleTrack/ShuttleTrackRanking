@@ -4,6 +4,8 @@ export interface GameInput {
   groups: Record<string, number[]>;
   scores?: Record<string, Record<string, MatchScore>>;
   status?: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED';
+  // The closed check-in vote this game is planned from (ATTENDANCE_VOTE_PLAN.md) - create only.
+  gameDayId?: number;
 }
 
 interface MatchScore {

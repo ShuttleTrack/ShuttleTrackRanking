@@ -1,7 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/pages/api/auth/[...nextauth]';
-import { getSquadAccess } from '@/lib/auth/squadAccess';
+import { requireSquadMember } from '@/lib/auth';
 import {
   createSlotReplacement,
   listSlotReplacementsForSquad,
@@ -21,15 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const squadId = parseSquadId(req, res);
   if (squadId === null) return;
 
-  const session = await getServerSession(req, res, authOptions);
-  if (!session?.user?.email) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
-  const { player, isSquadAdmin } = await getSquadAccess(session.user.email, squadId);
-  const isAdmin = isSquadAdmin || Boolean(session.user.isSuperAdmin);
-  if (!player && !isAdmin) {
-    return res.status(401).json({ message: 'Unauthorized' });
-  }
+  const member = await requireSquadMember(req, res, squadId);
+  if (!member) return;
+  const { player, isAdmin } = member;
 
   if (req.method === 'GET') {
     const wantsSquadScope = req.query.scope === 'squad';
@@ -72,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         replacementPlayerId,
         startDate,
         endDate,
-        createdByEmail: session.user.email,
+        createdByEmail: member.email,
       });
       res.status(201).json(replacement);
     } catch (error) {
