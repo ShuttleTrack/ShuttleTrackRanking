@@ -15,6 +15,7 @@ import { ValidationError } from '@/lib/api/validationError';
 import { computeGameDayCounts } from './counts';
 import { loadGameDayState, type Db } from './eligibility';
 import { withGameDayLock } from './lock';
+import { nominatorNameFor, nomineeRefusal } from './nominations';
 import { buildVacancyMessage } from './notifications';
 import { logSend, messageContextFor, sendGameDayPost } from './telegram';
 
@@ -144,10 +145,15 @@ export async function joinOpenSlot(
 
     const state = await loadGameDayState(tx, gameDay);
     if (!state.openSlotPoolIds.has(playerId)) {
+      // A nominee is an open-slot player, just not in this game day's pool - the generic "only
+      // open-slot players" would be false for them.
+      const nominatorName = nominatorNameFor(state, playerId);
       throw new ValidationError(
         state.structuralHolderIds.has(playerId)
           ? 'You already hold a slot on this game day - vote in or out instead'
-          : 'Only open-slot players can join the waiting list'
+          : nominatorName !== null
+            ? nomineeRefusal(nominatorName)
+            : 'Only open-slot players can join the waiting list'
       );
     }
 

@@ -132,6 +132,26 @@ export function buildVacancyMessage(ctx: MessageContext, input: VacancyMessageIn
   return null;
 }
 
+// Open-slot group, from the nomination post sync (SINGLE_DAY_NOMINATION_PLAN.md, "Telegram"): what
+// the group now needs to hear about one fulltime player's one-day hand-off. `previousNomineeName`
+// is who the group was last told - never a name it did not hear.
+export type NominationMessageInput =
+  | { kind: 'CREATED'; nominatorName: string; nomineeName: string }
+  | { kind: 'SWITCHED'; nominatorName: string; nomineeName: string; previousNomineeName: string }
+  | { kind: 'ENDED'; nominatorName: string; previousNomineeName: string };
+
+export function buildNominationMessage(ctx: MessageContext, input: NominationMessageInput): TelegramPost {
+  const nominator = escapeTelegramHtml(input.nominatorName);
+  const slot = `${nominator}'s slot for ${sessionLine(ctx)}`;
+  const line =
+    input.kind === 'CREATED'
+      ? `🔁 ${slot} goes to ${escapeTelegramHtml(input.nomineeName)}.`
+      : input.kind === 'SWITCHED'
+        ? `🔁 ${slot} now goes to ${escapeTelegramHtml(input.nomineeName)} instead of ${escapeTelegramHtml(input.previousNomineeName)}.`
+        : `↩️ ${slot} is no longer passed to ${escapeTelegramHtml(input.previousNomineeName)}.`;
+  return post(ctx, [line], 'See who is playing');
+}
+
 // Main group, when an already-announced game day is cancelled (resolved open question 4).
 export function buildCancellationMessage(ctx: MessageContext, reason: string): TelegramPost {
   return {

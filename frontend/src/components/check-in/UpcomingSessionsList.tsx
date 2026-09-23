@@ -3,8 +3,16 @@ import { useSquad } from '@/contexts/SquadContext';
 import { useUpcomingGameDays } from '@/hooks/useUpcomingGameDays';
 import { formatSessionTimeRange, formatSessionTitle } from '@/lib/check-in/schedule';
 import type { UpcomingGameDay } from '@/lib/check-in/types';
+import { capitalizeFirstLetter } from '@/utils/string';
 
 function chip(gameDay: UpcomingGameDay): { label: string; className: string } {
+  // One-day hand-offs first: the nominator's vote is IN, but "In" would say they are coming.
+  if (gameDay.standingInForName) {
+    return { label: `Playing (${capitalizeFirstLetter(gameDay.standingInForName)}'s slot)`, className: 'bg-primary/20 text-primary' };
+  }
+  if (gameDay.myNomineeName && gameDay.myVote === 'IN') {
+    return { label: `Passed to ${capitalizeFirstLetter(gameDay.myNomineeName)}`, className: 'bg-white/10 text-on-surface' };
+  }
   if (gameDay.myVote === 'IN') return { label: 'In', className: 'bg-primary/20 text-primary' };
   if (gameDay.myVote === 'OUT') return { label: 'Out', className: 'bg-red-950/40 text-red-400' };
   if (gameDay.myReservation) return { label: 'Slot passed to you', className: 'bg-primary/10 text-primary' };

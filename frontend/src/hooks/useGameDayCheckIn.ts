@@ -78,6 +78,13 @@ export function useGameDayCheckIn(date: string | undefined) {
   );
   const joinOrClaim = useCallback(() => run(() => send(`${base}/open-slot`, 'POST')), [base, run]);
   const leave = useCallback(() => run(() => send(`${base}/open-slot`, 'DELETE')), [base, run]);
+  // One-day slot hand-off (SINGLE_DAY_NOMINATION_PLAN.md): pass your slot on / switch who to, or
+  // take it back. Passing it on also sets your vote IN, so the page re-reads rather than guessing.
+  const nominate = useCallback(
+    (nomineePlayerId: number) => run(() => send(`${base}/nomination`, 'PUT', { nomineePlayerId })),
+    [base, run]
+  );
+  const revokeNomination = useCallback(() => run(() => send(`${base}/nomination`, 'DELETE')), [base, run]);
 
   return {
     view: data,
@@ -89,5 +96,9 @@ export function useGameDayCheckIn(date: string | undefined) {
     vote,
     joinOrClaim,
     leave,
+    nominate,
+    revokeNomination,
+    // Searched by the hand-off picker: GET ?query= returns { id, name, maskedEmail }[].
+    nominationUrl: base ? `${base}/nomination` : null,
   };
 }

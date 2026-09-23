@@ -12,6 +12,9 @@ vi.mock('@/lib/prisma', () => {
     // No live game days: the check-in reconciliation these write paths now run is covered by
     // lib/gameDay/reconcile.test.ts against a stateful fake.
     gameDay: { findMany: vi.fn(async () => []) },
+    // No one-day nominations either: the collision guardrail is covered by
+    // lib/gameDay/nominations.test.ts, against the same stateful fake.
+    gameDaySlotNomination: { findMany: vi.fn(async () => []) },
     $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(client)),
   };
   return { default: client };

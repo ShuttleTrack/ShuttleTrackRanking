@@ -22,16 +22,28 @@ vi.mock('@/lib/gameDay/lifecycle', () => ({
   cancelGameDay: vi.fn(),
 }));
 vi.mock('@/lib/gameDay/view', () => ({ getGameDayAttendance: vi.fn(async () => ({})) }));
+vi.mock('@/lib/gameDay/eligibility', () => ({ loadGameDayState: vi.fn(async () => ({})) }));
+vi.mock('@/lib/gameDay/nominations', () => ({
+  nominate: vi.fn(async (_s: number, _g: number, _nominator: number, nominee: number) => ({ nomineePlayerId: nominee })),
+  revokeNomination: vi.fn(async () => undefined),
+  nominationVerdict: vi.fn(() => ({ ok: true })),
+  nominationCandidates: vi.fn(() => [{ id: 7, name: 'Bob', email: 'bobby.tables@example.com' }]),
+}));
+vi.mock('@/lib/replacements', () => ({
+  maskEmail: (email: string) => `${email.slice(0, 5)}***${email.slice(email.lastIndexOf('@'))}`,
+}));
 vi.mock('@/lib/prisma', () => ({ default: { gameDay: { findUniqueOrThrow: vi.fn(async () => ({ id: 42 })) } } }));
 
 import { requireSquadMember } from '@/lib/auth';
 import { castVote } from '@/lib/gameDay/votes';
 import { joinOpenSlot, leaveOpenSlot } from '@/lib/gameDay/openSlots';
 import { releaseSlot } from '@/lib/gameDay/lifecycle';
+import { nominate, revokeNomination } from '@/lib/gameDay/nominations';
 import { ValidationError } from '@/lib/api/validationError';
 import voteHandler from './[date]/vote';
 import openSlotHandler from './[date]/open-slot';
 import adminHandler from './[date]/admin';
+import nominationHandler from './[date]/nomination';
 
 const member = requireSquadMember as unknown as ReturnType<typeof vi.fn>;
 const SESSION_PLAYER = { id: 5, squadId: 1, email: 'me@x.test' };
@@ -83,6 +95,38 @@ describe('a body naming another player has no effect', () => {
     await openSlotHandler(req('DELETE', SOMEONE_ELSE), res);
     expect(res.statusCode).toBe(204);
     expect(leaveOpenSlot).toHaveBeenCalledWith(1, 42, SESSION_PLAYER.id);
+  });
+});
+
+describe('slot nominations (SINGLE_DAY_NOMINATION_PLAN.md)', () => {
+  it('PUT nomination makes the SESSION player the nominator - a body naming another nominator is ignored', async () => {
+    const res = mockRes();
+    await nominationHandler(req('PUT', { nomineePlayerId: 7, nominatorPlayerId: 99, ...SOMEONE_ELSE }), res);
+    expect(res.statusCode).toBe(200);
+    expect(nominate).toHaveBeenCalledWith(1, 42, SESSION_PLAYER.id, 7);
+  });
+
+  it("DELETE nomination revokes the session player's own hand-off", async () => {
+    const res = mockRes();
+    await nominationHandler(req('DELETE', SOMEONE_ELSE), res);
+    expect(res.statusCode).toBe(204);
+    expect(revokeNomination).toHaveBeenCalledWith(1, 42, SESSION_PLAYER.id);
+  });
+
+  it('GET candidates returns masked addresses only - the route is open to any squad member', async () => {
+    const res = mockRes();
+    await nominationHandler({ ...req('GET'), query: { squadId: '1', date: '2026-09-23', query: 'bob' } } as unknown as NextApiRequest, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual([{ id: 7, name: 'Bob', maskedEmail: 'bobby***@example.com' }]);
+    expect(JSON.stringify(res.body)).not.toContain('bobby.tables');
+  });
+
+  it('a superadmin with no Player row cannot pass a slot on', async () => {
+    member.mockResolvedValue({ session: {}, email: 'root@x.test', player: null, isAdmin: true });
+    const res = mockRes();
+    await nominationHandler(req('PUT', { nomineePlayerId: 7 }), res);
+    expect(res.statusCode).toBe(403);
+    expect(nominate).not.toHaveBeenCalled();
   });
 });
 

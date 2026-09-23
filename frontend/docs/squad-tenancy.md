@@ -46,6 +46,7 @@ supersedes those now that the feature is built and in production.
   "Open-slot & replacement players" below.
 - **`GameDay`**, **`GameDayVote`**, **`GameDayOpenSlot`**, `Squad.gameDayOps` and
   `Game.gameDayId` - see "Game day check-in & attendance vote" below.
+- **`GameDaySlotNomination`** - a one-day slot hand-off; see "Single-day slot nominations" below.
 - **`Squad.openForOpenSlot`** (default `false`) and **`SquadJoinRequest`** - see
   "Self-registration & join requests" below.
 
@@ -149,6 +150,7 @@ flag - and, later, what signing in requires at all:
   pending request, squad-admin-only) - see "Open-slot & replacement players" below for all of
   these. `/api/squads/[squadId]/game-days` (GET), `/game-days/[date]` (GET),
   `/game-days/[date]/vote` (PUT), `/game-days/[date]/open-slot` (POST/DELETE),
+  `/game-days/[date]/nomination` (GET/PUT/DELETE - one-day slot hand-off),
   `/game-days/[date]/admin` (GET/PATCH, squad-admin-only), `/api/squads/[squadId]/game-day-ops`
   (PATCH, squad-admin-only) and `/api/admin/game-day-tick` (POST, superadmin-only) - see "Game day
   check-in & attendance vote" below.
@@ -524,6 +526,59 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   are unchanged. `POST /games` stamps `gameDayId` (400 naming the existing game on a second
   create). `Game.createdAt` stays the encounter date for submit/process.
 
+### Single-day slot nominations
+
+Full design doc: `SINGLE_DAY_NOMINATION_PLAN.md` at the repo root (PR #212). A fulltime player who
+holds their own slot on a game day can pass it to one open-slot player **for that day only**,
+arranged between the two of them beforehand. Summary of what's built (`lib/gameDay/nominations.ts`,
+`lib/gameDay/nominationPosts.ts`):
+
+- **Model.** `GameDaySlotNomination` (`GAME_DAY_SLOT_NOMINATION`) - nominator, nominee, game day,
+  plus `endedAt`/`endReason` (active = `endedAt` null, derived like `SlotReplacement.cancelledAt`;
+  ended rows are kept as history) and two Telegram stamps. Not a one-day `SlotReplacement` - no
+  3-playing-day minimum, no absentee Path 2, no admin approval to undo, and it does not move the
+  slot. "One active per nominator / per nominee per game day" is enforced under `withGameDayLock`,
+  since MySQL cannot express it as a unique index over a nullable column.
+- **The nominator keeps the slot and the vote; the nominee has none.** Nominating sets the
+  nominator's vote to IN. If the nominee can't come, they tell the nominator, who votes OUT - which
+  ends the nomination for good (`NOMINATOR_OUT`; a later IN is the nominator themselves). So
+  `slotsHeld`/`confirmedIn` never change. The nominee is taken out of **that game day's** open-slot
+  pool (`loadGameDayState`), so they cannot also queue for, or be promoted into, a second slot; their
+  `WAITING` row is deleted (not `WITHDRAWN`). They get a `NOMINEE` holding / role: no vote, no
+  waiting-list actions, and a "<nominator> holds the vote for this slot" refusal everywhere.
+- **Who may nominate:** a `FULLTIME` structural holder on the game date (not one covered by a
+  period replacement; not a replacement filler). **Who may be nominated:** a member of that game
+  day's open-slot pool. Both resolved against the game date, not today.
+- **Window.** Create, switch or revoke until **`votesCloseAt` itself** - not the status, which only
+  flips on the next 5-minute tick. After that the hand-off is frozen until the session ends, when the
+  scheduler ends it `SESSION_ENDED` (the normal end). Other ends: `REVOKED`, `SWITCHED`,
+  `ADMIN_RELEASE` / `PLAYER_DISABLED` (`removePlayerFromGameDay`, from either side - a disabled
+  *nominee* also deletes the nominator's IN, which was cast on their behalf), `GAME_DAY_CANCELLED`
+  (inside `cancelGameDay` - every cancellation path goes through it; `cancelOpenGameDays` is only the
+  disable path's loop). `recreateCancelledGameDay` deletes nomination rows with the votes. Once a
+  nomination ends early, the nominee is back in the pool: before 13:00 they can rejoin the waiting
+  list at the back; after it there is no queue, only a direct claim of a slot left over after the
+  waiting list was promoted.
+- **The roster swap lives in `buildRoster` (`lib/gameDay/view.ts`)** and nowhere else: an IN by a
+  nominator with an active (or `SESSION_ENDED`) nomination lists the nominee instead, with
+  `standingInFor`. `getGameDayAttendance().confirmed` comes from it, so Game Planner pre-ticks - and
+  the Elo run scores - the nominee, not the nominator.
+- **Period-replacement guardrail.** `createSlotReplacement` is rejected while its owner has, or its
+  replacement player is, an active nomination on a game day in range - "revoke that first" before
+  13:00, "already locked in" after; nominations whose session is over never block, stamped or not.
+- **Telegram** - open-slot group only (it is the queue the hand-off skips). Posts are the
+  *difference* between what the group was last told and what is true now, per nominator: "goes to
+  Bob", "now goes to Carol instead of Bob", "no longer passed to Bob". So a switch is one post, a
+  hand-off revoked before its first post landed posts nothing, and a failed send is retried by every
+  scheduler tick until it lands or the session ends - a live hand-off is not noise after 13:00.
+  Cancellation and the session end settle silently. No open-slot chat id = no posts, no retries.
+- **Absentee math unchanged** - the nominator is swept as if they voted OUT, matching the deferred
+  "double liability" decision for period replacements.
+- **Route**: `GET|PUT|DELETE /game-days/[date]/nomination` - GET lists candidates as `{ id, name,
+  maskedEmail }` (masked, like `searchOpenSlotPlayers` - any squad member can call it), PUT
+  `{ nomineePlayerId }` creates or switches, DELETE revokes. The nominator always comes from the
+  session; `nomineePlayerId` is the object of the action, not an identity.
+
 ## Production migration (history)
 
 Squad tenancy needed a real data migration (existing single-squad data → one `Squad`), done in
@@ -608,3 +663,5 @@ schema.
     game-day check-in & attendance vote (`ATTENDANCE_VOTE_PLAN.md`).
 14. [#211](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/211) - game-day check-in &
     attendance vote implementation (see "Game day check-in & attendance vote" above).
+15. [#212](https://github.com/ShuttleTrack/ShuttleTrackRanking/pull/212) - design doc for
+    single-day slot nominations (`SINGLE_DAY_NOMINATION_PLAN.md`).

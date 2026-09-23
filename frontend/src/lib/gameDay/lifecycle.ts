@@ -4,6 +4,8 @@
 import prisma from '@/lib/prisma';
 import { ValidationError } from '@/lib/api/validationError';
 import { GAME_DAY_TX_OPTIONS, withGameDayLock } from './lock';
+import { endAllNominations } from './nominations';
+import { syncUnsettledNominationPosts } from './nominationPosts';
 import { buildCancellationMessage } from './notifications';
 import { deliverVacancyPlan, deliverVacancyPlans, planVacancySync } from './openSlots';
 import { removePlayerFromGameDay, removePlayerFromGameDays } from './reconcile';
@@ -24,13 +26,21 @@ export async function closeVoting(gameDayId: number, now: Date = new Date()): Pr
 // Terminal (resolved open question 6): removing a skipDate later creates a brand-new row with an
 // empty vote rather than un-cancelling this one. Tells the main group when it had already been
 // told to vote (resolved open question 4).
-export async function cancelGameDay(gameDayId: number, reason: string): Promise<boolean> {
+//
+// THE place a cancellation ends one-day nominations (SINGLE_DAY_NOMINATION_PLAN.md): skip-date
+// cancellation, the Pass A backstops and the admin cancel all call this directly, while
+// cancelOpenGameDays is only the disable path's loop over it. And recreateCancelledGameDay refuses
+// to run when a Game exists, so a nomination left active here could stay active for good.
+export async function cancelGameDay(gameDayId: number, reason: string, now: Date = new Date()): Promise<boolean> {
   const cancelled = await withGameDayLock(gameDayId, async (tx, gameDay) => {
     if (gameDay.status === 'CANCELLED') return false;
     await tx.gameDay.update({ where: { id: gameDayId }, data: { status: 'CANCELLED' } });
+    await endAllNominations(tx, gameDayId, 'GAME_DAY_CANCELLED', now);
     return true;
   });
   if (!cancelled) return false;
+  // Settles silently - the main-group cancellation post below covers the day.
+  await syncUnsettledNominationPosts(now, gameDayId);
 
   try {
     const gameDay = await prisma.gameDay.findUnique({ where: { id: gameDayId }, include: { squad: true } });
@@ -73,6 +83,7 @@ export async function removeDisabledPlayerFromGameDays(squadId: number, playerId
       GAME_DAY_TX_OPTIONS
     );
     await deliverVacancyPlans(plans);
+    await syncUnsettledNominationPosts();
   } catch (error) {
     console.error(`[game-day] Failed to clear disabled player ${playerId} from squad ${squadId}'s game days`, error);
   }
@@ -96,4 +107,5 @@ export async function releaseSlot(squadId: number, gameDayId: number, playerId: 
     return removePlayerFromGameDay(tx, gameDayId, playerId, 'withdraw', now);
   });
   await deliverVacancyPlan(plan);
+  await syncUnsettledNominationPosts(now, gameDayId);
 }

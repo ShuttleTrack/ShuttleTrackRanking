@@ -8,6 +8,7 @@ import { countPlayingDaysBetween, getPlayingDatesInRange } from '@/lib/schedulin
 import type { SquadScheduleData } from '@/lib/squadSchedule';
 import { GAME_DAY_TX_OPTIONS } from '@/lib/gameDay/lock';
 import { deliverVacancyPlans, type VacancyPlan } from '@/lib/gameDay/openSlots';
+import { findBlockingNomination } from '@/lib/gameDay/nominations';
 import { reconcileSlotTransfer } from '@/lib/gameDay/reconcile';
 
 export const MIN_REPLACEMENT_PLAYING_DAYS = 3;
@@ -246,6 +247,20 @@ export async function createSlotReplacement(
       fromDate: startDate,
       toDate: endDate,
     });
+    // A one-day hand-off already announced to the open-slot group must not be silently undone by
+    // a period window (SINGLE_DAY_NOMINATION_PLAN.md, Decision 7). Checked AFTER the reconcile
+    // above has locked the live game days in range - nominations are only written under those
+    // locks - and throwing rolls the whole transaction back, reconciliation included.
+    const blocked = await findBlockingNomination(tx, {
+      squadId,
+      ownerId: fulltimePlayerId,
+      replacementId: replacementPlayerId,
+      fromDate: startDate,
+      toDate: endDate,
+    });
+    if (blocked) {
+      throw new Error(blocked);
+    }
     return { replacement: created, plans };
   }, GAME_DAY_TX_OPTIONS);
   await deliverVacancyPlans(plans);
@@ -431,7 +446,7 @@ export interface OpenSlotPlayerOption {
 // that is what gets hidden (beyond a 5-character prefix - enough to disambiguate similarly-named
 // players without handing out the full address); the domain stays because it is usually the
 // disambiguating part in a friend group (personal vs work address).
-function maskEmail(email: string): string {
+export function maskEmail(email: string): string {
   const atIndex = email.lastIndexOf('@');
   if (atIndex <= 0) return '***';
   const visible = email.slice(0, Math.min(5, atIndex));

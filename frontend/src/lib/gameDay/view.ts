@@ -2,11 +2,21 @@
 // "API routes" / "UI"). Everything here is derived from the same loadGameDayState +
 // computeGameDayCounts + evaluateVote the write paths use, so the page can never offer an
 // action the server would refuse.
-import type { GameDay, GameDayStatus, OpenSlotClaimSource, OpenSlotEntryStatus, Player, VoteChoice } from '@prisma/client';
+import type {
+  GameDay,
+  GameDaySlotNomination,
+  GameDayStatus,
+  OpenSlotClaimSource,
+  OpenSlotEntryStatus,
+  Player,
+  SlotNominationEndReason,
+  VoteChoice,
+} from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { dateOnlyFromIso, isoFromDateOnly } from './clock';
 import { computeGameDayCounts } from './counts';
 import { loadGameDayState, type GameDayState } from './eligibility';
+import { nominationVerdict, nominatorNameFor, nomineeRefusal } from './nominations';
 import { clockOf } from './scheduler';
 import { evaluateVote, holdingOf, voteContextFor, type Holding, type VoteVerdict } from './votes';
 import { isToday, sessionPhase } from './voteWindow';
@@ -33,6 +43,9 @@ export interface RosterPlayer {
   playerRank: number | null;
   isOpenSlot: boolean;
   hasScore: boolean;
+  // Set when this player is in the roster through a one-day nomination: playing in that
+  // fulltime player's slot, who is then not listed themselves (SINGLE_DAY_NOMINATION_PLAN.md).
+  standingInFor: { id: number; name: string } | null;
 }
 
 export interface UnconfirmedPlayer extends RosterPlayer {
@@ -50,21 +63,46 @@ function rosterPlayer(player: Player, state: GameDayState): RosterPlayer {
     playerRank: player.playerRank !== null && player.playerRank > 0 ? player.playerRank : null,
     isOpenSlot: state.assignedIds.has(player.id),
     hasScore: player.rankScore !== null,
+    standingInFor: null,
   };
+}
+
+// Whose slot a nominee plays in, keyed by nominator: the active nomination, or the one that ran
+// its course (SESSION_ENDED) - so a past game day's roster still shows who actually played.
+// Never one ended any other way: those all mean the nominee is not coming.
+function standInsByNominator(state: GameDayState): Map<number, GameDaySlotNomination> {
+  const standIns = new Map<number, GameDaySlotNomination>();
+  for (const nomination of state.nominations) {
+    if (nomination.endedAt === null || nomination.endReason === 'SESSION_ENDED') {
+      standIns.set(nomination.nominatorPlayerId, nomination);
+    }
+  }
+  return standIns;
 }
 
 const byRankThenName = (a: RosterPlayer, b: RosterPlayer) =>
   (a.playerRank ?? Number.MAX_SAFE_INTEGER) - (b.playerRank ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name);
 
+// The ONE place a nominee replaces their nominator as "attending". Game Planner pre-ticks
+// getGameDayAttendance().confirmed, which is this function's inPlayers - so a swap made anywhere
+// else would still have the planner tick, and the Elo run score, the nominator.
 function buildRoster(state: GameDayState) {
   const counts = computeGameDayCounts(state);
+  const standIns = standInsByNominator(state);
   const inPlayers: RosterPlayer[] = [];
   const outPlayers: RosterPlayer[] = [];
   for (const vote of state.votes) {
     const player = state.players.get(vote.playerId);
     if (!player || !state.voterIds.has(vote.playerId) || vote.inheritedFromPlayerId !== null) continue;
-    if (vote.choice === 'IN') inPlayers.push(rosterPlayer(player, state));
-    else if (vote.choice === 'OUT') outPlayers.push(rosterPlayer(player, state));
+    if (vote.choice === 'IN') {
+      const standIn = standIns.get(player.id);
+      const nominee = standIn ? state.players.get(standIn.nomineePlayerId) : undefined;
+      inPlayers.push(
+        nominee
+          ? { ...rosterPlayer(nominee, state), standingInFor: { id: player.id, name: player.name } }
+          : rosterPlayer(player, state)
+      );
+    } else if (vote.choice === 'OUT') outPlayers.push(rosterPlayer(player, state));
   }
   const unconfirmed: UnconfirmedPlayer[] = [
     ...counts.unconfirmedAssigneeIds.map((id) => ({
@@ -90,7 +128,16 @@ function buildRoster(state: GameDayState) {
   };
 }
 
-export type GameDayRole = 'VOTER' | 'OPEN_SLOT' | 'OBSERVER';
+// NOMINEE: playing in someone else's slot through a one-day nomination - no vote and no
+// waiting-list actions, just the arrangement (SINGLE_DAY_NOMINATION_PLAN.md, "UI").
+export type GameDayRole = 'VOTER' | 'NOMINEE' | 'OPEN_SLOT' | 'OBSERVER';
+
+function roleOf(holding: Holding): GameDayRole {
+  if (holding === 'STRUCTURAL' || holding === 'ASSIGNED') return 'VOTER';
+  if (holding === 'NOMINEE') return 'NOMINEE';
+  if (holding === 'OPEN_SLOT_POOL') return 'OPEN_SLOT';
+  return 'OBSERVER';
+}
 
 export interface GameDaySummary {
   gameDate: string;
@@ -129,6 +176,15 @@ export interface GameDayView extends GameDaySummary {
     joinWaitingList: VoteVerdict;
     leaveWaitingList: VoteVerdict;
     claimSlot: VoteVerdict;
+    // Create, switch or revoke a one-day nomination - one verdict, since all three share the
+    // same window and the same "fulltime, own slot" rule.
+    nominate: VoteVerdict;
+  };
+  // Your side of a one-day nomination, if any. `mine`: you passed your slot on (the nominator).
+  // `standingInFor`: you are playing in someone else's slot (the nominee).
+  nomination: {
+    mine: { nomineeId: number; nomineeName: string } | null;
+    standingInFor: { id: number; name: string } | null;
   };
   // "Roster hidden until you vote" applies to voters only (resolved open question 3): anyone who
   // cannot vote sees it straight away, since there is nothing to withhold it against. Withheld
@@ -151,11 +207,14 @@ function openSlotActions(state: GameDayState, playerId: number, now: Date, vacan
   const entry = state.openSlots.find((s) => s.playerId === playerId);
   const inPool = state.openSlotPoolIds.has(playerId);
   const pastLock = now.getTime() >= gameDay.slotLockAt.getTime();
+  const nominatorName = nominatorNameFor(state, playerId);
   const blocked =
     gameDay.status === 'CANCELLED'
       ? 'This game day has been cancelled'
       : !inPool
-        ? 'Only open-slot players can join the waiting list'
+        ? nominatorName !== null
+          ? nomineeRefusal(nominatorName)
+          : 'Only open-slot players can join the waiting list'
         : gameDay.minPlayers === null
           ? 'This game day has no open slots'
           : pastLock
@@ -206,7 +265,9 @@ export async function getGameDayView(gameDay: GameDay, player: Player | null, no
   const { counts, inPlayers, outPlayers, unconfirmed, waiting } = buildRoster(state);
   const playerId = player?.id ?? null;
   const holding: Holding = playerId === null ? 'NONE' : holdingOf(state, playerId);
-  const role: GameDayRole = holding === 'STRUCTURAL' || holding === 'ASSIGNED' ? 'VOTER' : holding === 'OPEN_SLOT_POOL' ? 'OPEN_SLOT' : 'OBSERVER';
+  const role = roleOf(holding);
+  const myNomination = playerId === null ? undefined : state.activeNominationByNominator.get(playerId);
+  const receivedNomination = playerId === null ? undefined : state.activeNominationByNominee.get(playerId);
 
   const vote = playerId === null ? null : state.votes.find((v) => v.playerId === playerId) ?? null;
   const ownVote = vote && vote.inheritedFromPlayerId === null ? vote.choice : null;
@@ -234,6 +295,21 @@ export async function getGameDayView(gameDay: GameDay, player: Player | null, no
       ...(playerId === null
         ? { joinWaitingList: notAVoter, leaveWaitingList: notAVoter, claimSlot: notAVoter }
         : openSlotActions(state, playerId, now, counts.vacancies)),
+      nominate: playerId === null ? notAVoter : nominationVerdict(state, playerId, now),
+    },
+    nomination: {
+      mine: myNomination
+        ? {
+            nomineeId: myNomination.nomineePlayerId,
+            nomineeName: state.players.get(myNomination.nomineePlayerId)?.name ?? 'someone',
+          }
+        : null,
+      standingInFor: receivedNomination
+        ? {
+            id: receivedNomination.nominatorPlayerId,
+            name: state.players.get(receivedNomination.nominatorPlayerId)?.name ?? 'someone',
+          }
+        : null,
     },
     rosterVisible,
     roster: rosterVisible
@@ -249,6 +325,9 @@ export interface UpcomingGameDay extends GameDaySummary {
   myVote: VoteChoice | null;
   myReservation: boolean;
   myOpenSlotStatus: OpenSlotEntryStatus | null;
+  // One-day nominations: whose slot you are playing in, or who you passed yours to.
+  standingInForName: string | null;
+  myNomineeName: string | null;
 }
 
 // "Upcoming" means the session has not ended - NOT that voting is open. Filtering on
@@ -265,13 +344,16 @@ export async function listUpcomingGameDays(squadId: number, player: Player | nul
       const state = await loadGameDayState(prisma, gameDay);
       const holding = player ? holdingOf(state, player.id) : 'NONE';
       const vote = player ? state.votes.find((v) => v.playerId === player.id) ?? null : null;
+      const mine = player ? state.activeNominationByNominator.get(player.id) : undefined;
       return {
         ...summaryOf(gameDay),
         isToday: isToday(clockOf(gameDay), now),
-        role: (holding === 'STRUCTURAL' || holding === 'ASSIGNED' ? 'VOTER' : holding === 'OPEN_SLOT_POOL' ? 'OPEN_SLOT' : 'OBSERVER') as GameDayRole,
+        role: roleOf(holding),
         myVote: vote && vote.inheritedFromPlayerId === null ? vote.choice : null,
         myReservation: vote !== null && vote.inheritedFromPlayerId !== null,
         myOpenSlotStatus: player ? state.openSlots.find((s) => s.playerId === player.id)?.status ?? null : null,
+        standingInForName: player ? nominatorNameFor(state, player.id) : null,
+        myNomineeName: mine ? state.players.get(mine.nomineePlayerId)?.name ?? null : null,
       };
     })
   );
@@ -290,6 +372,16 @@ export interface GameDayAttendance extends GameDaySummary {
   unconfirmed: UnconfirmedPlayer[];
   outAfterDeadline: RosterPlayer[];
   waitingList: RosterPlayer[];
+  // The day's one-day nominations, ended ones included with their reason - the "tracked
+  // separately" record, and the answer to "why was Bob playing?".
+  nominations: {
+    id: number;
+    nominatorName: string;
+    nomineeName: string;
+    createdAt: string;
+    endedAt: string | null;
+    endReason: SlotNominationEndReason | null;
+  }[];
 }
 
 // The admin view Game Planner reads.
@@ -318,5 +410,13 @@ export async function getGameDayAttendance(gameDay: GameDay): Promise<GameDayAtt
     unconfirmed,
     outAfterDeadline,
     waitingList: waiting.map((s) => rosterPlayer(state.players.get(s.playerId)!, state)),
+    nominations: state.nominations.map((n) => ({
+      id: n.id,
+      nominatorName: state.players.get(n.nominatorPlayerId)?.name ?? `#${n.nominatorPlayerId}`,
+      nomineeName: state.players.get(n.nomineePlayerId)?.name ?? `#${n.nomineePlayerId}`,
+      createdAt: n.createdAt.toISOString(),
+      endedAt: n.endedAt?.toISOString() ?? null,
+      endReason: n.endReason,
+    })),
   };
 }

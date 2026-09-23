@@ -12,7 +12,16 @@
 type Row = Record<string, any>;
 type Where = Record<string, any>;
 
-const MODELS = ['player', 'slotReplacement', 'squad', 'gameDay', 'gameDayVote', 'gameDayOpenSlot', 'game'] as const;
+const MODELS = [
+  'player',
+  'slotReplacement',
+  'squad',
+  'gameDay',
+  'gameDayVote',
+  'gameDayOpenSlot',
+  'gameDaySlotNomination',
+  'game',
+] as const;
 type ModelName = (typeof MODELS)[number];
 
 // Compound unique keys used in `where`, and the fields that must be unique together.
@@ -49,6 +58,8 @@ function defaultsFor(model: ModelName, now: Date): Row {
       return { inheritedFromPlayerId: null, votedAt: now, updatedAt: now };
     case 'gameDayOpenSlot':
       return { status: 'WAITING', source: null, joinedAt: now, assignedAt: null, withdrawnAt: null };
+    case 'gameDaySlotNomination':
+      return { createdAt: now, endedAt: null, endReason: null, announcedAt: null, retractedAt: null };
     case 'player':
       return { playerType: 'FULLTIME', playerStatus: 'ACTIVE', colorHex: 'aaaaaa', rankScore: 1000, playerRank: 1 };
     case 'slotReplacement':

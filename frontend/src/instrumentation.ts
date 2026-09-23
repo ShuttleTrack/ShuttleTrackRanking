@@ -29,7 +29,14 @@ export async function register() {
       cron.schedule('*/5 * * * *', () => {
         runGameDayTick()
           .then((summary) => {
-            if (summary.created || summary.recreated || summary.cancelled || summary.closed || summary.errors) {
+            if (
+              summary.created ||
+              summary.recreated ||
+              summary.cancelled ||
+              summary.closed ||
+              summary.nominationsEnded ||
+              summary.errors
+            ) {
               console.log('[game-day] Tick', summary);
             }
           })

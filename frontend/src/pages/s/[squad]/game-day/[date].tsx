@@ -27,7 +27,20 @@ const GameDayCheckInPage = (_props: GameDayCheckInPageProps) => {
   // The server gate has already decided access; `true` keeps the hook's !isUser redirect from
   // fighting the superadmin-observer case it admits.
   const { status } = useRequireUser(true);
-  const { view, isLoading, notFound, error, actionError, pending, vote, joinOrClaim, leave } = useGameDayCheckIn(date);
+  const {
+    view,
+    isLoading,
+    notFound,
+    error,
+    actionError,
+    pending,
+    vote,
+    joinOrClaim,
+    leave,
+    nominate,
+    revokeNomination,
+    nominationUrl,
+  } = useGameDayCheckIn(date);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -60,6 +73,9 @@ const GameDayCheckInPage = (_props: GameDayCheckInPageProps) => {
           onVote={vote}
           onJoinOrClaim={joinOrClaim}
           onLeave={leave}
+          nominationUrl={nominationUrl}
+          onNominate={nominate}
+          onRevokeNomination={revokeNomination}
         />
       )}
     </div>

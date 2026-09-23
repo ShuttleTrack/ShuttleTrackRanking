@@ -12,6 +12,7 @@ import {
 } from '@/lib/check-in/schedule';
 import type { CheckInVote, GameDayView } from '@/lib/check-in/types';
 import { CheckInRoster } from './CheckInRoster';
+import { NomineePanel, SlotHandOff } from './SlotHandOff';
 import {
   CheckInVoteButtons,
   checkInButtonBase,
@@ -50,6 +51,10 @@ interface CheckInViewProps {
   onVote: (vote: CheckInVote) => void;
   onJoinOrClaim: () => void;
   onLeave: () => void;
+  // One-day slot hand-off (SINGLE_DAY_NOMINATION_PLAN.md).
+  nominationUrl?: string | null;
+  onNominate?: (nomineeId: number) => void;
+  onRevokeNomination?: () => void;
 }
 
 function phaseChipClass(phase: ReturnType<typeof sessionPhase>): string {
@@ -271,7 +276,19 @@ function OpenSlotPanel({ view, pending, onJoinOrClaim, onLeave }: Pick<CheckInVi
   );
 }
 
-export function CheckInView({ view, now, avatarUrl, pending, actionError, onVote, onJoinOrClaim, onLeave }: CheckInViewProps) {
+export function CheckInView({
+  view,
+  now,
+  avatarUrl,
+  pending,
+  actionError,
+  onVote,
+  onJoinOrClaim,
+  onLeave,
+  nominationUrl = null,
+  onNominate,
+  onRevokeNomination,
+}: CheckInViewProps) {
   const showRoster = view.rosterVisible && view.roster !== null;
 
   return (
@@ -301,7 +318,20 @@ export function CheckInView({ view, now, avatarUrl, pending, actionError, onVote
         {view.status !== 'CANCELLED' ? (
           <div className="mt-4 border-t border-gray-600 pt-4">
             {view.role === 'VOTER' ? (
-              <VoterPanel view={view} pending={pending} onVote={onVote} rosterHidden={!showRoster} />
+              <>
+                <VoterPanel view={view} pending={pending} onVote={onVote} rosterHidden={!showRoster} />
+                {onNominate && onRevokeNomination ? (
+                  <SlotHandOff
+                    view={view}
+                    nominationUrl={nominationUrl}
+                    pending={pending}
+                    onNominate={onNominate}
+                    onRevoke={onRevokeNomination}
+                  />
+                ) : null}
+              </>
+            ) : view.role === 'NOMINEE' ? (
+              <NomineePanel view={view} />
             ) : view.role === 'OPEN_SLOT' ? (
               <OpenSlotPanel view={view} pending={pending} onJoinOrClaim={onJoinOrClaim} onLeave={onLeave} />
             ) : (
