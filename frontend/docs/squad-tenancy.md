@@ -515,7 +515,10 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   global `TELEGRAM_CHAT_ID` whatever the squad - that env var is gone.
 - **Routes**: `GET /game-days` (upcoming = not ended and not cancelled - *not* "voting open",
   which would drop today's row at 13:00), `GET /game-days/[date]` (the caller's view: role, vote,
-  allowed actions, and the roster - withheld from a voter who has not voted yet), `PUT
+  allowed actions, and the roster - withheld from a voter who has not voted yet; In/Out listed
+  latest vote first; squad admins and super admins also always get the waiting list by name, in
+  join order - even while the In/Out roster is withheld from them - where everyone else only gets
+  its count), `PUT
   /game-days/[date]/vote`, `POST|DELETE /game-days/[date]/open-slot`, `GET|PATCH
   /game-days/[date]/admin` (`close` / `cancel` / `release`). `[date]` is `YYYY-MM-DD` or 400;
   no row is 404. **Identity rule**: the acting player always comes from the session, never a

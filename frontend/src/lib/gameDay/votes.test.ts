@@ -6,8 +6,10 @@ vi.mock('@/lib/telegram/sendMessage', async (importOriginal) => ({
   sendTelegramMessage: vi.fn(async () => ({ ok: true })),
 }));
 
+import type { GameDay, Player } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import type { FakePrisma } from './testing/fakePrisma';
+import { getGameDayView } from './view';
 import { castVote, evaluateVote, type VoteContext } from './votes';
 import {
   T,
@@ -180,5 +182,55 @@ describe('evaluateVote (the rule table the page also renders from)', () => {
 
   it('lets an inherited reservation be released with OUT', () => {
     expect(evaluateVote({ ...base, vote: { choice: 'IN', inheritedFromPlayerId: 7 } }, 'OUT')).toEqual({ ok: true });
+  });
+});
+
+describe('check-in roster order', () => {
+  const at = (minute: number) => new Date(T.beforeClose.getTime() + minute * 60_000);
+
+  it('lists the latest vote first, and a changed vote moves to the top of its new side', async () => {
+    const gd = seedGameDay(db);
+    const [ada, bob, cy, dee] = ['ada', 'bob', 'cy', 'dee'].map((n) => fulltime(db, n));
+    await castVote(1, gd.id, ada.id, 'IN', at(0));
+    await castVote(1, gd.id, bob.id, 'IN', at(1));
+    await castVote(1, gd.id, cy.id, 'OUT', at(2));
+    await castVote(1, gd.id, dee.id, 'IN', at(3));
+    await castVote(1, gd.id, ada.id, 'OUT', at(4));
+
+    const gameDay = db.store.gameDay.find((g) => g.id === gd.id) as unknown as GameDay;
+    const { roster } = await getGameDayView(gameDay, ada as unknown as Player, at(5));
+    expect(roster!.in.map((p) => p.name)).toEqual(['dee', 'bob']);
+    expect(roster!.out.map((p) => p.name)).toEqual(['ada', 'cy']);
+  });
+});
+
+describe('waiting list on the check-in page', () => {
+  it('names the waiting players, in join order, to admins only', async () => {
+    const gd = seedGameDay(db);
+    const ada = fulltime(db, 'ada');
+    const [zed, amy] = ['zed', 'amy'].map((n) => openSlotPlayer(db, n));
+    seedOpenSlot(db, gd.id, zed.id, { joinedAt: new Date('2026-09-22T08:00:00Z') });
+    seedOpenSlot(db, gd.id, amy.id, { joinedAt: new Date('2026-09-22T09:00:00Z') });
+    await castVote(1, gd.id, ada.id, 'IN', T.beforeClose);
+
+    const gameDay = db.store.gameDay.find((g) => g.id === gd.id) as unknown as GameDay;
+    const asAdmin = await getGameDayView(gameDay, null, T.beforeClose, { isAdmin: true });
+    expect(asAdmin.waitingList!.map((p) => p.name)).toEqual(['zed', 'amy']);
+
+    const asPlayer = await getGameDayView(gameDay, ada as unknown as Player, T.beforeClose);
+    expect(asPlayer.roster!.waitingCount).toBe(2);
+    expect(asPlayer.waitingList).toBeNull();
+  });
+
+  it('shows an admin who has not voted yet the waiting list, but still withholds In/Out', async () => {
+    const gd = seedGameDay(db);
+    const adminPlayer = fulltime(db, 'boss');
+    const zed = openSlotPlayer(db, 'zed');
+    seedOpenSlot(db, gd.id, zed.id);
+
+    const gameDay = db.store.gameDay.find((g) => g.id === gd.id) as unknown as GameDay;
+    const view = await getGameDayView(gameDay, adminPlayer as unknown as Player, T.beforeClose, { isAdmin: true });
+    expect(view.roster).toBeNull();
+    expect(view.waitingList!.map((p) => p.name)).toEqual(['zed']);
   });
 });

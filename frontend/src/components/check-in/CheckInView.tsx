@@ -11,7 +11,7 @@ import {
   sessionStatusLabel,
 } from '@/lib/check-in/schedule';
 import type { CheckInVote, GameDayView } from '@/lib/check-in/types';
-import { CheckInRoster } from './CheckInRoster';
+import { CheckInRoster, WaitingList } from './CheckInRoster';
 import { NomineePanel, SlotHandOff } from './SlotHandOff';
 import {
   CheckInVoteButtons,
@@ -309,10 +309,14 @@ export function CheckInView({
             inPlayers={view.roster!.in}
             outPlayers={view.roster!.out}
             awaitingConfirmation={view.roster!.awaitingConfirmation}
-            waitingCount={view.roster!.waitingCount}
+            waitingCount={view.waitingList ? 0 : view.roster!.waitingCount}
             currentPlayerId={view.myPlayerId ?? undefined}
             avatarUrl={avatarUrl}
           />
+        ) : null}
+
+        {view.waitingList && view.waitingList.length > 0 ? (
+          <WaitingList players={view.waitingList} currentPlayerId={view.myPlayerId ?? undefined} avatarUrl={avatarUrl} />
         ) : null}
 
         {view.status !== 'CANCELLED' ? (
