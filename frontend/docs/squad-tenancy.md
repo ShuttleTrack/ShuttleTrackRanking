@@ -513,6 +513,19 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   only names the event. With check-in off there is no chat id, and the route answers `skipped`.
   This replaced the old flat `/api/notify`, which was superadmin-only and always posted to one
   global `TELEGRAM_CHAT_ID` whatever the squad - that env var is gone.
+- **Admin group notifications** (`Squad.adminTelegramChatId`, `lib/adminNotifications.ts`): a
+  third, optional per-squad Telegram group, for the squad's admins. Posted to after the write
+  commits: a new join request (`POST /join-requests`) and a replacement cancel/shorten request
+  (`PATCH /replacements/[id]`) - both pending admin actions, linking to the admin Players page -
+  plus a new long-term `SlotReplacement` (`POST /replacements`) as an important roster update.
+  Its own nullable column, deliberately **not** in `gameDayOps`: that blob is cleared whenever
+  check-in is off, and join requests and replacements work without check-in. Same shared
+  `TELEGRAM_BOT_TOKEN`. Squad-admin-editable via `PATCH /admin-telegram` (validated by the same
+  `normaliseChatId` as the check-in chat ids) and an "Admin notifications" card on the settings
+  page; returned flat as `adminTelegramChatId` on `GET /api/squads/[squadId]`. Sends are
+  fire-and-forget from the route and never reject - null chat id means nothing is sent, and a
+  Telegram failure is only logged, never turned into an error for a request that already
+  succeeded. Not sent (yet): admin decisions, join-request withdrawals, one-day nominations.
 - **Routes**: `GET /game-days` (upcoming = not ended and not cancelled - *not* "voting open",
   which would drop today's row at 13:00), `GET /game-days/[date]` (the caller's view: role, vote,
   allowed actions, and the roster - withheld from a voter who has not voted yet; In/Out listed

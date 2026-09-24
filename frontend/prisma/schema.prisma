@@ -296,6 +296,14 @@ model Squad {
   // Default false so no existing squad starts receiving requests without its admin opting in.
   openForOpenSlot Boolean @default(false) @map("open_for_open_slot")
 
+  // Telegram chat id of this squad's admin group: where pending admin actions (a join request, a
+  // replacement cancellation/shorten request) and important roster updates (a new long-term
+  // replacement) are posted - lib/adminNotifications.ts. Same shared TELEGRAM_BOT_TOKEN as every
+  // other post. Deliberately its own column rather than a field in gameDayOps: that blob is
+  // cleared whenever check-in is off, but join requests and replacements work without check-in.
+  // Null = no admin group, nothing sent.
+  adminTelegramChatId String? @map("admin_telegram_chat_id")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

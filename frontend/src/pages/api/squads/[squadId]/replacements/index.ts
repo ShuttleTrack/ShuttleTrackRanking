@@ -6,6 +6,7 @@ import {
   listSlotReplacementsForFulltimePlayer,
 } from '@/lib/replacements';
 import { parseSquadId } from '@/lib/api/squadParam';
+import { notifyAdminsOfReplacement } from '@/lib/adminNotifications';
 
 // GET: returns the caller's *own* nominations by default, whoever they are. `?scope=squad` asks
 // for every replacement in the squad (read-only admin oversight) and is rejected for anyone who
@@ -66,6 +67,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         endDate,
         createdByEmail: member.email,
       });
+      // Not awaited, and never rejects - see join-requests/index.ts.
+      void notifyAdminsOfReplacement(replacement);
       res.status(201).json(replacement);
     } catch (error) {
       console.error('Create Replacement API Error:', error);

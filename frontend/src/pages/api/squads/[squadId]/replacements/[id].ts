@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 import { requestCancelReplacementCancellation, requestReplacementShortening } from '@/lib/replacements';
 import { parseSquadId } from '@/lib/api/squadParam';
+import { notifyAdminsOfCancellationRequest } from '@/lib/adminNotifications';
 
 // PATCH *requests* ending a replacement early - either outright (no body, or `{ cancel: true }`)
 // or by pulling its end date in (`{ endDate }`). Only the nominating fulltime player can request
@@ -36,6 +37,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const replacement = newEndDate
       ? await requestReplacementShortening(squadId, replacementId, session.user.email, newEndDate)
       : await requestCancelReplacementCancellation(squadId, replacementId, session.user.email);
+    // Not awaited, and never rejects - see join-requests/index.ts.
+    void notifyAdminsOfCancellationRequest(replacement);
     res.status(200).json(replacement);
   } catch (error) {
     console.error('Cancel Replacement API Error:', error);
