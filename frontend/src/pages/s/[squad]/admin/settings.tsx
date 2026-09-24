@@ -97,6 +97,11 @@ const SquadSettingsPage = () => {
   const [isSavingCheckIn, setIsSavingCheckIn] = useState(false);
   const [checkInSaved, setCheckInSaved] = useState<string | null>(null);
 
+  const [adminTelegramChatId, setAdminTelegramChatId] = useState('');
+  const [adminTelegramError, setAdminTelegramError] = useState<string | null>(null);
+  const [isSavingAdminTelegram, setIsSavingAdminTelegram] = useState(false);
+  const [adminTelegramSaved, setAdminTelegramSaved] = useState(false);
+
   useEffect(() => {
     if (!settings) return;
     setIsPublic(settings.isPublic);
@@ -113,6 +118,7 @@ const SquadSettingsPage = () => {
     setMinPlayersForOpenSlot(settings.gameDayMinPlayersForOpenSlot?.toString() ?? '');
     setTelegramMainChatId(settings.gameDayTelegramMainChatId ?? '');
     setTelegramOpenSlotChatId(settings.gameDayTelegramOpenSlotChatId ?? '');
+    setAdminTelegramChatId(settings.adminTelegramChatId ?? '');
     setOpenSlotAbsenteeGraceDays(settings.openSlotAbsenteeGraceDays);
     setOpenSlotVisibilityGameDays(settings.openSlotVisibilityGameDays);
     setOpenForOpenSlot(settings.openForOpenSlot);
@@ -216,6 +222,30 @@ const SquadSettingsPage = () => {
       setCheckInError(err instanceof Error ? err.message : 'Failed to save check-in settings');
     } finally {
       setIsSavingCheckIn(false);
+    }
+  };
+
+  const handleSaveAdminTelegram = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingAdminTelegram(true);
+    setAdminTelegramError(null);
+    setAdminTelegramSaved(false);
+    try {
+      const response = await fetch(`/api/squads/${squadId}/admin-telegram`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminTelegramChatId }),
+      });
+      if (!response.ok) {
+        const body = await response.json();
+        throw new Error(body.message || 'Failed to save the admin group');
+      }
+      await mutate();
+      setAdminTelegramSaved(true);
+    } catch (err) {
+      setAdminTelegramError(err instanceof Error ? err.message : 'Failed to save the admin group');
+    } finally {
+      setIsSavingAdminTelegram(false);
     }
   };
 
@@ -528,6 +558,30 @@ const SquadSettingsPage = () => {
         <div className="mt-4">
           <button type="submit" className={primaryBtn} disabled={isSavingCheckIn}>
             {isSavingCheckIn ? 'Saving…' : 'Save check-in settings'}
+          </button>
+        </div>
+      </form>
+
+      <form onSubmit={handleSaveAdminTelegram} className={`${cardClass} mb-6`}>
+        <h2 className={sectionTitleClass}>Admin notifications</h2>
+        <p className="text-sm text-on-surface-variant mb-4">
+          A Telegram group for this squad&apos;s admins. It gets anything waiting on an admin (a join
+          request, a request to cancel or shorten a replacement) and important roster updates (a new
+          long-term replacement). Uses the same bot as the other groups, so add the bot to this group
+          too. Works whether or not game day check-in is on. Leave empty to turn it off.
+        </p>
+        <label className={scheduleFieldLabelClass}>Admin group chat id</label>
+        <input
+          className={inputFieldClass}
+          value={adminTelegramChatId}
+          placeholder="-1001234567890"
+          onChange={(e) => setAdminTelegramChatId(e.target.value)}
+        />
+        {adminTelegramError && <p className="text-sm text-red-400 mt-4">{adminTelegramError}</p>}
+        {adminTelegramSaved && !adminTelegramError && <p className="text-sm text-primary mt-4">Saved.</p>}
+        <div className="mt-4">
+          <button type="submit" className={primaryBtn} disabled={isSavingAdminTelegram}>
+            {isSavingAdminTelegram ? 'Saving…' : 'Save admin group'}
           </button>
         </div>
       </form>

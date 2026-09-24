@@ -32,8 +32,9 @@ export default async function handler(
         // would misreport how full a squad is.
         prisma.player.count({ where: { squadId, playerType: PlayerType.FULLTIME } }),
         // Feeds the dashboard's pending-requests badge. One more count on a payload this page
-        // already loads, rather than a second SWR hook - there's no notification channel, so the
-        // badge is the only thing stopping requests sitting unnoticed.
+        // already loads, rather than a second SWR hook. The admin Telegram group
+        // (lib/adminNotifications.ts) is optional, so the badge is still the one signal every
+        // squad gets that requests are waiting.
         countPendingJoinRequests(squadId),
       ]);
       // Squad.schedule collapses every recurrence field into one JSON blob (see
@@ -64,6 +65,7 @@ export default async function handler(
         openSlotVisibilityGameDays: squad.openSlotVisibilityGameDays,
         // Squad.gameDayOps unpacked the same way (ATTENDANCE_VOTE_PLAN.md).
         ...gameDayOpsToWire(squad.gameDayOps),
+        adminTelegramChatId: squad.adminTelegramChatId,
       });
     } catch (error) {
       console.error('Get Squad API Error:', error);

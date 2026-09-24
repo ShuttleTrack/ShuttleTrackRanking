@@ -6,6 +6,7 @@ import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
 import { isValidationError } from '@/lib/api/validationError';
 import { createJoinRequest, listJoinRequestsForSquad } from '@/lib/joinRequests';
+import { notifyAdminsOfJoinRequest } from '@/lib/adminNotifications';
 
 // POST: any signed-in person asks to join this squad. GET: that squad's admins read the queue.
 // (SELF_REGISTRATION_PLAN.md)
@@ -27,6 +28,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     try {
       const request = await createJoinRequest(squadId, session.user.email, { name, message });
+      // Not awaited: the request has committed, and a slow Telegram must not hold the response.
+      // Never rejects - failures are logged (lib/adminNotifications.ts).
+      void notifyAdminsOfJoinRequest(request);
       res.status(201).json(request);
     } catch (error) {
       if (isValidationError(error)) {

@@ -41,7 +41,9 @@ const DISABLED: GameDayOpsData = {
   telegramOpenSlotChatId: null,
 };
 
-function normaliseChatId(value: unknown): string | null | undefined {
+// Trimmed chat id, null for none (absent or blank), or undefined when it is not a valid chat id.
+// Also validates Squad.adminTelegramChatId (pages/api/squads/[squadId]/admin-telegram.ts).
+export function normaliseChatId(value: unknown): string | null | undefined {
   if (value === undefined || value === null) return null;
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
