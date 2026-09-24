@@ -126,7 +126,7 @@ export async function castVote(
     const written = await tx.gameDayVote.upsert({
       where: { gameDayId_playerId: { gameDayId, playerId } },
       create: { gameDayId, playerId, choice, votedAt: now },
-      update: { choice, inheritedFromPlayerId: null },
+      update: { choice, inheritedFromPlayerId: null, votedAt: now },
     });
 
     // Voting OUT and giving up an assigned slot are one action, in one transaction - two

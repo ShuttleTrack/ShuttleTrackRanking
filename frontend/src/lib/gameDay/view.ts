@@ -91,7 +91,9 @@ function buildRoster(state: GameDayState) {
   const standIns = standInsByNominator(state);
   const inPlayers: RosterPlayer[] = [];
   const outPlayers: RosterPlayer[] = [];
-  for (const vote of state.votes) {
+  // Latest vote first. votedAt is re-stamped on every vote, so switching sides moves you to the top.
+  const latestFirst = [...state.votes].sort((a, b) => b.votedAt.getTime() - a.votedAt.getTime() || b.id - a.id);
+  for (const vote of latestFirst) {
     const player = state.players.get(vote.playerId);
     if (!player || !state.voterIds.has(vote.playerId) || vote.inheritedFromPlayerId !== null) continue;
     if (vote.choice === 'IN') {
@@ -121,8 +123,8 @@ function buildRoster(state: GameDayState) {
     .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime() || a.id - b.id);
   return {
     counts,
-    inPlayers: inPlayers.sort(byRankThenName),
-    outPlayers: outPlayers.sort(byRankThenName),
+    inPlayers,
+    outPlayers,
     unconfirmed: unconfirmed.sort(byRankThenName),
     waiting,
   };
@@ -196,6 +198,10 @@ export interface GameDayView extends GameDaySummary {
     awaitingConfirmation: UnconfirmedPlayer[];
     waitingCount: number;
   } | null;
+  // Who is on the open-slot waiting list, in join order (first in line first). Squad admins and
+  // super admins only, and always - not withheld with the roster, which only hides the In/Out
+  // votes. Everyone else gets null and just sees roster.waitingCount.
+  waitingList: RosterPlayer[] | null;
   counts: { confirmedIn: number; slotsHeld: number; vacancies: number | null };
 }
 
@@ -260,7 +266,12 @@ async function observerReasonFor(state: GameDayState, player: Player | null): Pr
   return 'You do not hold a slot on this game day.';
 }
 
-export async function getGameDayView(gameDay: GameDay, player: Player | null, now: Date = new Date()): Promise<GameDayView> {
+export async function getGameDayView(
+  gameDay: GameDay,
+  player: Player | null,
+  now: Date = new Date(),
+  { isAdmin = false }: { isAdmin?: boolean } = {}
+): Promise<GameDayView> {
   const state = await loadGameDayState(prisma, gameDay);
   const { counts, inPlayers, outPlayers, unconfirmed, waiting } = buildRoster(state);
   const playerId = player?.id ?? null;
@@ -315,6 +326,7 @@ export async function getGameDayView(gameDay: GameDay, player: Player | null, no
     roster: rosterVisible
       ? { in: inPlayers, out: outPlayers, awaitingConfirmation: unconfirmed, waitingCount: waiting.length }
       : null,
+    waitingList: isAdmin ? waiting.map((s) => rosterPlayer(state.players.get(s.playerId)!, state)) : null,
     counts: { confirmedIn: counts.confirmedIn, slotsHeld: counts.slotsHeld, vacancies: counts.vacancies },
   };
 }
@@ -406,7 +418,9 @@ export async function getGameDayAttendance(gameDay: GameDay): Promise<GameDayAtt
     gameId: game?.id ?? null,
     votingClosedAt: gameDay.votingClosedAt?.toISOString() ?? null,
     counts: { confirmedIn: counts.confirmedIn, slotsHeld: counts.slotsHeld, vacancies: counts.vacancies },
-    confirmed: inPlayers,
+    // Rank order, not vote order: Game Planner caps its pre-tick, and who gets cut should not
+    // depend on who voted last.
+    confirmed: [...inPlayers].sort(byRankThenName),
     unconfirmed,
     outAfterDeadline,
     waitingList: waiting.map((s) => rosterPlayer(state.players.get(s.playerId)!, state)),

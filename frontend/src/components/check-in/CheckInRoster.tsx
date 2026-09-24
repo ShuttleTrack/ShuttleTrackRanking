@@ -139,3 +139,29 @@ export function CheckInRoster({
     </section>
   );
 }
+
+// Admins only (squad or super admin): who is on the open-slot waiting list, first in line first.
+// Rendered on its own, so it shows even while the In/Out roster is withheld.
+export function WaitingList({
+  players,
+  currentPlayerId,
+  avatarUrl,
+}: {
+  players: RosterPlayer[];
+  currentPlayerId?: number;
+  avatarUrl?: string;
+}) {
+  return (
+    <section className="mt-6 motion-safe:animate-slideUp" aria-label="Waiting list">
+      <h2 className="mb-2 font-label text-xs font-bold uppercase tracking-widest text-on-surface-variant opacity-80">
+        Open-slot waiting list ({players.length})
+      </h2>
+      <PlayerList
+        players={players}
+        currentPlayerId={currentPlayerId}
+        avatarUrl={avatarUrl}
+        badgeFor={(p) => `#${players.indexOf(p) + 1} in line`}
+      />
+    </section>
+  );
+}

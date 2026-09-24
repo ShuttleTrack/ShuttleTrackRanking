@@ -5,7 +5,8 @@ import { resolveGameDayParam } from '@/lib/api/gameDayParam';
 import { getGameDayView } from '@/lib/gameDay/view';
 
 // GET: one game day as the caller sees it - the snapshot, status, their role and vote, which
-// actions they may take, and (unless they are a voter who has not voted yet) the roster.
+// actions they may take, and (unless they are a voter who has not voted yet) the roster -
+// including, for squad admins and super admins, who is on the open-slot waiting list.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
@@ -20,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const gameDay = await resolveGameDayParam(req, res, squadId);
     if (!gameDay) return;
-    res.status(200).json(await getGameDayView(gameDay, member.player));
+    res.status(200).json(await getGameDayView(gameDay, member.player, new Date(), { isAdmin: member.isAdmin }));
   } catch (error) {
     console.error('Get Game Day API Error:', error);
     res.status(500).json({ message: 'Failed to load the game day' });
