@@ -165,3 +165,24 @@ export function WaitingList({
     </section>
   );
 }
+
+// Admins only (squad or super admin): fulltime slot holders who have not voted yet, so they can
+// be chased. Like WaitingList, shown even while the In/Out roster is withheld.
+export function NotVotedList({
+  players,
+  currentPlayerId,
+  avatarUrl,
+}: {
+  players: RosterPlayer[];
+  currentPlayerId?: number;
+  avatarUrl?: string;
+}) {
+  return (
+    <section className="mt-6 motion-safe:animate-slideUp" aria-label="Yet to vote">
+      <h2 className="mb-2 font-label text-xs font-bold uppercase tracking-widest text-on-surface-variant opacity-80">
+        Yet to vote ({players.length})
+      </h2>
+      <PlayerList players={players} currentPlayerId={currentPlayerId} avatarUrl={avatarUrl} />
+    </section>
+  );
+}

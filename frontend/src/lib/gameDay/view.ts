@@ -121,12 +121,19 @@ function buildRoster(state: GameDayState) {
   const waiting = state.openSlots
     .filter((s) => s.status === 'WAITING' && state.openSlotPoolIds.has(s.playerId))
     .sort((a, b) => a.joinedAt.getTime() - b.joinedAt.getTime() || a.id - b.id);
+  // Fulltime slot holders with no vote row at all. An inherited reservation is a vote row and is
+  // already listed under awaiting confirmation, as are assigned open-slot players yet to vote.
+  const votedIds = new Set(state.votes.map((v) => v.playerId));
+  const notVoted = Array.from(state.structuralHolderIds)
+    .filter((id) => !votedIds.has(id))
+    .map((id) => rosterPlayer(state.players.get(id)!, state));
   return {
     counts,
     inPlayers,
     outPlayers,
     unconfirmed: unconfirmed.sort(byRankThenName),
     waiting,
+    notVoted: notVoted.sort(byRankThenName),
   };
 }
 
@@ -202,6 +209,9 @@ export interface GameDayView extends GameDaySummary {
   // super admins only, and always - not withheld with the roster, which only hides the In/Out
   // votes. Everyone else gets null and just sees roster.waitingCount.
   waitingList: RosterPlayer[] | null;
+  // Fulltime slot holders who have not voted yet, in rank order. Admins only and always, like
+  // waitingList; null for everyone else.
+  notVoted: RosterPlayer[] | null;
   counts: { confirmedIn: number; slotsHeld: number; vacancies: number | null };
 }
 
@@ -273,7 +283,7 @@ export async function getGameDayView(
   { isAdmin = false }: { isAdmin?: boolean } = {}
 ): Promise<GameDayView> {
   const state = await loadGameDayState(prisma, gameDay);
-  const { counts, inPlayers, outPlayers, unconfirmed, waiting } = buildRoster(state);
+  const { counts, inPlayers, outPlayers, unconfirmed, waiting, notVoted } = buildRoster(state);
   const playerId = player?.id ?? null;
   const holding: Holding = playerId === null ? 'NONE' : holdingOf(state, playerId);
   const role = roleOf(holding);
@@ -327,6 +337,7 @@ export async function getGameDayView(
       ? { in: inPlayers, out: outPlayers, awaitingConfirmation: unconfirmed, waitingCount: waiting.length }
       : null,
     waitingList: isAdmin ? waiting.map((s) => rosterPlayer(state.players.get(s.playerId)!, state)) : null,
+    notVoted: isAdmin ? notVoted : null,
     counts: { confirmedIn: counts.confirmedIn, slotsHeld: counts.slotsHeld, vacancies: counts.vacancies },
   };
 }
