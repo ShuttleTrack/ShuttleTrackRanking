@@ -234,3 +234,22 @@ describe('waiting list on the check-in page', () => {
     expect(view.waitingList!.map((p) => p.name)).toEqual(['zed']);
   });
 });
+
+describe('yet-to-vote list on the check-in page', () => {
+  it('names fulltime players with no vote to admins only, even before the admin has voted', async () => {
+    const gd = seedGameDay(db);
+    const [ada, bob, cy] = ['ada', 'bob', 'cy'].map((n) => fulltime(db, n));
+    const zed = openSlotPlayer(db, 'zed');
+    seedOpenSlot(db, gd.id, zed.id);
+    await castVote(1, gd.id, ada.id, 'IN', T.beforeClose);
+    await castVote(1, gd.id, bob.id, 'OUT', T.beforeClose);
+
+    const gameDay = db.store.gameDay.find((g) => g.id === gd.id) as unknown as GameDay;
+    const asAdmin = await getGameDayView(gameDay, cy as unknown as Player, T.beforeClose, { isAdmin: true });
+    expect(asAdmin.roster).toBeNull();
+    expect(asAdmin.notVoted!.map((p) => p.name)).toEqual(['cy']);
+
+    const asPlayer = await getGameDayView(gameDay, ada as unknown as Player, T.beforeClose);
+    expect(asPlayer.notVoted).toBeNull();
+  });
+});

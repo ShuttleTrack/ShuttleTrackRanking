@@ -531,7 +531,7 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   allowed actions, and the roster - withheld from a voter who has not voted yet; In/Out listed
   latest vote first; squad admins and super admins also always get the waiting list by name, in
   join order - even while the In/Out roster is withheld from them - where everyone else only gets
-  its count), `PUT
+  its count - and the fulltime slot holders who have not voted yet, in rank order), `PUT
   /game-days/[date]/vote`, `POST|DELETE /game-days/[date]/open-slot`, `GET|PATCH
   /game-days/[date]/admin` (`close` / `cancel` / `release`). `[date]` is `YYYY-MM-DD` or 400;
   no row is 404. **Identity rule**: the acting player always comes from the session, never a
