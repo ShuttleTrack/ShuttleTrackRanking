@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Combobox, Transition } from '@headlessui/react';
 import { ChevronUpDownIcon, CheckIcon } from '@heroicons/react/24/outline';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import type { Player } from '@/types/player';
 
 interface SearchablePlayerPickerProps {
@@ -28,7 +28,7 @@ function PlayerOptionRow({
         aria-hidden
       />
       <span className="min-w-0 flex-1 font-headline text-sm font-semibold truncate">
-        {capitalizeFirstLetter(player.name)}
+        {publicDisplayName(player.name)}
       </span>
       {player.playerRank > 0 ? (
         <span className="font-numeric text-xs tabular-nums opacity-80 shrink-0">
@@ -106,7 +106,7 @@ const SearchablePlayerPicker = ({
             <Combobox.Input
               className="min-w-0 flex-1 border-0 bg-transparent p-0 font-headline text-sm font-semibold text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-0"
               displayValue={(player: Player | null) =>
-                player ? capitalizeFirstLetter(player.name) : ''
+                player ? publicDisplayName(player.name) : ''
               }
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Select player…"

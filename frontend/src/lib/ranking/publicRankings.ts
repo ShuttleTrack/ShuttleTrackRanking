@@ -30,9 +30,14 @@ function comparePrimaryMembership(a: PublicMembershipInput, b: PublicMembershipI
   return a.squadId - b.squadId;
 }
 
+// One row per person who is board-visible and ranked in at least one public squad AND has a
+// stored public rating (lib/ranking/publicRatingRecalc.ts) - someone who has never played a
+// public match has no rating yet, so no row. Squad memberships only decide who is shown and
+// which name/squad chips they get; the score is the stored public rating, never a squad score.
 export function buildPublicRankingsFromMemberships(
   memberships: PublicMembershipInput[],
-  encounters: RawEncounter[]
+  encounters: RawEncounter[],
+  ratingByEmail: Map<string, number>
 ): PublicPlayerRankingData[] {
   const byEmail = new Map<string, PublicMembershipInput[]>();
   for (const row of memberships) {
@@ -44,12 +49,15 @@ export function buildPublicRankingsFromMemberships(
 
   const merged: PublicPlayerRankingData[] = [];
 
-  for (const rows of Array.from(byEmail.values())) {
-    const sortedForPrimary = [...rows].sort(comparePrimaryMembership);
-    const primary = sortedForPrimary[0];
-    const playerIds = rows.map((r) => r.playerId);
-    const rankScore = rows.reduce((sum, r) => sum + r.rankScore, 0);
-    const form = computeCombinedFormStats(playerIds, encounters);
+  byEmail.forEach((rows, email) => {
+    const rating = ratingByEmail.get(email);
+    if (rating === undefined) return;
+
+    const primary = [...rows].sort(comparePrimaryMembership)[0];
+    const form = computeCombinedFormStats(
+      rows.map((r) => r.playerId),
+      encounters
+    );
 
     const squadMap = new Map<string, { slug: string; name: string }>();
     for (const r of rows) {
@@ -61,14 +69,14 @@ export function buildPublicRankingsFromMemberships(
       id: primary.playerId,
       name: primary.name,
       playerRank: 0,
-      rankScore,
+      rankScore: Math.round(rating),
       squadSlug: primary.squadSlug,
       squadName: primary.squadName,
       squads,
       lastFive: form.lastFive,
       winRate: form.winRate,
     });
-  }
+  });
 
   merged.sort((a, b) => b.rankScore - a.rankScore);
   merged.forEach((row, index) => {
@@ -79,10 +87,13 @@ export function buildPublicRankingsFromMemberships(
 }
 
 export async function getPublicRankings(): Promise<PublicRankingsResponse> {
-  const squads = await prisma.squad.findMany({
-    where: { enabled: true, isPublic: true },
-    orderBy: { name: 'asc' },
-  });
+  const [squads, storedRatings] = await Promise.all([
+    prisma.squad.findMany({
+      where: { enabled: true, isPublic: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.publicRating.findMany({ select: { email: true, rating: true } }),
+  ]);
 
   const memberships: PublicMembershipInput[] = [];
   const encounters: RawEncounter[] = [];
@@ -114,7 +125,8 @@ export async function getPublicRankings(): Promise<PublicRankingsResponse> {
     }
   }
 
-  const players = buildPublicRankingsFromMemberships(memberships, encounters);
+  const ratingByEmail = new Map(storedRatings.map((r) => [r.email, r.rating]));
+  const players = buildPublicRankingsFromMemberships(memberships, encounters, ratingByEmail);
   const totalPlayers = players.length;
   const topScore = totalPlayers > 0 ? Math.max(...players.map((p) => p.rankScore)) : 0;
   const averageScore =
@@ -127,5 +139,6 @@ export async function getPublicRankings(): Promise<PublicRankingsResponse> {
       averageScore,
     },
     players,
+    ratingsCalculated: storedRatings.length > 0,
   };
 }

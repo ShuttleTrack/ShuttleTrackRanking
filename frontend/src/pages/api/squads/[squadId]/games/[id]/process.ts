@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { requireSquadAdmin } from '@/lib/auth';
 import { processEncountersForDate } from '@/lib/ranking/processEncounters';
 import { parseSquadId } from '@/lib/api/squadParam';
+import { recalculatePublicRatingsSafely } from '@/lib/ranking/publicRatingRecalc';
 
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
@@ -69,6 +70,8 @@ export default async function handler(
       where: { id },
       data: { status: 'COMPLETED' }
     });
+
+    await recalculatePublicRatingsSafely(`squad ${squadId} processed ${gameDate}`);
 
     res.status(200).json(updatedGame);
   } catch (error) {

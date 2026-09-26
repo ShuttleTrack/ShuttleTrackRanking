@@ -1,4 +1,4 @@
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import type { Player } from '@/types/player';
 
 export function NavPlayerRow({ player }: { player: Player }) {
@@ -10,7 +10,7 @@ export function NavPlayerRow({ player }: { player: Player }) {
         aria-hidden
       />
       <span className="min-w-0 flex-1 font-headline text-sm font-semibold truncate">
-        {capitalizeFirstLetter(player.name)}
+        {publicDisplayName(player.name)}
       </span>
       {player.playerRank > 0 ? (
         <span className="font-numeric text-xs tabular-nums opacity-80 shrink-0">

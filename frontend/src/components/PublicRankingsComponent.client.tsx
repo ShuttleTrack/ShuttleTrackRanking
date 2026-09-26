@@ -35,7 +35,9 @@ const PublicRankingsComponent = () => {
         <PageHeader title="Public Leaderboard" />
         <div className="max-w-7xl mx-auto px-8 pb-20">
           <div className="rounded-xl border border-gray-600 bg-surface-container p-6 text-on-surface-variant">
-            No ranked players on public squads yet.
+            {rankings.ratingsCalculated
+              ? 'No ranked players on public squads yet.'
+              : 'Public ratings haven’t been calculated yet. They appear after the next processed game day.'}
           </div>
         </div>
       </div>

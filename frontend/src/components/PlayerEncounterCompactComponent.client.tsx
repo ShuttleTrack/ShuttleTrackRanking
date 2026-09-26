@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Disclosure } from '@headlessui/react';
 import { ChevronUpIcon } from '@heroicons/react/24/solid';
 import type { Encounter } from '@/types/encounter';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import { usePlayers } from '@/hooks/usePlayers';
 import type { Player } from '@/types/player';
 import { usePlayerEncounters } from '@/hooks/usePlayerEncounters';
@@ -80,7 +80,7 @@ const PlayerEncountersCompactComponent: React.FC<PlayerEncountersComponentProps>
   if (!encounters) return null;
 
   const { stats, encountersByDate, scoreSumByDate } = encounters;
-  const displayName = player ? capitalizeFirstLetter(player.name) : 'Player';
+  const displayName = player ? publicDisplayName(player.name) : 'Player';
   const title = `${displayName}'s History`;
   const winRateDisplay = `${stats.winRate.toFixed(1)}%`;
 

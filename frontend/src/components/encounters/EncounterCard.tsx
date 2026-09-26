@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Encounter, EncounterPlayer } from '@/types/encounter';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import ScoreBreakdownPills from '@/components/ScoreBreakdownPills';
 import { ENCOUNTER_DESKTOP_GRID } from './encounterGrid';
 import { useSquad } from '@/contexts/SquadContext';
@@ -29,7 +29,7 @@ function TeamNames({
             href={`/s/${slug}/player/${player.playerId}/encounters`}
             className="font-headline font-semibold hover:underline hover:text-primary"
           >
-            {capitalizeFirstLetter(player.playerName)}
+            {publicDisplayName(player.playerName)}
           </Link>
         </span>
       ))}

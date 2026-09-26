@@ -7,6 +7,14 @@ export const capitalizeFirstLetter = (string: string): string => {
     .join(' ');
 };
 
+/** Public boards and link-public pages: first name plus the second name's initial. */
+export function publicDisplayName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return capitalizeFirstLetter(parts[0]);
+  return capitalizeFirstLetter(`${parts[0]} ${parts[1].charAt(0)}`);
+}
+
 // Generic function to group array elements by a key
 export function groupBy<T, K extends keyof any>(
   array: T[],

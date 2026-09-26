@@ -242,11 +242,18 @@ model Squad {
   // superadmin can change it (see requireSuperAdmin in the squad-settings API).
   maxPlayers Int?    @map("max_players")
 
-  // When true (default), this squad's active ranked players feed the site-root public leaderboard
-  // at `/` (scores from multiple public squads for the same email are summed). Private squads
-  // remain reachable by link at `/s/[slug]` but are excluded from that aggregate. Editable by the
-  // squad's own admins - see requireSquadAdmin on the visibility PATCH endpoint.
+  // When true (default), this squad's matches feed the site-root public leaderboard at `/` - one
+  // public rating per email across every public squad (PublicRating below, rebuilt by
+  // lib/ranking/publicRatingRecalc.ts), not a sum of per-squad rankScores. Private squads remain
+  // reachable by link at `/s/[slug]` but are excluded from that rating. Editable by the squad's
+  // own admins - see requireSquadAdmin on the visibility PATCH endpoint.
   isPublic Boolean @default(true) @map("is_public")
+
+  // This squad's level for the public rating, 0..1 (higher = stronger squad). Drives the seed a
+  // player gets from their first public match here, and scales every match played here: gains by
+  // (1 + w) / 2, losses by (1 - w) / 2 - see lib/ranking/publicRating.ts. Superadmin-only, unlike
+  // isPublic: a squad admin could otherwise claim the top level for their own squad.
+  publicWeight Float @default(0.5) @map("public_weight")
 
   // Recurrence schedule - informational only for now (nothing reads it to auto-create game days
   // or drive the Telegram poll yet; that's a deliberate later follow-up once this shape has
@@ -329,6 +336,54 @@ model SquadAdmin {
   squad Squad @relation(fields: [squadId], references: [id])
 
   @@unique([squadId, email])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Public leaderboard rating. Both tables are DERIVED data, like Game: every recalculation
+// (lib/ranking/publicRatingRecalc.ts) deletes and rebuilds all rows from Encounter/ScoreHistory
+// in one transaction. Never edit them by hand, and never treat them as authoritative.
+// ---------------------------------------------------------------------------------------------
+
+enum PublicRatingEventKind {
+  SEED
+  MATCH
+  INACTIVITY
+}
+
+// One row per person across all public squads, keyed by lowercased email (the same identity
+// link Player/SquadAdmin use) rather than a player id, since a person has one Player row per squad.
+model PublicRating {
+  id             Int       @id @default(autoincrement())
+  email          String    @unique @db.VarChar(255)
+  rating         Float
+  seed           Float
+  matches        Int
+  lastPlayed     DateTime? @map("last_played") @db.Date
+  // Current streak of consecutive public game weeks without a match.
+  missedWeeks    Int       @map("missed_weeks")
+  recalculatedAt DateTime  @map("recalculated_at")
+
+  @@map("PUBLIC_RATING")
+}
+
+// Every change to a person's public rating, in replay order. encounterId/squadId are plain
+// columns, not FKs: this table is rebuilt wholesale, and must never block deleting a player or
+// squad.
+model PublicRatingEvent {
+  id          Int                   @id @default(autoincrement())
+  email       String                @db.VarChar(255)
+  kind        PublicRatingEventKind
+  eventDate   DateTime              @map("event_date") @db.Date
+  encounterId Int?                  @map("encounter_id")
+  squadId     Int?                  @map("squad_id")
+  oldRating   Float                 @map("old_rating")
+  newRating   Float                 @map("new_rating")
+  delta       Float
+  details     Json?
+
+  @@index([email, eventDate])
+  @@index([encounterId])
+  @@map("PUBLIC_RATING_EVENT")
 }
 
 // ---------------------------------------------------------------------------------------------
