@@ -7,10 +7,11 @@ import { gameDayOpsToWire } from '@/lib/gameDayOps';
 import { cancelOpenGameDays } from '@/lib/gameDay/lifecycle';
 import { PlayerType } from '@prisma/client';
 import { countPendingJoinRequests } from '@/lib/joinRequests';
+import { recalculatePublicRatingsSafely } from '@/lib/ranking/publicRatingRecalc';
 
-// GET: squad settings (enabled, maxPlayers, current roster size) - visible to that squad's own
-// admins, not just a superadmin, since they need to see the cap even though only a superadmin
-// can change it. PATCH: change enabled/maxPlayers - superadmin only.
+// GET: squad settings (enabled, maxPlayers, publicWeight, current roster size) - visible to that
+// squad's own admins, not just a superadmin, since they need to see the cap even though only a
+// superadmin can change it. PATCH: change enabled/maxPlayers/publicWeight - superadmin only.
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -52,6 +53,7 @@ export default async function handler(
         fulltimePlayerCount,
         pendingJoinRequestCount,
         isPublic: squad.isPublic,
+        publicWeight: squad.publicWeight,
         openForOpenSlot: squad.openForOpenSlot,
         isRecurring: schedule?.isRecurring ?? false,
         scheduleDayOfWeek: schedule?.dayOfWeek ?? null,
@@ -75,14 +77,20 @@ export default async function handler(
     const session = await requireSuperAdmin(req, res);
     if (!session) return;
 
-    const { enabled, maxPlayers } = req.body;
-    const data: { enabled?: boolean; maxPlayers?: number | null } = {};
+    const { enabled, maxPlayers, publicWeight } = req.body;
+    const data: { enabled?: boolean; maxPlayers?: number | null; publicWeight?: number } = {};
     if (enabled !== undefined) data.enabled = Boolean(enabled);
     if (maxPlayers !== undefined) {
       if (maxPlayers !== null && (!Number.isInteger(maxPlayers) || maxPlayers < 1)) {
         return res.status(400).json({ message: 'maxPlayers must be a positive integer or null (unlimited)' });
       }
       data.maxPlayers = maxPlayers;
+    }
+    if (publicWeight !== undefined) {
+      if (typeof publicWeight !== 'number' || !Number.isFinite(publicWeight) || publicWeight < 0 || publicWeight > 1) {
+        return res.status(400).json({ message: 'publicWeight must be a number from 0 to 1' });
+      }
+      data.publicWeight = publicWeight;
     }
 
     try {
@@ -92,6 +100,9 @@ export default async function handler(
       // handler (ATTENDANCE_VOTE_PLAN.md, "Disabling a squad must not strand open rows").
       if (data.enabled === false) {
         await cancelOpenGameDays(squadId, 'The squad was disabled.');
+      }
+      if (data.enabled !== undefined || data.publicWeight !== undefined) {
+        await recalculatePublicRatingsSafely(`squad ${squadId} settings changed`);
       }
       res.status(200).json(squad);
     } catch (error) {

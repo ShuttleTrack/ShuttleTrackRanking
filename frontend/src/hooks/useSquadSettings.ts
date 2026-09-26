@@ -14,6 +14,8 @@ export interface SquadSettings {
   fulltimePlayerCount: number;
   pendingJoinRequestCount: number;
   isPublic: boolean;
+  // Read-only here: the squad's public-rating level, superadmin-set on /platform/squads.
+  publicWeight: number;
   openForOpenSlot: boolean;
   isRecurring: boolean;
   scheduleDayOfWeek: DayOfWeek | null;

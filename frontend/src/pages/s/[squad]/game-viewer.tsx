@@ -7,6 +7,7 @@ import MatchResultLegend from '@/components/matches/MatchResultLegend';
 import MatchScoreRow from '@/components/matches/MatchScoreRow';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadOrNotFound } from '@/lib/squadPage';
+import { publicDisplayName } from '@/utils/string';
 import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
 
 const outlineBtn =
@@ -79,7 +80,7 @@ const GameViewer = () => {
 
   const getPlayerName = (id: number) => {
     const player = players.find((p) => p.id === id);
-    return player ? player.name : `Player ${id}`;
+    return player ? publicDisplayName(player.name) : `Player ${id}`;
   };
 
   const { completed, total, progressPct } = useMemo(() => {

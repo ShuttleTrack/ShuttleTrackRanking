@@ -23,6 +23,7 @@ There also used to be an Ansible-playbook deployment setup (`deployment/`) for r
 - **Game-day check-in** (attendance vote, open-slot waiting list, per-squad Telegram posts): `frontend/src/lib/gameDay/`, with an every-5-minutes cron registered in `frontend/src/instrumentation.ts` (an in-process `node-cron` job, since this deploys as a long-running container, not serverless). Pure decision logic (`clock.ts`, `voteWindow.ts`, `counts.ts`, `votes.ts`'s `evaluateVote`, `scheduler.ts`'s `decide*`) is kept separate from the Prisma paths; the tests run the Prisma paths against a stateful fake (`lib/gameDay/testing/fakePrisma.ts`).
 - **API routes**: `frontend/src/pages/api/squads/[squadId]/**` call the `lib/` functions above directly - no `fetch(NEXT_PUBLIC_BACKEND_URL + ...)` anywhere anymore. The old flat `frontend/src/pages/api/local/**` scaffold mentioned in earlier versions of this doc has been deleted (it was vestigial from the Java-backend migration and never wired to anything by the time squad tenancy landed).
 - **`Game` table** (Prisma, in the same `brs` MySQL schema): scratch state for an in-progress game day (groups + live scores as JSON, plus a `squadId`). A game lives in this table while being played (`DRAFT` → `IN_PROGRESS` → `COMPLETED` once processed) - it is **not** authoritative ranking data. `Player`/`Encounter`/`ScoreHistory` (also Prisma models in the same schema) are the real, permanent ranking/encounter history.
+- **`PublicRating` / `PublicRatingEvent` tables**: the site-root public leaderboard's one-rating-per-email across public squads (weighted by the superadmin-set `Squad.publicWeight`). Also **derived, not authoritative** - rebuilt wholesale from processed `Encounter`s by `lib/ranking/publicRatingRecalc.ts` after every Process, weight/visibility change, or the superadmin Recalculate button on `/platform/squads`. Rules in `lib/ranking/publicRating.ts` and `frontend/docs/squad-tenancy.md` ("Public leaderboard rating").
 
 ## Core domain flow (game day)
 
@@ -92,7 +93,7 @@ npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/
 ## Don't
 
 - Don't commit or push unless asked.
-- Don't treat the `Game` table as authoritative ranking data; it's throwaway session state.
+- Don't treat the `Game` table as authoritative ranking data; it's throwaway session state. Same for `PublicRating`/`PublicRatingEvent` - never edit them by hand; recalculate instead.
 - Don't assume there's a separate backend to call - there isn't anymore.
 - Don't change squad data model, auth, routing, or any squad-level feature (settings, schedule, etc.) without updating `frontend/docs/squad-tenancy.md` in the same change - it's the living reference for the multi-squad model, and it goes stale (like this file periodically has) if edits don't keep it in sync.
 - Don't use `prisma db push` for schema changes (it mutates the DB without writing `_prisma_migrations`).

@@ -1,4 +1,4 @@
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import type { RankingHistoryData } from '@/types/rankings';
 import type { PlayerRankingData } from '@/types/rankings';
 
@@ -18,7 +18,7 @@ export interface RankChangeRow {
 }
 
 export function historyKeyForPlayerName(name: string): string {
-  return capitalizeFirstLetter(name);
+  return publicDisplayName(name);
 }
 
 export function sortedHistoryDates(history: RankingHistoryData[]): string[] {

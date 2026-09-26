@@ -24,8 +24,12 @@ supersedes those now that the feature is built and in production.
 
 - **`Squad`** (`prisma/schema.prisma`) - the tenant. `id`, `name`, `slug` (unique, used in URLs),
   `enabled`, `maxPlayers` (nullable = unlimited), `isPublic` (default `true` — feeds the
-  site-root public leaderboard; see below), plus `schedule` (a single JSON blob for the recurrence
-  schedule - see below).
+  site-root public leaderboard; see below), `publicWeight` (0..1, default 0.5 — the squad's level
+  for the public rating, superadmin-only; see "Public leaderboard rating" below), plus `schedule`
+  (a single JSON blob for the recurrence schedule - see below).
+- **`PublicRating`** / **`PublicRatingEvent`** - one public rating per email across all public
+  squads, plus its audit trail. **Derived data**, like `Game`: rebuilt wholesale on every
+  recalculation, never authoritative (see "Public leaderboard rating").
   Frontend-owned, like `Game` - not part of the original Java backend's schema.
 - **`SquadAdmin`** - join table (`squadId`, `email`) granting admin rights scoped to one squad.
   Keyed by email (lowercased), not a numeric user id - matches how this app already resolves
@@ -113,10 +117,10 @@ flag - and, later, what signing in requires at all:
   superadmin with no `Player` row gets a read-only observer view.
 - **Admin** (signed-in + squad admin, or superadmin): `/s/[squad]/admin/{dashboard,game-day,game-planner,players,score-keeper,settings}`.
 - **Platform** (superadmin only): `/platform/squads` - create squads, manage each squad's admins,
-  edit `enabled`/`maxPlayers`.
-- **`/`** - **public aggregate leaderboard** (no login). Merges active ranked players from every
-  `enabled` + `isPublic` squad into one row per email; `rankScore` values are **summed** across
-  that person's public memberships. Narrower columns than the per-squad board (no peak tenure,
+  edit `enabled`/`maxPlayers`/`publicWeight`, and **Recalculate public ratings**.
+- **`/`** - **public aggregate leaderboard** (no login). One row per email for people who are
+  active and ranked in at least one `enabled` + `isPublic` squad, scored by their stored **public
+  rating** (see "Public leaderboard rating") - not a sum of squad `rankScore`s. Narrower columns than the per-squad board (no peak tenure,
   last-day net, or trend). Rows are **not** clickable — a callout directs visitors to sign in and
   pick a squad for detailed rankings and encounter history. Per-squad boards at `/s/[slug]` still
   link rows to player encounters as before. Above the board, a **"Live now"** strip lists every
@@ -140,7 +144,8 @@ flag - and, later, what signing in requires at all:
   auth), **`GET /api/games/live`** (in-progress games of public squads, progress summary only; no
   auth), `/api/squads` (list mine / create, superadmin-only create),
   `/api/squads/[squadId]` (GET detail incl. schedule fields, squad-admin-readable; PATCH
-  `enabled`/`maxPlayers`, superadmin-only), `/api/squads/[squadId]/admins` (superadmin-only),
+  `enabled`/`maxPlayers`/`publicWeight`, superadmin-only), `/api/platform/public-ratings` (GET last
+  recalculation, POST recalculate; superadmin-only), `/api/squads/[squadId]/admins` (superadmin-only),
   `/api/squads/[squadId]/schedule` (PATCH, squad-admin-editable),
   `/api/squads/[squadId]/open-slot-settings` (PATCH, squad-admin-editable),
   `/api/squads/[squadId]/players/{bulk-initial-score,open-slot}`,
@@ -225,16 +230,70 @@ squad-scoped route can't be used to touch another squad's row by guessing an id)
 
 ## Squad visibility: `isPublic`
 
-Public (default `true`) vs. private, on `Squad`. When public, that squad's active ranked players
-(`playerRank > 0`) are included in the site-root leaderboard (`/`, `GET /api/rankings`). The same
-email in multiple public squads appears once there with **summed** `rankScore`; last-5 and win
-rate combine matches across those memberships. Private squads are excluded from the aggregate but
-remain link-public at `/s/[slug]` like before. Unlike `enabled`/`maxPlayers`, editable by the
-squad's **own admins** (`requireSquadAdmin`, not superadmin-only), via
-`PATCH /api/squads/[squadId]/visibility` and a toggle on `/s/[squad]/admin/settings`.
+Public (default `true`) vs. private, on `Squad`. When public, that squad's matches feed the public
+rating, and its active ranked players (`playerRank > 0`) are shown on the site-root leaderboard
+(`/`, `GET /api/rankings`). The same email in multiple public squads appears once there with one
+public rating; last-5 and win rate combine matches across those memberships. Private squads are
+excluded from the rating but remain link-public at `/s/[slug]` like before. Unlike
+`enabled`/`maxPlayers`/`publicWeight`, editable by the squad's **own admins** (`requireSquadAdmin`,
+not superadmin-only), via `PATCH /api/squads/[squadId]/visibility` and a toggle on
+`/s/[squad]/admin/settings`; a change triggers a public rating recalculation.
 Implementation: `lib/ranking/publicRankings.ts`. The same flag gates the "Live now" strip on `/`
 (`lib/games/liveGames.ts`); a private squad's game viewer stays link-public as before, it just isn't
 advertised.
+
+## Public leaderboard rating
+
+Full write-up of the algorithm, seeds, and rebuild triggers: `frontend/docs/public-ranking.md`.
+
+One rating per person (lowercased email) across every `enabled` + `isPublic` squad - summing
+squad `rankScore`s inflated anyone playing in several squads and treated all squads as equal. It's
+win/loss Elo (margin scales the change) with a per-squad weight (FIFA-style match importance;
+higher tiers soften losses relative to gains). Pure logic in `lib/ranking/publicRating.ts`;
+DB loading/persisting in `lib/ranking/publicRatingRecalc.ts`. Nothing names a squad or weekday -
+the squad's `publicWeight` (0..1, **superadmin-only**, `/platform/squads`; a squad admin could
+otherwise claim the top level) drives everything:
+
+- **Seed** - the middle of the squad of the person's **first** public match, never re-seeded
+  afterwards: `1500 + 500 x (w - 0.5)`, so 1700 at 0.9, 1400 at 0.3 (300 apart, about 21-9
+  expected). Everyone in a squad starts equal and Elo separates them from there. Squad standing
+  and squad scores are deliberately ignored: a squad's first-day scores can be admin-set, and an
+  earlier version that seeded from standing gave those players a head start the founders of
+  other squads (all tied on their first day) never got. Memberships never feed the rating -
+  anyone can play in any squad.
+- **Per match** (date then id order; team rating = average of its players): expected win chance
+  `E = 1 / (1 + 10^((R_opp - R_team) / 800))`, actual `1` if the team won the scoreline else `0`,
+  margin `mov = 1 + |point diff| / higher score`, `raw = 16 x mov x (actual - E)`, then x gain
+  `(1 + w) / 2` if `raw > 0` else x `gain x (1 - w / 2)`. Winners always gain and losers always
+  lose; a 21-5 win moves more than 21-19. A higher weight pays more for wins and costs less for
+  losses (about half a win at 0.9, not 5%).
+- **Inactivity** - the **same amounts as the squad absentee penalty** (-10, -20, then -30 per
+  week; derived from `DEMERIT_POINTS_ABSENTEE` x `absenteeMultiplierForSpell` in
+  `absenteeManager.ts`, so the two never drift), but counted per consecutive **fully missed public
+  game week** rather than per squad game day. A week is missed when the person played no processed
+  match in *any* public squad that ISO week (Monday-Sunday) while at least one public squad did;
+  one match anywhere that week means no penalty. Resets on playing, no floor, and no
+  auto-deactivation (board visibility is still the squads' rules). Weeks nobody played cost
+  nothing, and the current, unfinished week is never docked (so a squad playing later in the week
+  isn't penalised in between). The squads' own absentee `ScoreHistory` rows are deliberately *not*
+  imported: they'd penalise two-squad members for skipping one squad while playing the other.
+
+Stored in **`PublicRating`** (one row per email: rating, seed, matches, lastPlayed, missedWeeks)
+and **`PublicRatingEvent`** (every `SEED`/`MATCH`/`INACTIVITY` change with its inputs in
+`details`). Both are rebuilt wholesale in one transaction by `recalculatePublicRatings()` (one run
+at a time via an in-process lock; the app is a single container). Triggers:
+
+- `POST /api/squads/[squadId]/games/[id]/process`, after the game is `COMPLETED`;
+- `PATCH /api/squads/[squadId]` when `enabled` or `publicWeight` is sent;
+- `PATCH /api/squads/[squadId]/visibility`;
+- the superadmin **Recalculate public ratings** button on `/platform/squads`
+  (`POST /api/platform/public-ratings`) - also the backfill on a fresh deploy, and the fix after
+  edits nothing triggers automatically (a player's email change or deletion).
+
+The automatic triggers are non-fatal (`recalculatePublicRatingsSafely`): the squad-level action has
+already succeeded, and the button can always repair the tables. Constants (`K`, `DIVISOR`,
+`SEED_BASE`, `WEIGHT_SPREAD`) live in `publicRating.ts`, the inactivity amounts in
+`absenteeManager.ts`; changing them or a weight re-scores all history on the next recalculation.
 
 ## Squad schedule
 

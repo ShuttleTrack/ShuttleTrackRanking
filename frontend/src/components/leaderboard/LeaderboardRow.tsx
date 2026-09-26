@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import type { PlayerRankingData, PublicPlayerRankingData } from '@/types/rankings';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import FormBars from './FormBars';
 import {
   LEADERBOARD_DESKTOP_GRID,
@@ -136,7 +136,7 @@ const LeaderboardRow = ({ player, variant = 'squad' }: LeaderboardRowProps) => {
           <span
             className={`min-w-0 truncate font-headline font-bold leading-tight ${nameLinkClass} ${nameClass[rowVariant]}`}
           >
-            {capitalizeFirstLetter(player.name)}
+            {publicDisplayName(player.name)}
           </span>
           {peakTenure}
         </div>
@@ -174,7 +174,7 @@ const LeaderboardRow = ({ player, variant = 'squad' }: LeaderboardRowProps) => {
             <span
               className={`min-w-0 flex-1 truncate font-headline text-base font-bold leading-none ${nameLinkClass} ${nameClass[rowVariant]}`}
             >
-              {capitalizeFirstLetter(player.name)}
+              {publicDisplayName(player.name)}
             </span>
             {peakTenure}
             {variant === 'squad' && squadPlayer && (

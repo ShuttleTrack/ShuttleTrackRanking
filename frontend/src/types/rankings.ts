@@ -47,6 +47,8 @@ export interface PublicPlayerRankingData {
 export interface PublicRankingsResponse {
   stats: RankingStats;
   players: PublicPlayerRankingData[];
+  // False until the public ratings have been calculated at least once (fresh deploy).
+  ratingsCalculated: boolean;
 }
 
 export interface RankingHistoryData {

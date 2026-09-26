@@ -27,66 +27,71 @@ function membership(
   };
 }
 
+function ratings(entries: [string, number][]): Map<string, number> {
+  return new Map(entries);
+}
+
 describe('buildPublicRankingsFromMemberships', () => {
-  it('sums rankScore for the same email across squads', () => {
+  it('uses the stored public rating, not a sum of squad scores, for a two-squad member', () => {
     const rows = buildPublicRankingsFromMemberships(
       [
         membership({ playerId: 1, rankScore: 1100, squadId: 1, squadSlug: 'a', squadName: 'A' }),
-        membership({
-          email: 'alice@example.com',
-          playerId: 2,
-          rankScore: 900,
-          playerRank: 2,
-          squadId: 2,
-          squadSlug: 'b',
-          squadName: 'B',
-        }),
+        membership({ playerId: 2, rankScore: 900, playerRank: 2, squadId: 2, squadSlug: 'b', squadName: 'B' }),
       ],
-      []
+      [],
+      ratings([['alice@example.com', 1712.6]])
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].rankScore).toBe(2000);
+    expect(rows[0].rankScore).toBe(1713);
     expect(rows[0].squads).toHaveLength(2);
     expect(rows[0].playerRank).toBe(1);
   });
 
-  it('merges email case-insensitively', () => {
+  it('merges memberships case-insensitively and matches the lowercased stored email', () => {
     const rows = buildPublicRankingsFromMemberships(
       [
-        membership({ email: 'Alice@Example.com', rankScore: 500 }),
-        membership({ email: 'alice@example.com', playerId: 2, rankScore: 300, squadId: 2 }),
+        membership({ email: 'Alice@Example.com ' }),
+        membership({ email: 'alice@example.com', playerId: 2, squadId: 2 }),
       ],
-      []
+      [],
+      ratings([['alice@example.com', 1500]])
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].rankScore).toBe(800);
+    expect(rows[0].rankScore).toBe(1500);
   });
 
-  it('assigns display ranks by summed score descending', () => {
+  it('assigns display ranks by public rating descending', () => {
     const rows = buildPublicRankingsFromMemberships(
       [
-        membership({ email: 'a@x.com', playerId: 1, name: 'A', rankScore: 100 }),
-        membership({ email: 'b@x.com', playerId: 2, name: 'B', rankScore: 500 }),
-        membership({ email: 'c@x.com', playerId: 3, name: 'C', rankScore: 300 }),
+        membership({ email: 'a@x.com', playerId: 1, name: 'A', rankScore: 9000 }),
+        membership({ email: 'b@x.com', playerId: 2, name: 'B', rankScore: 100 }),
+        membership({ email: 'c@x.com', playerId: 3, name: 'C', rankScore: 500 }),
       ],
-      []
+      [],
+      ratings([
+        ['a@x.com', 1400],
+        ['b@x.com', 1800],
+        ['c@x.com', 1600],
+      ])
     );
+    expect(rows.map((r) => r.name)).toEqual(['B', 'C', 'A']);
     expect(rows.map((r) => r.playerRank)).toEqual([1, 2, 3]);
-    expect(rows[0].name).toBe('B');
     expect(rows[0].id).toBe(2);
   });
 
-  it('picks primary membership by highest individual score', () => {
+  it('leaves out someone with no stored public rating yet', () => {
+    const rows = buildPublicRankingsFromMemberships(
+      [membership({ email: 'a@x.com' }), membership({ email: 'new@x.com', playerId: 2 })],
+      [],
+      ratings([['a@x.com', 1500]])
+    );
+    expect(rows.map((r) => r.id)).toEqual([1]);
+  });
+
+  it('picks primary membership by highest individual squad score', () => {
     const rows = buildPublicRankingsFromMemberships(
       [
-        membership({
-          email: 'bob@x.com',
-          playerId: 10,
-          name: 'BobLow',
-          rankScore: 800,
-          squadSlug: 'low',
-          squadName: 'Low Squad',
-        }),
+        membership({ email: 'bob@x.com', playerId: 10, name: 'BobLow', rankScore: 800, squadSlug: 'low', squadName: 'Low Squad' }),
         membership({
           email: 'bob@x.com',
           playerId: 11,
@@ -98,7 +103,8 @@ describe('buildPublicRankingsFromMemberships', () => {
           squadName: 'High Squad',
         }),
       ],
-      []
+      [],
+      ratings([['bob@x.com', 1500]])
     );
     expect(rows[0].name).toBe('BobHigh');
     expect(rows[0].squadSlug).toBe('high');
@@ -131,7 +137,8 @@ describe('buildPublicRankingsFromMemberships', () => {
         membership({ playerId: 1, email: 'p@x.com' }),
         membership({ playerId: 2, email: 'p@x.com', squadId: 2, squadSlug: 'b' }),
       ],
-      encounters
+      encounters,
+      ratings([['p@x.com', 1500]])
     );
     expect(rows[0].lastFive).toEqual(['W', 'L']);
     expect(rows[0].winRate).toBe(50);

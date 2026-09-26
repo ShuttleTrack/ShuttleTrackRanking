@@ -79,7 +79,7 @@ const PlatformSquadsPage = () => {
     <div className="min-h-screen pb-12">
       <PageHeader
         title="Squads"
-        subtitle="Create squads and manage their admins."
+        subtitle="Create squads, manage their admins, and set public leaderboard weights."
         className="!mb-6"
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-8">
@@ -89,6 +89,8 @@ const PlatformSquadsPage = () => {
             New Squad
           </button>
         </div>
+
+        <PublicRatingsCard />
 
         <ul className="space-y-3">
           {(squads ?? []).map((squad) => (
@@ -114,6 +116,7 @@ const PlatformSquadsPage = () => {
                     <span className="text-sm text-on-surface-variant">
                       Max players: {squad.maxPlayers ?? 'Unlimited'}
                     </span>
+                    <span className="text-sm text-on-surface-variant">Weight: {squad.publicWeight}</span>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -183,6 +186,92 @@ const PlatformSquadsPage = () => {
           />
         )}
       </div>
+    </div>
+  );
+};
+
+interface PublicRatingStatus {
+  lastRecalculatedAt: string | null;
+  people: number;
+  events: number;
+}
+
+interface RecalculationSummary {
+  people: number;
+  matches: number;
+  events: number;
+  durationMs: number;
+  recalculatedAt: string;
+}
+
+const PublicRatingsCard = () => {
+  const { data: status, mutate } = useSWR<PublicRatingStatus>('/api/platform/public-ratings', fetcher);
+  const [confirming, setConfirming] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [summary, setSummary] = useState<RecalculationSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const recalculate = async () => {
+    setConfirming(false);
+    setIsRunning(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/platform/public-ratings', { method: 'POST' });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || 'Recalculation failed');
+      setSummary(body);
+      await mutate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Recalculation failed');
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <div className={`${cardClass} mb-6`}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className="font-headline text-lg font-semibold text-on-surface">Public leaderboard</p>
+          <p className="text-sm text-on-surface-variant">
+            One rating per player across all public squads, weighted by each squad&apos;s tier weight. Rebuilt
+            automatically after every processed game day and weight or visibility change.
+          </p>
+          <p className="text-sm text-on-surface-variant">
+            {status?.lastRecalculatedAt
+              ? `Last recalculated ${new Date(status.lastRecalculatedAt).toLocaleString()} - ${status.people} players`
+              : 'Not calculated yet'}
+          </p>
+          {summary && (
+            <p className="text-sm text-primary">
+              {summary.people} players, {summary.matches.toLocaleString()} matches, recalculated in{' '}
+              {summary.durationMs} ms
+            </p>
+          )}
+          {error && <p className="text-sm text-red-400">{error}</p>}
+        </div>
+        <button type="button" className={primaryBtn} onClick={() => setConfirming(true)} disabled={isRunning}>
+          {isRunning ? 'Recalculating…' : 'Recalculate public ratings'}
+        </button>
+      </div>
+
+      {confirming && (
+        <ModalShell onClose={() => setConfirming(false)}>
+          <h3 className="font-headline text-lg font-semibold text-on-surface mb-2">Recalculate public ratings?</h3>
+          <p className="text-sm text-on-surface-variant mb-4">
+            Every processed match in every public squad is replayed with the current squad weights, and the
+            public leaderboard is replaced with the result.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button type="button" className={outlineBtn} onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+            <button type="button" className={primaryBtn} onClick={recalculate}>
+              Recalculate
+            </button>
+          </div>
+        </ModalShell>
+      )}
     </div>
   );
 };
@@ -280,6 +369,7 @@ const SquadSettingsModal = ({
 }) => {
   const [enabled, setEnabled] = useState(squad.enabled);
   const [maxPlayers, setMaxPlayers] = useState(squad.maxPlayers?.toString() ?? '');
+  const [publicWeight, setPublicWeight] = useState(squad.publicWeight.toString());
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -294,6 +384,7 @@ const SquadSettingsModal = ({
         body: JSON.stringify({
           enabled,
           maxPlayers: maxPlayers.trim() === '' ? null : Number(maxPlayers),
+          publicWeight: Number(publicWeight),
         }),
       });
       if (!response.ok) {
@@ -333,6 +424,22 @@ const SquadSettingsModal = ({
             onChange={(e) => setMaxPlayers(e.target.value)}
             placeholder="Leave blank for unlimited"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-on-surface mb-1">Public tier weight</label>
+          <input
+            type="number"
+            min={0}
+            max={1}
+            step={0.05}
+            className={inputFieldClass}
+            value={publicWeight}
+            onChange={(e) => setPublicWeight(e.target.value)}
+            required
+          />
+          <p className="mt-1 text-xs text-on-surface-variant">
+            0 to 1. Higher = stronger squad: bigger gains and smaller losses on the public leaderboard.
+          </p>
         </div>
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div className="flex justify-end gap-2">

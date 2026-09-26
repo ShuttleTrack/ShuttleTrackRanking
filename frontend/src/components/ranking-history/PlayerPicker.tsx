@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { Listbox, Transition } from '@headlessui/react';
 import { ChevronUpDownIcon, CheckIcon } from '@heroicons/react/24/outline';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import type { Player } from '@/types/player';
 
 interface PlayerPickerProps {
@@ -37,7 +37,7 @@ const PlayerPicker = ({ players, selectedPlayerId, onSelect }: PlayerPickerProps
             aria-hidden
           />
           <span className="min-w-0 flex-1 font-headline text-sm font-semibold text-on-surface truncate">
-            {capitalizeFirstLetter(selected.name)}
+            {publicDisplayName(selected.name)}
           </span>
           <span className="font-numeric text-xs tabular-nums text-on-surface-variant shrink-0">
             #{String(selected.playerRank).padStart(2, '0')}
@@ -78,7 +78,7 @@ const PlayerPicker = ({ players, selectedPlayerId, onSelect }: PlayerPickerProps
                       aria-hidden
                     />
                     <span className="min-w-0 flex-1 font-headline text-sm font-semibold truncate">
-                      {capitalizeFirstLetter(player.name)}
+                      {publicDisplayName(player.name)}
                     </span>
                     <span className="font-numeric text-xs tabular-nums opacity-80 shrink-0">
                       #{String(player.playerRank).padStart(2, '0')}

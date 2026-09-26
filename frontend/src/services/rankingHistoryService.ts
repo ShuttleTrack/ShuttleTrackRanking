@@ -1,6 +1,6 @@
 import { RankingHistoryData } from '@/types/rankings';
 import { parseISO, subDays, format } from 'date-fns';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import { getAllPlayersHistory } from '@/lib/ranking/players';
 
 interface PlayerHistory {
@@ -31,7 +31,7 @@ const transformDataForGraph = (players: PlayerHistory[]): RankingHistoryData[] =
   players.forEach((player) => {
     player.history.forEach((entry) => {
       let existingDateEntry = graphData.find((e) => e.date === entry.date);
-      const playerNameCapitalized = capitalizeFirstLetter(player.playerName);
+      const playerNameCapitalized = publicDisplayName(player.playerName);
       if (existingDateEntry) {
         existingDateEntry[playerNameCapitalized] = entry.newRank;
       } else {
@@ -63,7 +63,7 @@ const postProcessDataToAddPreviousDates = (
     );
 
     return {
-      player: capitalizeFirstLetter(playerHistory.playerName), 
+      player: publicDisplayName(playerHistory.playerName), 
       initialOldRank: sortedHistory[0].oldRank
     };
   });
