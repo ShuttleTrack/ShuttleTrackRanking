@@ -19,10 +19,12 @@ const MAX_PLAYERS = 20;
 // Distribute players into group sizes for a game day.
 //
 // The size *composition* (how many groups of 4 vs 5) is fixed by the player
-// count, but their *order* is randomly shuffled (Fisher-Yates) on every call, so
-// the larger (5-player) groups don't always land in the lowest-ranked group.
-// `rng` is injectable for tests; it defaults to Math.random.
-export const calculateGroupDistribution = (totalPlayers: number, rng: () => number = Math.random): number[] => {
+// count, but their *order* is shuffled (Fisher-Yates) with a PRNG seeded by
+// `seed`, so the larger (5-player) groups don't always land in the
+// lowest-ranked group. The planner passes the squad's random daily seed
+// (lib/games/groupSeed.ts), so re-creating the game the same day with the same
+// player count yields the same distribution and can't be re-rolled.
+export const calculateGroupDistribution = (totalPlayers: number, seed: string): number[] => {
   if (totalPlayers < 4) return [];
 
   // Base composition of group sizes for the supported player counts.
@@ -58,7 +60,27 @@ export const calculateGroupDistribution = (totalPlayers: number, rng: () => numb
     }
   }
 
-  // Fisher-Yates shuffle of the group sizes.
+  // Hash the seed string into a 32-bit unsigned int.
+  const hashSeed = (str: string): number => {
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++) {
+      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    return h >>> 0;
+  };
+
+  // mulberry32: small, fast seeded PRNG returning values in [0, 1).
+  const mulberry32 = (a: number): (() => number) => () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  // Seeded Fisher-Yates shuffle of the group sizes.
+  const rng = mulberry32(hashSeed(seed));
   for (let i = distribution.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [distribution[i], distribution[j]] = [distribution[j], distribution[i]];
@@ -150,8 +172,12 @@ const GamePlannerPage = () => {
   const createGameDayFor = async (selectedPlayerDetails: GamePlannerPlayer[]) => {
     const totalPlayers = selectedPlayerDetails.length;
 
+    // The squad's random seed for today, fixed server-side for the rest of the day. Folding in the
+    // player count keeps different counts decorrelated.
+    const dailySeed = await gameService.getGroupSeed(squadId);
+
     // Calculate number of groups and distribution
-    const distribution = calculateGroupDistribution(totalPlayers);
+    const distribution = calculateGroupDistribution(totalPlayers, `${dailySeed}:${totalPlayers}`);
     const groups: Record<string, number[]> = {};
 
     let playerIndex = 0;

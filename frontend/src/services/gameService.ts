@@ -35,6 +35,14 @@ export const gameService = {
     return response.json();
   },
 
+  // Today's random group-ordering seed for the squad - the same value all day.
+  getGroupSeed: async (squadId: number): Promise<string> => {
+    const response = await fetch(`/api/squads/${squadId}/games/group-seed`, { cache: 'no-store' });
+    if (!response.ok) throw new Error(await failureMessage(response, 'Failed to fetch the group seed'));
+    const body: { seed: string } = await response.json();
+    return body.seed;
+  },
+
   getGame: async (squadId: number, id: string): Promise<Game> => {
     const response = await fetch(`/api/squads/${squadId}/games/${id}`);
     if (!response.ok) throw new Error('Failed to fetch game');
