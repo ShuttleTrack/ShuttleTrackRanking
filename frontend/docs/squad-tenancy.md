@@ -548,11 +548,11 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   transaction).
 - **Scheduler** (`lib/gameDay/scheduler.ts`, every 5 minutes from `instrumentation.ts`; it replaced
   the old global 17:00 Telegram poll, now removed). Pass A, per squad with a recurring schedule
-  and check-in on: scan every squad-local date from today to today + `voteOpensDaysBefore` (recovers a missed day), create
+  and check-in on: scan every squad-local date from today to today + `voteOpensDaysBefore` (recovers a missed day; the furthest date only from 17:00 local, `VOTE_OPENS_TIME`, so the "vote is open" post is not sent at midnight), create
   missing rows with a no-op conflict path, cancel open rows no longer on the schedule, and
   re-create a cancelled one in place (fresh vote) once its date is back. Pass B, over every live
   row: announce, 09:00 open-slot ping (only when `confirmedIn` is short), 10:00 reminder - each
-  stamped once, bounded above by the deadline so an outage never sends them late - then close
+  claimed (stamped) *before* it is sent, so two processes ticking one DB cannot both send it (released on a failed send, for retry), bounded above by the deadline so an outage never sends them late - then close
   voting and sync; and retry the sync on closed rows until `slotLockAt`. One squad's (and one
   row's) failure never stops another's. A superadmin can run a tick now from the admin dashboard.
 - **`Squad.gameDayOps`** (`lib/gameDayOps.ts`, one JSON blob like `schedule`): `enabled`,
