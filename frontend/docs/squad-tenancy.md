@@ -641,8 +641,9 @@ arranged between the two of them beforehand. Summary of what's built (`lib/gameD
   replacement player is, an active nomination on a game day in range - "revoke that first" before
   13:00, "already locked in" after; nominations whose session is over never block, stamped or not.
 - **Telegram** - open-slot group only (it is the queue the hand-off skips). Posts are the
-  *difference* between what the group was last told and what is true now, per nominator: "goes to
-  Bob", "now goes to Carol instead of Bob", "no longer passed to Bob". So a switch is one post, a
+  *difference* between what the group was last told and what is true now, per nominator: "Bob is
+  playing for Ada's slot", "Carol is playing for Ada's slot instead of Bob", "Bob is no longer
+  playing for Ada's slot". So a switch is one post, a
   hand-off revoked before its first post landed posts nothing, and a failed send is retried by every
   scheduler tick until it lands or the session ends - a live hand-off is not noise after 13:00.
   Cancellation and the session end settle silently. No open-slot chat id = no posts, no retries.

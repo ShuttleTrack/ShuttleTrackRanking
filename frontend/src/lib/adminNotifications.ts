@@ -43,14 +43,15 @@ export interface JoinRequestMessageInput {
 
 export function buildJoinRequestMessage(ctx: AdminMessageContext, input: JoinRequestMessageInput): TelegramPost {
   const lines = [
-    `🙋 <b>New join request · ${escapeTelegramHtml(ctx.squadName)}</b>`,
-    `${escapeTelegramHtml(input.name)} (${escapeTelegramHtml(input.email)}) asked to join the squad.`,
+    `🙋 <b>${escapeTelegramHtml(input.name)}</b> (${escapeTelegramHtml(input.email)}) wants to join <b>${escapeTelegramHtml(ctx.squadName)}</b>`,
   ];
   if (input.message) {
-    lines.push(`<i>"${escapeTelegramHtml(input.message)}"</i>`);
+    lines.push(`Note: ${escapeTelegramHtml(input.message)}`);
   }
-  lines.push('Approve or reject it on the Players page.');
-  return withPlayersLink(ctx, lines, 'Review request');
+  const url = adminPlayersUrl(ctx);
+  const buttons = buttonsFor(url, 'Review request');
+  const text = buttons ? lines.join('\n') : [...lines, '', url].join('\n');
+  return { text, buttons };
 }
 
 export interface ReplacementMessageInput {

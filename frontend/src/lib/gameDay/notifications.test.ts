@@ -27,12 +27,11 @@ describe('gameDayUrl', () => {
 });
 
 describe('the four message bodies', () => {
-  it('vote is open: session, deadline, link in the text and as a button; names HTML-escaped', () => {
+  it('vote is open: session question, deadline, link via button only', () => {
     const post = buildVoteOpenMessage(ctx);
-    expect(post.text).toContain('<b>Wed &lt;Smashers&gt; &amp; Co</b>');
-    expect(post.text).toContain('Wednesday 23 Sep, 19:00–22:00');
-    expect(post.text).toContain('Vote by <b>13:00</b>');
-    expect(post.text).toContain(URL);
+    expect(post.text).toBe('Are you in for Wednesday 23 Sep, 19:00–22:00?\nVote by <b>13:00</b> on the game day.');
+    expect(post.text).not.toContain('Wed &lt;Smashers&gt;');
+    expect(post.text).not.toContain(URL);
     expect(post.buttons).toEqual({ inline_keyboard: [[{ text: 'Vote in / out', url: URL }]] });
   });
 
@@ -41,10 +40,35 @@ describe('the four message bodies', () => {
     expect(buildReminderMessage(ctx, { confirmedIn: 11, minPlayers: null }).text).toContain('11 in so far.');
   });
 
-  it('players needed: the shortfall and the waiting-list rule', () => {
-    const text = buildOpenSlotPingMessage(ctx, { confirmedIn: 12, minPlayers: 16 }).text;
-    expect(text).toContain('12 of 16 confirmed so far (4 short)');
-    expect(text).toContain('join order');
+  it('players needed: the shortfall headline and waiting-list rule, link via button only', () => {
+    const post = buildOpenSlotPingMessage(ctx, { confirmedIn: 12, minPlayers: 16 });
+    expect(post.text).toContain('We need <b>4</b> more players for Wednesday 23 Sep, 19:00–22:00');
+    expect(post.text).toContain('first come, first served');
+    expect(post.text).not.toContain(URL);
+    expect(post.buttons).toEqual({ inline_keyboard: [[{ text: 'Join the waiting list', url: URL }]] });
+  });
+
+  it('players needed: singular when one short', () => {
+    const text = buildOpenSlotPingMessage(ctx, { confirmedIn: 15, minPlayers: 16 }).text;
+    expect(text).toContain('We need <b>1</b> more player for');
+  });
+
+  it('final call: appends the game-day URL when the inline button is unavailable', () => {
+    const post = buildVacancyMessage(
+      { ...ctx, appUrl: 'http://localhost:3000' },
+      { promotedNames: [], remaining: 3, previouslyAnnounced: null, pingSent: false }
+    )!;
+    expect(post.buttons).toBeUndefined();
+    expect(post.text).toContain('http://localhost:3000/s/wed/game-day/2026-09-23');
+  });
+
+  it('players needed: appends the game-day URL when the inline button is unavailable', () => {
+    const post = buildOpenSlotPingMessage(
+      { ...ctx, appUrl: 'http://localhost:3000' },
+      { confirmedIn: 12, minPlayers: 16 }
+    );
+    expect(post.buttons).toBeUndefined();
+    expect(post.text).toContain('http://localhost:3000/s/wed/game-day/2026-09-23');
   });
 
   it('vacancy sync: all four cases, and silence when the group was never asked', () => {
@@ -53,7 +77,12 @@ describe('the four message bodies', () => {
 
     expect(v(['Ada', 'Grace'], 2)).toMatch(/Ada, Grace are in .*\n2 spots still open/);
     expect(v(['Ada'], 0)).toMatch(/Ada is in .*\nThe session is full\./);
-    expect(v([], 3)).toContain('3 open slots for Wednesday 23 Sep');
+    const finalCall = buildVacancyMessage(ctx, { promotedNames: [], remaining: 3, previouslyAnnounced: null, pingSent: false })!;
+    expect(finalCall.text).toContain('Final call for open slots!');
+    expect(finalCall.text).toContain('3 open slots for Wednesday 23 Sep, 19:00–22:00.');
+    expect(finalCall.text).toContain('First come, first served.');
+    expect(finalCall.text).not.toContain(URL);
+    expect(finalCall.buttons).toEqual({ inline_keyboard: [[{ text: 'Claim a slot', url: URL }]] });
     expect(v([], 1)).toContain('1 open slot for');
     expect(v([], 0, { pingSent: true })).toContain('filled up — no open slots needed');
     expect(v([], 0, { previouslyAnnounced: 2 })).toContain('filled up');
@@ -79,15 +108,27 @@ describe('the four message bodies', () => {
 });
 
 describe('slot hand-off posts (SINGLE_DAY_NOMINATION_PLAN.md)', () => {
-  it('create, switch and end - names escaped, with the link', () => {
+  it('create, switch and end - names escaped, link via button only', () => {
     const created = buildNominationMessage(ctx, { kind: 'CREATED', nominatorName: 'Ada', nomineeName: 'Bob <3' });
-    expect(created.text).toBe(`🔁 Ada's slot for Wednesday 23 Sep, 19:00–22:00 goes to Bob &lt;3.\n\n${URL}`);
+    expect(created.text).toBe('🔁 Bob &lt;3 is playing for Ada\'s slot for Wednesday 23 Sep, 19:00–22:00');
+    expect(created.text).not.toContain(URL);
     expect(created.buttons?.inline_keyboard[0][0].url).toBe(URL);
 
     const switched = buildNominationMessage(ctx, { kind: 'SWITCHED', nominatorName: 'Ada', nomineeName: 'Carol', previousNomineeName: 'Bob' });
-    expect(switched.text.split('\n')[0]).toBe("🔁 Ada's slot for Wednesday 23 Sep, 19:00–22:00 now goes to Carol instead of Bob.");
+    expect(switched.text).toBe(
+      "🔁 Carol is playing for Ada's slot for Wednesday 23 Sep, 19:00–22:00 instead of Bob."
+    );
 
     const ended = buildNominationMessage(ctx, { kind: 'ENDED', nominatorName: 'Ada', previousNomineeName: 'Bob' });
-    expect(ended.text.split('\n')[0]).toBe("↩️ Ada's slot for Wednesday 23 Sep, 19:00–22:00 is no longer passed to Bob.");
+    expect(ended.text).toBe("↩️ Bob is no longer playing for Ada's slot for Wednesday 23 Sep, 19:00–22:00.");
+  });
+
+  it('hand-off: appends the game-day URL when the inline button is unavailable', () => {
+    const post = buildNominationMessage(
+      { ...ctx, appUrl: 'http://localhost:3000' },
+      { kind: 'CREATED', nominatorName: 'Ada', nomineeName: 'Bob' }
+    );
+    expect(post.buttons).toBeUndefined();
+    expect(post.text).toContain('http://localhost:3000/s/wed/game-day/2026-09-23');
   });
 });

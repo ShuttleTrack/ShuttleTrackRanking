@@ -29,7 +29,9 @@ import {
 const db = prisma as unknown as FakePrisma;
 const send = sendTelegramMessage as unknown as ReturnType<typeof vi.fn>;
 const handOffPosts = () =>
-  send.mock.calls.map((c) => c[2] as string).filter((text) => /slot for .* (goes to|now goes to|is no longer passed)/.test(text));
+  send.mock.calls
+    .map((c) => c[2] as string)
+    .filter((text) => /is playing for .* slot for|is no longer playing for .* slot for/.test(text));
 
 beforeEach(() => {
   db.reset();
@@ -111,7 +113,9 @@ describe('what the open-slot group actually receives', () => {
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0][1]).toBe(OPS.telegramOpenSlotChatId);
-    expect(handOffPosts()).toEqual([expect.stringContaining("ada's slot for Wednesday 23 Sep, 19:00–22:00 goes to bob.")]);
+    expect(handOffPosts()).toEqual([
+      expect.stringContaining('bob is playing for ada\'s slot for Wednesday 23 Sep, 19:00–22:00'),
+    ]);
     expect(nominationsOf(db, gd.id)[0].announcedAt).not.toBeNull();
   });
 
@@ -128,7 +132,7 @@ describe('what the open-slot group actually receives', () => {
     await runGameDayTick(T.afterClose);
 
     expect(handOffPosts()).toHaveLength(2); // the failed attempt, then the retry
-    expect(handOffPosts()[1]).toContain('goes to bob');
+    expect(handOffPosts()[1]).toContain('bob is playing for ada');
     expect(nominationsOf(db, gd.id)[0].announcedAt).not.toBeNull();
   });
 
@@ -160,10 +164,11 @@ describe('what the open-slot group actually receives', () => {
     await nominate(1, gd.id, ada.id, carol.id, T.beforeClose);
     await syncUnsettledNominationPosts(T.beforeClose);
 
-    expect(handOffPosts()).toEqual([
-      expect.stringContaining('goes to bob.'),
-      expect.stringContaining('now goes to carol instead of bob.'),
-    ]);
+    const posts = handOffPosts();
+    expect(posts).toHaveLength(2);
+    expect(posts[0]).toContain('bob is playing for ada');
+    expect(posts[1]).toContain('carol is playing for ada');
+    expect(posts[1]).toContain('instead of bob');
   });
 
   it('turns a switch after an UNdelivered create into a plain "goes to carol" - one post, no "instead of"', async () => {
@@ -179,7 +184,7 @@ describe('what the open-slot group actually receives', () => {
     send.mockClear();
     await runGameDayTick(T.beforeClose);
 
-    expect(handOffPosts()).toEqual([expect.stringContaining('goes to carol.')]);
+    expect(handOffPosts()).toEqual([expect.stringContaining('carol is playing for ada')]);
     expect(handOffPosts()[0]).not.toContain('instead of');
   });
 
@@ -195,8 +200,8 @@ describe('what the open-slot group actually receives', () => {
     await castVote(1, gd.id, ada.id, 'OUT', T.afterClose);
 
     expect(handOffPosts()).toEqual([
-      expect.stringContaining('goes to bob.'),
-      expect.stringContaining('is no longer passed to bob.'),
+      expect.stringContaining('bob is playing for ada'),
+      expect.stringContaining('bob is no longer playing for ada'),
     ]);
   });
 

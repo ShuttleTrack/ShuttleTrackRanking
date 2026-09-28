@@ -9,20 +9,22 @@ const ctx: GameMessageContext = {
 };
 
 describe('buildGameMessage', () => {
-  it('started: links the squad-scoped game viewer, in the text and as a button', () => {
+  it('started: links the squad-scoped game viewer via button only', () => {
     const url = 'https://brs.example.com/s/wed/game-viewer?gameId=clxyz0000abcd';
     const post = buildGameMessage('started', ctx);
-    expect(post.text).toContain('Game #abcd has started');
-    expect(post.text).toContain('Wed &lt;Smashers&gt; &amp; Co');
-    expect(post.text.endsWith(url)).toBe(true);
+    expect(post.text).toBe(
+      '🏸 <b>Wed &lt;Smashers&gt; &amp; Co — Game #abcd has started!</b>\nTrack live scores and game combinations.'
+    );
+    expect(post.text).not.toContain(url);
     expect(post.buttons).toEqual({ inline_keyboard: [[{ text: '📊 Track Scores', url }]] });
   });
 
-  it('completed: links the squad ranking board', () => {
+  it('completed: headline only, ranking board via button', () => {
     const url = 'https://brs.example.com/s/wed';
     const post = buildGameMessage('completed', ctx);
-    expect(post.text).toContain('Game #abcd has been completed');
-    expect(post.text.endsWith(url)).toBe(true);
+    expect(post.text).toBe('🏆 <b>Wed &lt;Smashers&gt; &amp; Co — Game #abcd has been completed!</b>');
+    expect(post.text).not.toContain('Scores have been processed');
+    expect(post.text).not.toContain(url);
     expect(post.buttons).toEqual({ inline_keyboard: [[{ text: '🏆 Check Rankings', url }]] });
   });
 

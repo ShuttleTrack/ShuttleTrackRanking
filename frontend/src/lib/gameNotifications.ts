@@ -36,7 +36,9 @@ function shortId(gameId: string): string {
 }
 
 function withLink(lines: string[], url: string, buttonLabel: string): TelegramPost {
-  return { text: [...lines, '', url].join('\n'), buttons: buttonsFor(url, buttonLabel) };
+  const buttons = buttonsFor(url, buttonLabel);
+  const text = buttons ? lines.join('\n') : [...lines, '', url].join('\n');
+  return { text, buttons };
 }
 
 export function buildGameMessage(event: GameEvent, ctx: GameMessageContext): TelegramPost {
@@ -46,16 +48,12 @@ export function buildGameMessage(event: GameEvent, ctx: GameMessageContext): Tel
   switch (event) {
     case 'started':
       return withLink(
-        [`🏸 <b>${squad} — ${game} has started!</b>`, 'Track live scores, groups and game combinations.'],
+        [`🏸 <b>${squad} — ${game} has started!</b>`, 'Track live scores and game combinations.'],
         gameViewerUrl(ctx),
         '📊 Track Scores'
       );
     case 'completed':
-      return withLink(
-        [`🏆 <b>${squad} — ${game} has been completed!</b>`, 'Scores have been processed. Check the updated rankings.'],
-        rankingsUrl(ctx),
-        '🏆 Check Rankings'
-      );
+      return withLink([`🏆 <b>${squad} — ${game} has been completed!</b>`], rankingsUrl(ctx), '🏆 Check Rankings');
     case 'cancelled':
       return { text: `❌ <b>${squad} — ${game} has been cancelled.</b>` };
   }
