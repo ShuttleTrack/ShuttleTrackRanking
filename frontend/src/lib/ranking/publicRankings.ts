@@ -2,7 +2,7 @@ import prisma from '@/lib/prisma';
 import { getAllEncounters } from '@/lib/ranking/encounters';
 import { getSecurePlayers } from '@/lib/ranking/players';
 import { filterBoardVisible } from '@/lib/ranking/boardVisibility';
-import type { PublicPlayerRankingData, PublicRankingsResponse } from '@/types/rankings';
+import type { PublicPlayerRankingData, PublicRankingsResponse, SquadChip } from '@/types/rankings';
 import { computeCombinedFormStats, type RawEncounter } from '@/utils/playerForm';
 
 export interface PublicMembershipInput {
@@ -14,10 +14,34 @@ export interface PublicMembershipInput {
   squadId: number;
   squadSlug: string;
   squadName: string;
+  publicWeight: number;
 }
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function compareSquadChips(a: SquadChip, b: SquadChip): number {
+  if (a.playerRank !== b.playerRank) {
+    return a.playerRank - b.playerRank;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+function buildSquadChips(rows: PublicMembershipInput[]): SquadChip[] {
+  const squadMap = new Map<string, SquadChip>();
+  for (const r of rows) {
+    const existing = squadMap.get(r.squadSlug);
+    if (!existing || r.playerRank < existing.playerRank) {
+      squadMap.set(r.squadSlug, {
+        slug: r.squadSlug,
+        name: r.squadName,
+        playerRank: r.playerRank,
+        publicWeight: r.publicWeight,
+      });
+    }
+  }
+  return Array.from(squadMap.values()).sort(compareSquadChips);
 }
 
 function comparePrimaryMembership(a: PublicMembershipInput, b: PublicMembershipInput): number {
@@ -59,11 +83,7 @@ export function buildPublicRankingsFromMemberships(
       encounters
     );
 
-    const squadMap = new Map<string, { slug: string; name: string }>();
-    for (const r of rows) {
-      squadMap.set(r.squadSlug, { slug: r.squadSlug, name: r.squadName });
-    }
-    const squads = Array.from(squadMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    const squads = buildSquadChips(rows);
 
     merged.push({
       id: primary.playerId,
@@ -121,6 +141,7 @@ export async function getPublicRankings(): Promise<PublicRankingsResponse> {
         squadId: squad.id,
         squadSlug: squad.slug,
         squadName: squad.name,
+        publicWeight: squad.publicWeight,
       });
     }
   }

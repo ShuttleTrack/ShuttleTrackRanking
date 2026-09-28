@@ -120,8 +120,7 @@ flag - and, later, what signing in requires at all:
   edit `enabled`/`maxPlayers`/`publicWeight`, and **Recalculate public ratings**.
 - **`/`** - **public aggregate leaderboard** (no login). One row per email for people who are
   active and ranked in at least one `enabled` + `isPublic` squad, scored by their stored **public
-  rating** (see "Public leaderboard rating") - not a sum of squad `rankScore`s. Narrower columns than the per-squad board (no peak tenure,
-  last-day net, or trend). Rows are **not** clickable — a callout directs visitors to sign in and
+  rating** (see "Public leaderboard rating") - not a sum of squad `rankScore`s. Narrower columns than the per-squad board (no last-day net or trend); up to four squad rank chips (stacked on desktop) beside each name instead of peak tenure. Rows are **not** clickable — a callout directs visitors to sign in and
   pick a squad for detailed rankings and encounter history. Per-squad boards at `/s/[slug]` still
   link rows to player encounters as before. Above the board, a **"Live now"** strip lists every
   `IN_PROGRESS` game in those same `enabled` + `isPublic` squads (`GET /api/games/live`, polled

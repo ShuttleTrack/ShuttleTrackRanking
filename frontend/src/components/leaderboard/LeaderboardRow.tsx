@@ -11,6 +11,7 @@ import RankBadge, { type RowVariant } from './RankBadge';
 import LastGameDayNet from './LastGameDayNet';
 import TrendIndicator from './TrendIndicator';
 import PeakTenure from './PeakTenure';
+import SquadScoreChips from './SquadScoreChips';
 import { useOptionalSquad } from '@/contexts/SquadContext';
 import type { LeaderboardVariant } from './Leaderboard';
 
@@ -119,6 +120,11 @@ const LeaderboardRow = ({ player, variant = 'squad' }: LeaderboardRowProps) => {
     />
   ) : null;
 
+  const squadScoreChips =
+    isPublicBoard && isPublicPlayer(player) ? (
+      <SquadScoreChips squads={player.squads} variant={rowVariant} />
+    ) : null;
+
   const desktopGrid =
     variant === 'public' ? PUBLIC_LEADERBOARD_DESKTOP_GRID : LEADERBOARD_DESKTOP_GRID;
 
@@ -132,13 +138,16 @@ const LeaderboardRow = ({ player, variant = 'squad' }: LeaderboardRowProps) => {
         <div>
           <RankBadge rank={player.playerRank} variant={rowVariant} />
         </div>
-        <div className="flex min-w-0 items-center gap-2">
+        <div
+          className={`flex min-w-0 items-center gap-2 ${isPublicBoard ? 'max-md:flex-wrap' : ''}`}
+        >
           <span
             className={`min-w-0 truncate font-headline font-bold leading-tight ${nameLinkClass} ${nameClass[rowVariant]}`}
           >
             {publicDisplayName(player.name)}
           </span>
           {peakTenure}
+          {squadScoreChips}
         </div>
         <div className="flex justify-center">
           <FormBars results={player.lastFive} variant={rowVariant} />
@@ -170,17 +179,26 @@ const LeaderboardRow = ({ player, variant = 'squad' }: LeaderboardRowProps) => {
           <div className="flex-shrink-0">
             <RankBadge rank={player.playerRank} variant={rowVariant} />
           </div>
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 flex-nowrap">
             <span
               className={`min-w-0 flex-1 truncate font-headline text-base font-bold leading-none ${nameLinkClass} ${nameClass[rowVariant]}`}
             >
               {publicDisplayName(player.name)}
             </span>
-            {peakTenure}
-            {variant === 'squad' && squadPlayer && (
-              <div className="flex shrink-0">
-                <TrendIndicator rankChange={squadPlayer.rankChange} variant={rowVariant} />
-              </div>
+            {isPublicBoard ? (
+              <span className="flex w-[14rem] max-w-[55%] shrink-0 min-w-[9rem] items-center justify-end self-center">
+                {squadScoreChips}
+              </span>
+            ) : (
+              <>
+                {peakTenure}
+                {squadScoreChips}
+                {variant === 'squad' && squadPlayer && (
+                  <div className="flex shrink-0">
+                    <TrendIndicator rankChange={squadPlayer.rankChange} variant={rowVariant} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
