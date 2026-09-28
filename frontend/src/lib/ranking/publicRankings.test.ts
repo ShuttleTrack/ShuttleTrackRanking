@@ -12,6 +12,7 @@ function membership(
     squadId: number;
     squadSlug: string;
     squadName: string;
+    publicWeight: number;
   }> = {}
 ) {
   return {
@@ -23,6 +24,7 @@ function membership(
     squadId: 1,
     squadSlug: 'alpha',
     squadName: 'Alpha',
+    publicWeight: 0.5,
     ...overrides,
   };
 }
@@ -44,6 +46,8 @@ describe('buildPublicRankingsFromMemberships', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].rankScore).toBe(1713);
     expect(rows[0].squads).toHaveLength(2);
+    expect(rows[0].squads.map((s) => s.playerRank)).toEqual([1, 2]);
+    expect(rows[0].squads.map((s) => s.name)).toEqual(['A', 'B']);
     expect(rows[0].playerRank).toBe(1);
   });
 

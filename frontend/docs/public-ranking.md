@@ -145,7 +145,7 @@ Automatic triggers are non-fatal. The squad action has already succeeded; the bu
 
 `buildPublicRankingsFromMemberships` keeps a person who is board-visible in at least one public squad **and** has a stored public rating. The sort key is that rating.
 
-The name, squad chips, and primary membership (highest squad `rankScore`, then `playerRank`) come from squad rows. Form (wins, losses) is combined across that person’s public-squad player ids. The number on the board is never a squad `rankScore`.
+The name, squad chips, and primary membership (highest squad `rankScore`, then `playerRank`) come from squad rows. Each chip shows the squad name and that membership’s squad rank (`#N`, sorted by best rank first); at most four chips per player on desktop in a vertical stack beside the name, with any others named in the chip group’s accessible description. Form (wins, losses) is combined across that person’s public-squad player ids. The **Points** column is the stored public rating only — squad ranks on chips are context, not addends.
 
 On pages a visitor can open without signing in, names render as first name plus the first letter of the second name (`Nishan Karunarathna` → `Nishan K`). Stored `Player.name` is unchanged. Admin and signed-in tools still show the full name. See `publicDisplayName` in `frontend/src/utils/string.ts`.
 

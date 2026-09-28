@@ -30,6 +30,8 @@ export interface RankingsResponse {
 export interface SquadChip {
   slug: string;
   name: string;
+  playerRank: number;
+  publicWeight: number;
 }
 
 export interface PublicPlayerRankingData {

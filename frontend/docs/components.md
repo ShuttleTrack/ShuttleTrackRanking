@@ -142,9 +142,9 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **Variants:** `podiumGold` | `podiumSilver` | `podiumBronze` | `podiumDark` | `default` from `playerRank`.
 
-**Behavior:** Squad variant: whole row links to `/s/{slug}/player/{id}/encounters`. Public variant: non-interactive `div` (no peak chip on public board).
+**Behavior:** Squad variant: whole row links to `/s/{slug}/player/{id}/encounters`. Public variant: non-interactive `div` with up to four `SquadScoreChips` beside the name (no `PeakTenure`).
 
-**Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name and `PeakTenure` chip inline | `TrendIndicator`; Row 2: Last 5 / Win rate / Last day / Points with `flex-col gap-0.5` captions (no divider). `LastGameDayNet` sits under the Last day caption between Win rate and Points. Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
+**Mobile:** Compact two-row layout — Row 1: smaller `RankBadge` (`text-xl`, smaller trophy) | name and `PeakTenure` or `SquadScoreChips` inline | `TrendIndicator`; Row 2: Last 5 / Win rate / Last day / Points with `flex-col gap-0.5` captions (no divider). `LastGameDayNet` sits under the Last day caption between Win rate and Points. Tighter card padding (`px-3 py-2`), `space-y-1` between rows. Podium metric captions use dark muted `labelClass`. Desktop unchanged (`md:` sizes and grid).
 
 ---
 
@@ -154,7 +154,17 @@ Overlay tile layout: Rankings tile (full-width) → Ranking History / Encounter 
 
 **Props:** `playerRank`, `highestRank`, `timeInHighestRank`, `variant` (row podium styling).
 
-**Shows:** Context-sensitive pill beside the player name on `LeaderboardRow` (same row; name truncates when tight). At peak: tenure only (`18d at peak`, `New peak`, `At peak`). Off peak: `Peak #N · Nd`. Exported `peakTenureCopy()` / `parsePeakTenureDays()` for tests.
+**Shows:** Context-sensitive pill beside the player name on `LeaderboardRow` (same row; name truncates when tight). At peak: tenure only (`18d at peak`, `New peak`, `At peak`). Off peak: `Peak #N · Nd`. Exported `peakTenureCopy()` / `parsePeakTenureDays()` for tests. Podium pill colors live in `leaderboardChipClass.ts` (shared with `SquadScoreChips`).
+
+---
+
+### SquadScoreChips
+
+**File:** `src/components/leaderboard/SquadScoreChips.tsx`
+
+**Props:** `squads` (`SquadChip[]` with `playerRank`), `variant` (row podium styling), optional `max` (default 4).
+
+**Shows:** On the public aggregate board only — one pill per public squad membership (best rank per slug), sorted by squad rank ascending on desktop. Label is squad name plus `#N` squad rank (not the public rating in the Points column). Desktop: up to four pills stacked vertically beside the name. Mobile: auto-advancing horizontal carousel (highest `publicWeight` first, up to four), one pill visible; pauses when the tab is hidden; no animation when `prefers-reduced-motion`. Exported `selectSquadScoreChips()`, `squadChipsByWeight()`, `mobileCarouselChips()`, and `squadScoreChipCopy()` for tests.
 
 ---
 

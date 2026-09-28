@@ -1,4 +1,5 @@
 import type { RowVariant } from './RankBadge';
+import { leaderboardChipClass } from './leaderboardChipClass';
 
 export interface PeakTenureInput {
   playerRank: number;
@@ -49,14 +50,6 @@ export function peakTenureCopy({
   };
 }
 
-const chipClass: Record<RowVariant, string> = {
-  gold: 'bg-yellow-950/10 text-yellow-900',
-  silver: 'bg-slate-900/10 text-slate-700',
-  bronze: 'bg-orange-950/10 text-orange-900',
-  dark: 'bg-white/10 text-on-surface-variant',
-  default: 'bg-white/10 text-on-surface-variant',
-};
-
 interface PeakTenureProps extends PeakTenureInput {
   variant: RowVariant;
 }
@@ -70,7 +63,7 @@ const PeakTenure = ({ variant, playerRank, highestRank, timeInHighestRank }: Pea
 
   return (
     <span
-      className={`inline-flex w-fit max-w-full shrink-0 items-center rounded-full px-2 py-px font-label text-[10px] font-bold uppercase leading-none tracking-widest ${chipClass[variant]}`}
+      className={`inline-flex w-fit max-w-full shrink-0 items-center rounded-full px-2 py-px font-label text-[10px] font-bold uppercase leading-none tracking-widest ${leaderboardChipClass[variant]}`}
       aria-label={ariaLabel}
     >
       <span className="truncate font-numeric tabular-nums leading-none">{label}</span>
