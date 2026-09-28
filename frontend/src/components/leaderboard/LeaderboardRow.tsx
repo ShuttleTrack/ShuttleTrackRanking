@@ -186,7 +186,7 @@ const LeaderboardRow = ({ player, variant = 'squad' }: LeaderboardRowProps) => {
               {publicDisplayName(player.name)}
             </span>
             {isPublicBoard ? (
-              <span className="block w-[14rem] max-w-[55%] shrink-0 min-w-[9rem]">
+              <span className="flex w-[14rem] max-w-[55%] shrink-0 min-w-[9rem] items-center justify-end self-center">
                 {squadScoreChips}
               </span>
             ) : (

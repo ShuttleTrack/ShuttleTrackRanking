@@ -101,14 +101,14 @@ function MobileSquadChipCarousel({
     return () => window.clearInterval(id);
   }, [chips.length, reduceMotion]);
 
-  const viewportClass = 'block w-full overflow-hidden md:hidden';
+  const viewportClass = 'flex w-full items-center overflow-hidden md:hidden';
 
   const active = chips[index];
   const slotPillClass = `${pillClass} max-w-full min-w-0`;
 
   return (
     <span className={viewportClass} role="group" aria-label={aria}>
-      <span className="flex w-full min-w-0 justify-end overflow-hidden">
+      <span className="flex w-full min-w-0 items-center justify-end overflow-hidden">
         <span
           key={active.slug}
           className="max-w-full min-w-0 motion-reduce:animate-none animate-fadeIn"
