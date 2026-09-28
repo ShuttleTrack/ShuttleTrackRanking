@@ -3,6 +3,9 @@
 // gameDayOps later is purely additive (resolved open question 1). Pure, client-safe.
 import { addMinutes, instantAt, localDateIso, wallClockIn } from './clock';
 
+// The vote for a session opens - and the main group is told - at this time, voteOpensDaysBefore
+// days ahead. Not midnight: a 00:00 "are you in?" post lands while everyone is asleep.
+export const VOTE_OPENS_TIME = '17:00';
 export const OPEN_SLOT_PING_TIME = '09:00';
 export const REMINDER_TIME = '10:00';
 export const VOTES_CLOSE_TIME = '13:00';

@@ -11,7 +11,7 @@ export const GAME_DATE = '2026-09-23'; // a Wednesday
 // Around the 2026-09-23 session (CEST, UTC+2): 09:00 ping = 07:00Z, 10:00 reminder = 08:00Z,
 // 13:00 deadline = 11:00Z, 17:00 slot lock (start - 2h) = 15:00Z, 19:00 start = 17:00Z.
 export const T = {
-  twoDaysBefore: new Date('2026-09-21T10:00:00Z'),
+  twoDaysBefore: new Date('2026-09-21T15:00:00Z'), // 17:00 Amsterdam - the vote opens
   beforePing: new Date('2026-09-23T06:30:00Z'),
   afterPing: new Date('2026-09-23T07:05:00Z'),
   afterReminder: new Date('2026-09-23T08:05:00Z'),
