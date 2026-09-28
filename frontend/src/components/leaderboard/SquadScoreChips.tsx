@@ -141,7 +141,7 @@ const SquadScoreChips = ({ squads, variant, max = 4 }: SquadScoreChipsProps) => 
   const mobileChips = mobileCarouselChips(squads, max);
 
   return (
-    <span className="block w-full min-w-0 md:max-w-full">
+    <span className="block w-full min-w-0 md:w-auto md:shrink-0">
       <span
         className="hidden min-w-0 max-w-full flex-col items-start gap-0.5 md:flex"
         role="group"

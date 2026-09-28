@@ -125,6 +125,9 @@ const LeaderboardRow = ({ player, variant = 'squad' }: LeaderboardRowProps) => {
       <SquadScoreChips squads={player.squads} variant={rowVariant} />
     ) : null;
 
+  const singlePublicSquadChip =
+    isPublicBoard && isPublicPlayer(player) && player.squads.length === 1;
+
   const desktopGrid =
     variant === 'public' ? PUBLIC_LEADERBOARD_DESKTOP_GRID : LEADERBOARD_DESKTOP_GRID;
 
@@ -139,10 +142,18 @@ const LeaderboardRow = ({ player, variant = 'squad' }: LeaderboardRowProps) => {
           <RankBadge rank={player.playerRank} variant={rowVariant} />
         </div>
         <div
-          className={`flex min-w-0 items-center gap-2 ${isPublicBoard ? 'max-md:flex-wrap' : ''}`}
+          className={`flex min-w-0 gap-2 ${
+            isPublicBoard
+              ? singlePublicSquadChip
+                ? 'items-center'
+                : 'items-start'
+              : 'items-center'
+          }`}
         >
           <span
-            className={`min-w-0 truncate font-headline font-bold leading-tight ${nameLinkClass} ${nameClass[rowVariant]}`}
+            className={`min-w-0 font-headline font-bold leading-tight ${nameLinkClass} ${nameClass[rowVariant]} ${
+              isPublicBoard ? 'min-w-[8rem] shrink-0' : 'truncate'
+            }`}
           >
             {publicDisplayName(player.name)}
           </span>
