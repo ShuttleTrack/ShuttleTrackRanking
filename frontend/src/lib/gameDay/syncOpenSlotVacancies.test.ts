@@ -69,8 +69,12 @@ describe('posting when voting closes', () => {
 
     await closeVoting(gd.id, T.atClose);
 
+    expect(sentTexts()[0]).toContain('Final call for open slots');
     expect(sentTexts()[0]).toContain('3 open slots');
-    expect(sentTexts()[0]).toContain('https://brs.example.com/s/wed/game-day/2026-09-23');
+    expect(sentTexts()[0]).not.toContain('https://brs.example.com');
+    expect((send.mock.calls[0][3] as { inline_keyboard: { url: string }[][] }).inline_keyboard[0][0].url).toBe(
+      'https://brs.example.com/s/wed/game-day/2026-09-23'
+    );
     expect(gameDayRow(gd.id).announcedVacancies).toBe(3);
   });
 

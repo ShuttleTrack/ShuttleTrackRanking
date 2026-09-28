@@ -26,18 +26,32 @@ const ctx = { appUrl: 'https://brs.example.com/', squadName: 'Wed <Smashers>', s
 const date = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
 describe('message builders', () => {
-  it('links to the admin players page, with a button on a real host', () => {
-    expect(adminPlayersUrl(ctx)).toBe('https://brs.example.com/s/wednesday/admin/players');
+  it('links to the admin players page via button only on a real host', () => {
+    const playersUrl = 'https://brs.example.com/s/wednesday/admin/players';
+    expect(adminPlayersUrl(ctx)).toBe(playersUrl);
     const post = buildJoinRequestMessage(ctx, { name: 'Sam', email: 'sam@example.com', message: null });
-    expect(post.text).toContain('https://brs.example.com/s/wednesday/admin/players');
-    expect(post.buttons?.inline_keyboard[0][0].url).toBe('https://brs.example.com/s/wednesday/admin/players');
+    expect(post.text).not.toContain(playersUrl);
+    expect(post.text).toContain('<b>Sam</b> (sam@example.com) wants to join <b>Wed &lt;Smashers&gt;</b>');
+    expect(post.buttons?.inline_keyboard[0][0].url).toBe(playersUrl);
+    expect(post.buttons?.inline_keyboard[0][0].text).toBe('Review request');
+  });
+
+  it('omits the note line when message is null', () => {
+    const post = buildJoinRequestMessage(ctx, { name: 'Sam', email: 'sam@example.com', message: null });
+    expect(post.text).not.toContain('Note:');
   });
 
   it('escapes user-supplied text in a join request', () => {
     const post = buildJoinRequestMessage(ctx, { name: 'A<b>', email: 'a@example.com', message: 'hi & bye' });
-    expect(post.text).toContain('Wed &lt;Smashers&gt;');
-    expect(post.text).toContain('A&lt;b&gt; (a@example.com) asked to join');
-    expect(post.text).toContain('hi &amp; bye');
+    expect(post.text).toContain('<b>A&lt;b&gt;</b> (a@example.com) wants to join <b>Wed &lt;Smashers&gt;</b>');
+    expect(post.text).toContain('Note: hi &amp; bye');
+  });
+
+  it('appends the players URL when the inline button is unavailable (localhost)', () => {
+    const localCtx = { appUrl: 'http://localhost:3000/', squadName: 'Wed', slug: 'wednesday' };
+    const post = buildJoinRequestMessage(localCtx, { name: 'Sam', email: 'sam@example.com', message: null });
+    expect(post.buttons).toBeUndefined();
+    expect(post.text).toContain('http://localhost:3000/s/wednesday/admin/players');
   });
 
   it('describes a new long-term replacement with its window', () => {
@@ -103,7 +117,7 @@ describe('notifyAdminsOf*', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.telegram.org/bottoken/sendMessage');
     expect(sentBody().chat_id).toBe('-100123');
-    expect(sentBody().text).toContain('Sam (sam@example.com) asked to join');
+    expect(sentBody().text).toContain('<b>Sam</b> (sam@example.com) wants to join <b>Wed</b>');
   });
 
   it('sends nothing when the squad has no admin group', async () => {

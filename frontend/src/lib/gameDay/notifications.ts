@@ -53,14 +53,14 @@ function post(ctx: MessageContext, lines: string[], buttonLabel: string): Telegr
 
 // Main group, on creation (voteOpensDaysBefore ahead).
 export function buildVoteOpenMessage(ctx: MessageContext): TelegramPost {
-  return post(
-    ctx,
-    [
-      `🏸 <b>${escapeTelegramHtml(ctx.squadName)}</b> — ${sessionLine(ctx)}`,
-      `Are you in? Vote by <b>${VOTES_CLOSE_TIME}</b> on the day.`,
-    ],
-    'Vote in / out'
-  );
+  const lines = [
+    `Are you in for ${sessionLine(ctx)}?`,
+    `Vote by <b>${VOTES_CLOSE_TIME}</b> on the game day.`,
+  ];
+  const url = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
+  const buttons = buttonsFor(url, 'Vote in / out');
+  const text = buttons ? lines.join('\n') : [...lines, '', url].join('\n');
+  return { text, buttons };
 }
 
 // Main group, 10:00 on the game day.
@@ -88,14 +88,15 @@ export function buildOpenSlotPingMessage(
   counts: { confirmedIn: number; minPlayers: number }
 ): TelegramPost {
   const short = Math.max(0, counts.minPlayers - counts.confirmedIn);
-  return post(
-    ctx,
-    [
-      `🙋 Players needed — ${sessionLine(ctx)}`,
-      `${counts.confirmedIn} of ${counts.minPlayers} confirmed so far (${short} short). Join the waiting list — slots are handed out in join order when voting closes at ${VOTES_CLOSE_TIME}.`,
-    ],
-    'Join the waiting list'
-  );
+  const playerWord = short === 1 ? 'player' : 'players';
+  const lines = [
+    `🙋 We need <b>${short}</b> more ${playerWord} for ${sessionLine(ctx)}`,
+    'Join the waiting list — first come, first served.',
+  ];
+  const url = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
+  const buttons = buttonsFor(url, 'Join the waiting list');
+  const text = buttons ? lines.join('\n') : [...lines, '', url].join('\n');
+  return { text, buttons };
 }
 
 export interface VacancyMessageInput {
@@ -122,7 +123,16 @@ export function buildVacancyMessage(ctx: MessageContext, input: VacancyMessageIn
     return post(ctx, [`✅ ${names} ${input.promotedNames.length === 1 ? 'is' : 'are'} in for ${sessionLine(ctx)}.`, 'The session is full.'], 'See who is playing');
   }
   if (remaining > 0) {
-    return post(ctx, [`📣 ${remaining} open ${remaining === 1 ? 'slot' : 'slots'} for ${sessionLine(ctx)}.`, 'First come, first served.'], 'Claim a slot');
+    const slotWord = remaining === 1 ? 'slot' : 'slots';
+    const lines = [
+      'Final call for open slots!',
+      `${remaining} open ${slotWord} for ${sessionLine(ctx)}.`,
+      'First come, first served.',
+    ];
+    const url = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
+    const buttons = buttonsFor(url, 'Claim a slot');
+    const text = buttons ? lines.join('\n') : [...lines, '', url].join('\n');
+    return { text, buttons };
   }
   // Nobody promoted, nothing open. Only worth saying to a group that was asked: without this the
   // common case - pinged at 09:00, everyone votes in by 13:00 - never tells them it filled.
@@ -145,11 +155,14 @@ export function buildNominationMessage(ctx: MessageContext, input: NominationMes
   const slot = `${nominator}'s slot for ${sessionLine(ctx)}`;
   const line =
     input.kind === 'CREATED'
-      ? `🔁 ${slot} goes to ${escapeTelegramHtml(input.nomineeName)}.`
+      ? `🔁 ${escapeTelegramHtml(input.nomineeName)} is playing for ${slot}`
       : input.kind === 'SWITCHED'
-        ? `🔁 ${slot} now goes to ${escapeTelegramHtml(input.nomineeName)} instead of ${escapeTelegramHtml(input.previousNomineeName)}.`
-        : `↩️ ${slot} is no longer passed to ${escapeTelegramHtml(input.previousNomineeName)}.`;
-  return post(ctx, [line], 'See who is playing');
+        ? `🔁 ${escapeTelegramHtml(input.nomineeName)} is playing for ${slot} instead of ${escapeTelegramHtml(input.previousNomineeName)}.`
+        : `↩️ ${escapeTelegramHtml(input.previousNomineeName)} is no longer playing for ${slot}.`;
+  const url = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
+  const buttons = buttonsFor(url, 'See who is playing');
+  const text = buttons ? line : [line, '', url].join('\n');
+  return { text, buttons };
 }
 
 // Main group, when an already-announced game day is cancelled (resolved open question 4).
