@@ -91,11 +91,16 @@ describe('decideGameDayActions', () => {
 describe('candidateDates', () => {
   it("is the squad's wall-clock date, not UTC's - a tick at 00:30 Amsterdam evaluates the new day", () => {
     const halfPastMidnight = new Date('2026-09-22T22:30:00Z'); // 00:30 on the 23rd in Amsterdam
-    expect(candidateDates(halfPastMidnight, AMS, 2)).toEqual(['2026-09-23', '2026-09-24', '2026-09-25']);
+    expect(candidateDates(halfPastMidnight, AMS, 2)).toEqual(['2026-09-23', '2026-09-24']);
   });
 
   it('scans the whole window from today, not just the date N days out', () => {
     expect(candidateDates(T.twoDaysBefore, AMS, 2)).toEqual(['2026-09-21', '2026-09-22', '2026-09-23']);
+  });
+
+  it('adds the date N days out only from 17:00 local, not at midnight', () => {
+    expect(candidateDates(new Date('2026-09-21T14:55:00Z'), AMS, 2)).toEqual(['2026-09-21', '2026-09-22']);
+    expect(candidateDates(new Date('2026-09-21T15:00:00Z'), AMS, 2)).toEqual(['2026-09-21', '2026-09-22', '2026-09-23']);
   });
 });
 
@@ -143,6 +148,24 @@ describe('Pass A - creation', () => {
     expect((send.mock.calls[0][3] as { inline_keyboard: { url: string }[][] }).inline_keyboard[0][0].url).toBe(
       'https://brs.example.com/s/wed/game-day/2026-09-23'
     );
+  });
+
+  it('neither creates nor announces the session N days out before 17:00 local', async () => {
+    seedSquad(db);
+    await runGameDayTick(new Date('2026-09-20T22:00:00Z')); // 00:00 on the 21st in Amsterdam
+    await runGameDayTick(new Date('2026-09-21T14:55:00Z')); // 16:55
+    expect(rowFor('2026-09-23')).toBeUndefined();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('announces once even when two processes tick the same database at the same instant', async () => {
+    seedSquad(db);
+    const first = runGameDayTick(T.twoDaysBefore);
+    global.__gameDayTickInProgress = false; // the second process has its own in-memory guard
+    const second = runGameDayTick(T.twoDaysBefore);
+    await Promise.all([first, second]);
+    expect(rows()).toHaveLength(1);
+    expect(send).toHaveBeenCalledTimes(1);
   });
 
   it('recovers a session a missed day would have lost: any tick in the window creates it', async () => {
@@ -266,7 +289,7 @@ describe('Pass B - the message and deadline steps', () => {
     await runGameDayTick(T.twoDaysBefore);
     expect(rowFor('2026-09-23')!.announcedAt).toBeNull();
 
-    await runGameDayTick(new Date('2026-09-21T10:05:00Z'));
+    await runGameDayTick(new Date('2026-09-21T15:05:00Z'));
     expect(rowFor('2026-09-23')!.announcedAt).not.toBeNull();
     expect(send).toHaveBeenCalledTimes(2);
   });

@@ -14,7 +14,7 @@ import prisma from '@/lib/prisma';
 import { parseGameDayOps, type GameDayOpsData } from '@/lib/gameDayOps';
 import { isPlayingDay } from '@/lib/scheduling/playingDayCalculator';
 import { scheduleTimezone, type SquadScheduleData } from '@/lib/squadSchedule';
-import { addCalendarDays, dateOnlyFromIso, isoFromDateOnly, localDateIso } from './clock';
+import { addCalendarDays, dateOnlyFromIso, instantAt, isoFromDateOnly, localDateIso } from './clock';
 import { computeGameDayCounts } from './counts';
 import { loadGameDayState } from './eligibility';
 import { cancelGameDay, closeVoting } from './lifecycle';
@@ -25,7 +25,7 @@ import { buildOpenSlotPingMessage, buildReminderMessage, buildVoteOpenMessage } 
 import { deliverVacancyPlan, planVacancySync } from './openSlots';
 import { logSend, messageContextFor, sendGameDayPost, type SendOutcome } from './telegram';
 import { reminderRollCall } from './view';
-import { resolveGameDayInstants, type GameDayClock } from './voteWindow';
+import { resolveGameDayInstants, VOTE_OPENS_TIME, type GameDayClock } from './voteWindow';
 
 // ---- pure ----------------------------------------------------------------------------------
 
@@ -33,10 +33,14 @@ import { resolveGameDayInstants, type GameDayClock } from './voteWindow';
 // wall-clock date, not UTC (at 00:30 in Amsterdam UTC is still on yesterday), and dates step by
 // calendar day, never by 24h multiples of an instant. Scanning the whole window rather than the
 // single date daysAhead out is what lets any tick within the window recover a session a
-// process outage would otherwise have lost permanently.
+// process outage would otherwise have lost permanently. The date daysAhead out only joins the
+// window at VOTE_OPENS_TIME local - creation is what triggers the announcement, so this is what
+// holds the "vote is open" post back until the evening.
 export function candidateDates(now: Date, timezone: string, daysAhead: number): string[] {
   const today = localDateIso(now, timezone);
-  return Array.from({ length: daysAhead + 1 }, (_, i) => addCalendarDays(today, i));
+  const opened = now.getTime() >= instantAt(today, VOTE_OPENS_TIME, timezone).getTime();
+  const lastOffset = opened ? daysAhead : daysAhead - 1;
+  return Array.from({ length: lastOffset + 1 }, (_, i) => addCalendarDays(today, i));
 }
 
 export interface GameDaySnapshot {
@@ -249,19 +253,37 @@ async function runCreationPass(squad: Squad, now: Date, summary: TickSummary): P
   }
 }
 
-async function stamp(
-  gameDayId: number,
-  field: 'announcedAt' | 'openSlotPingedAt' | 'remindedAt',
-  now: Date,
-  extra: Prisma.GameDayUpdateManyMutationInput = {}
-) {
-  await prisma.gameDay.updateMany({ where: { id: gameDayId, [field]: null }, data: { [field]: now, ...extra } });
+type StepStamp = 'announcedAt' | 'openSlotPingedAt' | 'remindedAt';
+
+async function stamp(gameDayId: number, field: StepStamp, now: Date) {
+  await prisma.gameDay.updateMany({ where: { id: gameDayId, [field]: null }, data: { [field]: now } });
 }
 
-// Sent or deliberately skipped -> stamp; failed -> leave the stamp unset so the next tick retries
-// (until the deadline turns it into a skip).
-function shouldStamp(outcome: SendOutcome): boolean {
-  return outcome.status !== 'failed';
+// Claim-then-send, so a one-shot post goes out once even when two processes tick against the
+// same database (a second container, a redeploy overlap, a dev server on the live DB): their cron
+// ticks fire on the same wall-clock second, so send-then-stamp let both read a null stamp and
+// both send. Only the tick whose conditional update wins sends. Sent or deliberately skipped ->
+// the claim stands; failed -> it is released so the next tick retries (until the deadline turns
+// it into a skip). Null = another tick already claimed it. A crash between claim and send loses
+// the post - at-most-once is the right side to err on for a group chat.
+async function sendOnce(
+  gameDayId: number,
+  field: StepStamp,
+  now: Date,
+  send: () => Promise<SendOutcome>
+): Promise<SendOutcome | null> {
+  const { count } = await prisma.gameDay.updateMany({ where: { id: gameDayId, [field]: null }, data: { [field]: now } });
+  if (count === 0) return null;
+  let outcome: SendOutcome;
+  try {
+    outcome = await send();
+  } catch (error) {
+    outcome = { status: 'failed', reason: error instanceof Error ? error.message : String(error) };
+  }
+  if (outcome.status === 'failed') {
+    await prisma.gameDay.updateMany({ where: { id: gameDayId, [field]: now }, data: { [field]: null } });
+  }
+  return outcome;
 }
 
 // Pass B for one game day row.
@@ -275,9 +297,10 @@ async function runStepsPass(gameDay: GameDay & { squad: Squad }, now: Date, summ
     console.log(`[game-day] ${squad.slug}: skipped announcement for ${label} (past the deadline)`);
     await stamp(gameDay.id, 'announcedAt', now);
   } else if (actions.announce === 'send') {
-    const outcome = await sendGameDayPost(squad, 'main', buildVoteOpenMessage(ctx));
-    logSend(squad, `announcement for ${label}`, outcome);
-    if (shouldStamp(outcome)) await stamp(gameDay.id, 'announcedAt', now);
+    const outcome = await sendOnce(gameDay.id, 'announcedAt', now, () =>
+      sendGameDayPost(squad, 'main', buildVoteOpenMessage(ctx))
+    );
+    if (outcome) logSend(squad, `announcement for ${label}`, outcome);
   }
 
   if (actions.ping !== null || actions.remind === 'send') {
@@ -293,26 +316,25 @@ async function runStepsPass(gameDay: GameDay & { squad: Squad }, now: Date, summ
         console.log(`[game-day] ${squad.slug}: skipped open-slot ping for ${label} (${verdict.reason})`);
         await stamp(gameDay.id, 'openSlotPingedAt', now);
       } else {
-        const outcome = await sendGameDayPost(
-          squad,
-          'openSlot',
-          buildOpenSlotPingMessage(ctx, { confirmedIn: counts.confirmedIn, minPlayers: gameDay.minPlayers! })
+        const outcome = await sendOnce(gameDay.id, 'openSlotPingedAt', now, () =>
+          sendGameDayPost(
+            squad,
+            'openSlot',
+            buildOpenSlotPingMessage(ctx, { confirmedIn: counts.confirmedIn, minPlayers: gameDay.minPlayers! })
+          )
         );
-        logSend(squad, `open-slot ping for ${label}`, outcome);
-        if (shouldStamp(outcome)) {
-          await stamp(gameDay.id, 'openSlotPingedAt', now, { openSlotPingSent: outcome.status === 'sent' });
+        if (outcome) logSend(squad, `open-slot ping for ${label}`, outcome);
+        if (outcome?.status === 'sent') {
+          await prisma.gameDay.updateMany({ where: { id: gameDay.id }, data: { openSlotPingSent: true } });
         }
       }
     }
 
     if (actions.remind === 'send') {
-      const outcome = await sendGameDayPost(
-        squad,
-        'main',
-        buildReminderMessage(ctx, reminderRollCall(state))
+      const outcome = await sendOnce(gameDay.id, 'remindedAt', now, () =>
+        sendGameDayPost(squad, 'main', buildReminderMessage(ctx, reminderRollCall(state)))
       );
-      logSend(squad, `reminder for ${label}`, outcome);
-      if (shouldStamp(outcome)) await stamp(gameDay.id, 'remindedAt', now);
+      if (outcome) logSend(squad, `reminder for ${label}`, outcome);
     }
   }
   if (actions.remind === 'skip') {
