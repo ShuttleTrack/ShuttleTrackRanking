@@ -24,6 +24,7 @@ import { syncUnsettledNominationPosts } from './nominationPosts';
 import { buildOpenSlotPingMessage, buildReminderMessage, buildVoteOpenMessage } from './notifications';
 import { deliverVacancyPlan, planVacancySync } from './openSlots';
 import { logSend, messageContextFor, sendGameDayPost, type SendOutcome } from './telegram';
+import { reminderRollCall } from './view';
 import { resolveGameDayInstants, VOTE_OPENS_TIME, type GameDayClock } from './voteWindow';
 
 // ---- pure ----------------------------------------------------------------------------------
@@ -303,7 +304,8 @@ async function runStepsPass(gameDay: GameDay & { squad: Squad }, now: Date, summ
   }
 
   if (actions.ping !== null || actions.remind === 'send') {
-    const counts = computeGameDayCounts(await loadGameDayState(prisma, gameDay));
+    const state = await loadGameDayState(prisma, gameDay);
+    const counts = computeGameDayCounts(state);
 
     if (actions.ping === 'skip') {
       console.log(`[game-day] ${squad.slug}: skipped open-slot ping for ${label} (past the deadline)`);
@@ -330,11 +332,7 @@ async function runStepsPass(gameDay: GameDay & { squad: Squad }, now: Date, summ
 
     if (actions.remind === 'send') {
       const outcome = await sendOnce(gameDay.id, 'remindedAt', now, () =>
-        sendGameDayPost(
-          squad,
-          'main',
-          buildReminderMessage(ctx, { confirmedIn: counts.confirmedIn, minPlayers: gameDay.minPlayers })
-        )
+        sendGameDayPost(squad, 'main', buildReminderMessage(ctx, reminderRollCall(state)))
       );
       if (outcome) logSend(squad, `reminder for ${label}`, outcome);
     }

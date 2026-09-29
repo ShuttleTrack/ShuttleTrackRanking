@@ -5,6 +5,7 @@
 import { format, parseISO } from 'date-fns';
 import { escapeTelegramHtml, type InlineKeyboard } from '@/lib/telegram/sendMessage';
 import { VOTES_CLOSE_TIME } from './voteWindow';
+import type { ReminderRollCall } from './view';
 
 export interface TelegramPost {
   text: string;
@@ -63,23 +64,32 @@ export function buildVoteOpenMessage(ctx: MessageContext): TelegramPost {
   return { text, buttons };
 }
 
+function reminderInLine(line: ReminderRollCall['in'][number]): string {
+  const name = escapeTelegramHtml(line.name);
+  return line.standingInForName
+    ? `✅ ${name} for ${escapeTelegramHtml(line.standingInForName)}`
+    : `✅ ${name}`;
+}
+
 // Main group, 10:00 on the game day.
-export function buildReminderMessage(
-  ctx: MessageContext,
-  counts: { confirmedIn: number; minPlayers: number | null }
-): TelegramPost {
-  const tally =
-    counts.minPlayers === null
-      ? `${counts.confirmedIn} in so far.`
-      : `${counts.confirmedIn} of ${counts.minPlayers} in so far.`;
-  return post(
-    ctx,
-    [
-      `⏰ Reminder — ${sessionLine(ctx)}`,
-      `${tally} Voting closes at <b>${VOTES_CLOSE_TIME}</b> today.`,
-    ],
-    'Vote in / out'
-  );
+export function buildReminderMessage(ctx: MessageContext, rollCall: ReminderRollCall): TelegramPost {
+  const lines = [
+    `⏰ Reminder! Vote by <b>${VOTES_CLOSE_TIME}</b> today, or you're out. (No vote = out)`,
+    `<b>${rollCall.voted}</b> of ${rollCall.holders} have voted.`,
+  ];
+  if (rollCall.in.length > 0) {
+    lines.push('', 'In', ...rollCall.in.map(reminderInLine));
+  }
+  if (rollCall.out.length > 0) {
+    lines.push('', 'Out', ...rollCall.out.map((line) => `❌ ${escapeTelegramHtml(line.name)}`));
+  }
+  if (rollCall.yetToVote.length > 0) {
+    lines.push('', 'Yet to vote', ...rollCall.yetToVote.map((line) => `❓ ${escapeTelegramHtml(line.name)}`));
+  }
+  const url = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
+  const buttons = buttonsFor(url, 'Vote in / out');
+  const text = buttons ? lines.join('\n') : [...lines, '', url].join('\n');
+  return { text, buttons };
 }
 
 // Open-slot group, 09:00 on the game day, only when confirmedIn is below the minimum.
@@ -137,7 +147,7 @@ export function buildVacancyMessage(ctx: MessageContext, input: VacancyMessageIn
   // Nobody promoted, nothing open. Only worth saying to a group that was asked: without this the
   // common case - pinged at 09:00, everyone votes in by 13:00 - never tells them it filled.
   if (input.pingSent || (input.previouslyAnnounced ?? 0) > 0) {
-    return post(ctx, [`👍 ${sessionLine(ctx)} filled up — no open slots needed. Thanks!`], 'See who is playing');
+    return post(ctx, [`👍 ${sessionLine(ctx)} filled up — no open slots available. Thanks!`], 'See who is playing');
   }
   return null;
 }

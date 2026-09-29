@@ -35,9 +35,44 @@ describe('the four message bodies', () => {
     expect(post.buttons).toEqual({ inline_keyboard: [[{ text: 'Vote in / out', url: URL }]] });
   });
 
-  it('reminder carries the current count against the minimum, or alone without one', () => {
-    expect(buildReminderMessage(ctx, { confirmedIn: 11, minPlayers: 16 }).text).toContain('11 of 16 in so far.');
-    expect(buildReminderMessage(ctx, { confirmedIn: 11, minPlayers: null }).text).toContain('11 in so far.');
+  it('reminder: deadline, voted count, and roll-call sections', () => {
+    const post = buildReminderMessage(ctx, {
+      voted: 13,
+      holders: 18,
+      in: [
+        { name: 'Ada', standingInForName: null },
+        { name: 'Bob', standingInForName: 'Carol' },
+      ],
+      out: [{ name: 'Dan', standingInForName: null }],
+      yetToVote: [{ name: 'Eve', standingInForName: null }, { name: 'A<b>', standingInForName: null }],
+    });
+    expect(post.text).toContain("Vote by <b>13:00</b> today, or you're out. (No vote = out)");
+    expect(post.text).toContain('<b>13</b> of 18 have voted.');
+    expect(post.text).toContain('✅ Bob for Carol');
+    expect(post.text).toContain('❌ Dan');
+    expect(post.text).toContain('❓ A&lt;b&gt;');
+    expect(post.text).not.toContain(URL);
+    expect(post.buttons).toEqual({ inline_keyboard: [[{ text: 'Vote in / out', url: URL }]] });
+  });
+
+  it('reminder omits empty Out section', () => {
+    const post = buildReminderMessage(ctx, {
+      voted: 2,
+      holders: 2,
+      in: [{ name: 'Ada', standingInForName: null }],
+      out: [],
+      yetToVote: [],
+    });
+    expect(post.text).not.toContain('\nOut\n');
+  });
+
+  it('reminder appends the game-day URL when the inline button is unavailable', () => {
+    const post = buildReminderMessage(
+      { ...ctx, appUrl: 'http://localhost:3000' },
+      { voted: 0, holders: 1, in: [], out: [], yetToVote: [{ name: 'Ada', standingInForName: null }] }
+    );
+    expect(post.buttons).toBeUndefined();
+    expect(post.text).toContain('http://localhost:3000/s/wed/game-day/2026-09-23');
   });
 
   it('players needed: the shortfall headline and waiting-list rule, link via button only', () => {
@@ -84,7 +119,7 @@ describe('the four message bodies', () => {
     expect(finalCall.text).not.toContain(URL);
     expect(finalCall.buttons).toEqual({ inline_keyboard: [[{ text: 'Claim a slot', url: URL }]] });
     expect(v([], 1)).toContain('1 open slot for');
-    expect(v([], 0, { pingSent: true })).toContain('filled up — no open slots needed');
+    expect(v([], 0, { pingSent: true })).toContain('filled up — no open slots available');
     expect(v([], 0, { previouslyAnnounced: 2 })).toContain('filled up');
     expect(v([], 0)).toBeNull();
   });
