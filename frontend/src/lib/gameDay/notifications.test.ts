@@ -119,7 +119,7 @@ describe('the four message bodies', () => {
     expect(finalCall.text).not.toContain(URL);
     expect(finalCall.buttons).toEqual({ inline_keyboard: [[{ text: 'Claim a slot', url: URL }]] });
     expect(v([], 1)).toContain('1 open slot for');
-    expect(v([], 0, { pingSent: true })).toContain('filled up — no open slots needed');
+    expect(v([], 0, { pingSent: true })).toContain('filled up — no open slots available');
     expect(v([], 0, { previouslyAnnounced: 2 })).toContain('filled up');
     expect(v([], 0)).toBeNull();
   });

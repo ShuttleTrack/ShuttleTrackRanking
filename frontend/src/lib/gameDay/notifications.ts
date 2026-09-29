@@ -147,7 +147,7 @@ export function buildVacancyMessage(ctx: MessageContext, input: VacancyMessageIn
   // Nobody promoted, nothing open. Only worth saying to a group that was asked: without this the
   // common case - pinged at 09:00, everyone votes in by 13:00 - never tells them it filled.
   if (input.pingSent || (input.previouslyAnnounced ?? 0) > 0) {
-    return post(ctx, [`👍 ${sessionLine(ctx)} filled up — no open slots needed. Thanks!`], 'See who is playing');
+    return post(ctx, [`👍 ${sessionLine(ctx)} filled up — no open slots available. Thanks!`], 'See who is playing');
   }
   return null;
 }
