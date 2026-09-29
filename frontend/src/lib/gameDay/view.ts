@@ -137,6 +137,37 @@ function buildRoster(state: GameDayState) {
   };
 }
 
+export interface ReminderRollCallLine {
+  name: string;
+  standingInForName: string | null;
+}
+
+export interface ReminderRollCall {
+  voted: number;
+  holders: number;
+  in: ReminderRollCallLine[];
+  out: ReminderRollCallLine[];
+  yetToVote: ReminderRollCallLine[];
+}
+
+// 10:00 main-group reminder: same In/Out/Yet to vote lists as the check-in roster (NotVotedList).
+export function reminderRollCall(state: GameDayState): ReminderRollCall {
+  const roster = buildRoster(state);
+
+  const toLine = (p: RosterPlayer): ReminderRollCallLine => ({
+    name: p.name,
+    standingInForName: p.standingInFor?.name ?? null,
+  });
+
+  const inLines = [...roster.inPlayers].sort(byRankThenName).map(toLine);
+  const outLines = [...roster.outPlayers].sort(byRankThenName).map(toLine);
+  const yetToVote = roster.notVoted.map(toLine);
+  const voted = inLines.length + outLines.length;
+  const holders = voted + yetToVote.length;
+
+  return { voted, holders, in: inLines, out: outLines, yetToVote };
+}
+
 // NOMINEE: playing in someone else's slot through a one-day nomination - no vote and no
 // waiting-list actions, just the arrangement (SINGLE_DAY_NOMINATION_PLAN.md, "UI").
 export type GameDayRole = 'VOTER' | 'NOMINEE' | 'OPEN_SLOT' | 'OBSERVER';

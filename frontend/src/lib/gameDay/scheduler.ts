@@ -24,6 +24,7 @@ import { syncUnsettledNominationPosts } from './nominationPosts';
 import { buildOpenSlotPingMessage, buildReminderMessage, buildVoteOpenMessage } from './notifications';
 import { deliverVacancyPlan, planVacancySync } from './openSlots';
 import { logSend, messageContextFor, sendGameDayPost, type SendOutcome } from './telegram';
+import { reminderRollCall } from './view';
 import { resolveGameDayInstants, type GameDayClock } from './voteWindow';
 
 // ---- pure ----------------------------------------------------------------------------------
@@ -280,7 +281,8 @@ async function runStepsPass(gameDay: GameDay & { squad: Squad }, now: Date, summ
   }
 
   if (actions.ping !== null || actions.remind === 'send') {
-    const counts = computeGameDayCounts(await loadGameDayState(prisma, gameDay));
+    const state = await loadGameDayState(prisma, gameDay);
+    const counts = computeGameDayCounts(state);
 
     if (actions.ping === 'skip') {
       console.log(`[game-day] ${squad.slug}: skipped open-slot ping for ${label} (past the deadline)`);
@@ -307,7 +309,7 @@ async function runStepsPass(gameDay: GameDay & { squad: Squad }, now: Date, summ
       const outcome = await sendGameDayPost(
         squad,
         'main',
-        buildReminderMessage(ctx, { confirmedIn: counts.confirmedIn, minPlayers: gameDay.minPlayers })
+        buildReminderMessage(ctx, reminderRollCall(state))
       );
       logSend(squad, `reminder for ${label}`, outcome);
       if (shouldStamp(outcome)) await stamp(gameDay.id, 'remindedAt', now);

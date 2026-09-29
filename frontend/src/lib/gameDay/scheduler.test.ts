@@ -139,7 +139,10 @@ describe('Pass A - creation', () => {
       announcedAt: T.twoDaysBefore,
     });
     expect(sentTo()).toEqual([OPS.telegramMainChatId]);
-    expect(sentTexts()[0]).toContain('https://brs.example.com/s/wed/game-day/2026-09-23');
+    expect(sentTexts()[0]).toContain('Are you in for Wednesday 23 Sep, 19:00–22:00?');
+    expect((send.mock.calls[0][3] as { inline_keyboard: { url: string }[][] }).inline_keyboard[0][0].url).toBe(
+      'https://brs.example.com/s/wed/game-day/2026-09-23'
+    );
   });
 
   it('recovers a session a missed day would have lost: any tick in the window creates it', async () => {
@@ -215,7 +218,7 @@ describe('Pass B - the message and deadline steps', () => {
 
     await runGameDayTick(T.afterPing);
     expect(sentTo()).toEqual([OPS.telegramOpenSlotChatId]);
-    expect(sentTexts()[0]).toContain('10 of 16 confirmed');
+    expect(sentTexts()[0]).toContain('We need <b>6</b> more players');
     expect(rowFor('2026-09-23')).toMatchObject({ openSlotPingedAt: T.afterPing, openSlotPingSent: true });
 
     send.mockClear();
@@ -239,7 +242,8 @@ describe('Pass B - the message and deadline steps', () => {
     fulltimeIn(db, gd.id, 12);
     await runGameDayTick(T.afterReminder);
     expect(sentTo()).toEqual([OPS.telegramMainChatId]);
-    expect(sentTexts()[0]).toContain('12 of 16 in so far');
+    expect(sentTexts()[0]).toContain('<b>12</b> of 12 have voted');
+    expect(sentTexts()[0]).toContain('✅ ft1');
   });
 
   it('after an outage, skips the late reminder rather than sending it, while voting still closes', async () => {
