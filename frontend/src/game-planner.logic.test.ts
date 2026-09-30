@@ -16,7 +16,7 @@ const EXPECTED_MULTISETS: Record<number, number[]> = {
   17: [4, 4, 4, 5],
   18: [4, 4, 5, 5],
   19: [4, 5, 5, 5],
-  20: [5, 5, 5, 5],
+  20: [4, 4, 4, 4, 4],
 };
 
 const sorted = (arr: number[]) => [...arr].sort((a, b) => a - b);

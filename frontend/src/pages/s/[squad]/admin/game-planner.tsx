@@ -43,7 +43,7 @@ export const calculateGroupDistribution = (totalPlayers: number, seed: string): 
     case 17: distribution = [4, 4, 4, 5]; break;
     case 18: distribution = [4, 4, 5, 5]; break;
     case 19: distribution = [4, 5, 5, 5]; break;
-    case 20: distribution = [5, 5, 5, 5]; break;
+    case 20: distribution = [4, 4, 4, 4, 4]; break; // groups of 4 preferred when both splits work
     default: {
       // Fallback for any unexpected count (shouldn't happen due to validation).
       const numGroups = Math.ceil(totalPlayers / 5);
