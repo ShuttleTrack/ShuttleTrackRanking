@@ -122,17 +122,33 @@ export function buildReminderMessage(ctx: MessageContext, rollCall: ReminderRoll
   return { text, buttons };
 }
 
-// Open-slot group, 09:00 on the game day, only when confirmedIn is below the minimum.
+// Open-slot group, 09:00 on the game day, when confirmedIn + waiting is at or below the minimum.
 export function buildOpenSlotPingMessage(
   ctx: MessageContext,
-  counts: { confirmedIn: number; minPlayers: number }
+  counts: { confirmedIn: number; waiting: number; minPlayers: number }
 ): TelegramPost {
-  const short = Math.max(0, counts.minPlayers - counts.confirmedIn);
-  const playerWord = short === 1 ? 'player' : 'players';
-  const lines = [
-    `🙋 We need <b>${short}</b> more ${playerWord} for ${sessionLine(ctx)}`,
-    'Join the waiting list — first come, first served.',
-  ];
+  const shortfall = counts.minPlayers - counts.confirmedIn - counts.waiting;
+  const lines =
+    shortfall === 0
+      ? [
+          `🙋 ${sessionLine(ctx)} is covered.`,
+          counts.waiting > 0
+            ? `${counts.confirmedIn} in and ${counts.waiting} on the waiting list.`
+            : `${counts.confirmedIn} in.`,
+          '',
+          'Join the waiting list to be next in line if someone cancels.',
+        ]
+      : (() => {
+          const playerWord = shortfall === 1 ? 'player' : 'players';
+          const body = [
+            `🙋 We need <b>${shortfall}</b> more ${playerWord} for ${sessionLine(ctx)}`,
+            ...(counts.waiting > 0
+              ? [`Including ${counts.waiting} already on the waiting list.`]
+              : []),
+            'Join the waiting list — first come, first served.',
+          ];
+          return body;
+        })();
   const gameDay = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
   const squadBoard = squadBoardUrl(ctx.appUrl, ctx.slug);
   const buttons = buttonsForRows([

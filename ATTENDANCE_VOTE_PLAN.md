@@ -150,7 +150,7 @@ confirmedIn = count(votes where choice = IN and inheritedFromPlayerId is null)
               // inherited through a post-deadline transfer - see "Eligibility is live"
 ```
 
-This is what the 09:00 minimum check compares, what the roster displays, and what Game Planner pre-ticks. **Two kinds of person hold a slot without having confirmed** — an assigned open-slot player who has not voted, and a structural holder sitting on an inherited reservation — and both appear as **awaiting confirmation**, visible on the page and in the planner banner, deliberately *not* counted as attendance.
+This is what the roster displays, and what Game Planner pre-ticks. The 09:00 open-slot ping also counts players on the WAITING list toward the minimum. **Two kinds of person hold a slot without having confirmed** — an assigned open-slot player who has not voted, and a structural holder sitting on an inherited reservation — and both appear as **awaiting confirmation**, visible on the page and in the planner banner, deliberately *not* counted as attendance.
 
 A consequence worth stating: `slotsHeld >= confirmedIn` always, and the difference is exactly the set of people holding a slot without having confirmed - unconfirmed assignees, plus any inherited reservation from a post-deadline transfer. A session can therefore be "full" (no vacancies to offer) while still short of confirmed players. That is the correct behaviour — those slots are spoken for — and the gap closes itself as people confirm, or reopens via the vacancy sync when they vote out.
 
@@ -599,7 +599,7 @@ A tick has **two distinct passes over different sets of rows**, and conflating t
 | **Remind** | past 10:00 squad-local, `remindedAt` is null | `remindedAt` |
 | **Close voting** | past `votesCloseAt` | → `VOTING_CLOSED` + `votingClosedAt`, then the vacancy sync |
 
-The ping additionally requires the minimum *and* the open-slot chat id to be configured, and `confirmedIn` to be below the minimum (Decision 6).
+The ping additionally requires the minimum *and* the open-slot chat id to be configured, and `confirmedIn + waiting` to be at or below the minimum (Decision 6; `waiting` = WAITING open-slot rows in the pool).
 
 **Catch-up is bounded at both ends.** "Threshold passed AND stamp is null" alone is not enough: at 18:00, "past 10:00 and `remindedAt` is null" is still true, so a tick that finally runs after a long outage would send "please vote" and then immediately close voting — and could fire the 09:00 open-slot ping after the session had already started. **Announce, ping and remind all additionally require `status === VOTING_OPEN` and `now < votesCloseAt`.** Past the deadline they are stamped-as-skipped rather than sent. Closing is the only step with no upper bound, because closing late is still correct.
 
@@ -617,7 +617,7 @@ Each squad's tick is wrapped in its own try/catch, so one squad's failure — a 
 |---|---|---|
 | Vote is open | main | on creation, `voteOpensDaysBefore` ahead |
 | Reminder, with current counts | main | 10:00 game day |
-| Players needed — join the waiting list (+ **Join the squad** → `/s/{slug}`) | open-slot | 09:00 game day, `confirmedIn` < minimum |
+| Players needed / covered — join the waiting list (+ **Join the squad** → `/s/{slug}`) | open-slot | 09:00 game day, `confirmedIn + waiting` ≤ minimum |
 | Slots assigned / slots available | open-slot | the vacancy sync |
 
 ## API routes
@@ -717,7 +717,7 @@ DaisyUI stays out of the player-facing pages — they follow `docs/design.md` to
 4. Vote IN, then OUT, then IN again while open. Confirm the roster stays hidden until the first vote.
 5. As a fulltime player **with an active replacement covering that date**, confirm the page is read-only with a reason — and that their replacement can vote.
 6. As an `OPEN_SLOT` player, join the waiting list **before** any 09:00 ping: the planned game day is visible and joinable from creation.
-7. Tick past 09:00 with `confirmedIn` below the minimum → the open-slot group is pinged. Re-tick → **not** pinged again. Separately, with `confirmedIn` already at or above the minimum → no ping, stamp still set.
+7. Tick past 09:00 with `confirmedIn + waiting` below the minimum → the open-slot group is pinged. Re-tick → **not** pinged again. With the total exactly at the minimum → covered ping (cancellation line). With the total above the minimum → no ping, stamp still set.
 8. Tick past 13:00 → `VOTING_CLOSED`; waiting-list players promoted in join order up to the gap and **no further**; the open-slot group gets names plus any remaining count. With an empty waiting list, it gets the vacancy count and link instead.
 9. An assigned player who has **not** voted shows as *awaiting confirmation*, is **not** in `confirmedIn`, and their slot is **not** re-offered. They then vote IN → they move into `confirmedIn` and no total jumps (the no-double-count check).
 10. After the deadline: a structural holder votes OUT → a new vacancy post, and the next waiting-list player is promoted on the same pass. An OUT player tries IN → 400.
