@@ -79,17 +79,24 @@ function reminderInLine(line: ReminderRollCall['in'][number]): string {
 // Main group, 10:00 on the game day.
 export function buildReminderMessage(ctx: MessageContext, rollCall: ReminderRollCall): TelegramPost {
   const lines = [
-    `⏰ Reminder! Vote by <b>${VOTES_CLOSE_TIME}</b> today, or you're out. (No vote = out)`,
-    `<b>${rollCall.voted}</b> of ${rollCall.holders} have voted.`,
+    `⏰ Reminder! Vote by <b>${VOTES_CLOSE_TIME}</b> today, or you're considered out.`,
+    `<b>${rollCall.voted}</b> of ${rollCall.holders} have voted and <b>${rollCall.waiting.length}</b> in open slot waiting list.`,
   ];
+  if (rollCall.yetToVote.length > 0) {
+    lines.push('', 'Yet to vote', ...rollCall.yetToVote.map((line) => `❓ ${telegramPlayerName(line.name)}`));
+  }
   if (rollCall.in.length > 0) {
     lines.push('', 'In', ...rollCall.in.map(reminderInLine));
   }
+  if (rollCall.waiting.length > 0) {
+    lines.push(
+      '',
+      'Open slot waiting list',
+      ...rollCall.waiting.map((line) => `⏳ ${telegramPlayerName(line.name)}`)
+    );
+  }
   if (rollCall.out.length > 0) {
     lines.push('', 'Out', ...rollCall.out.map((line) => `❌ ${telegramPlayerName(line.name)}`));
-  }
-  if (rollCall.yetToVote.length > 0) {
-    lines.push('', 'Yet to vote', ...rollCall.yetToVote.map((line) => `❓ ${telegramPlayerName(line.name)}`));
   }
   const url = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
   const buttons = buttonsFor(url, 'Vote in / out');

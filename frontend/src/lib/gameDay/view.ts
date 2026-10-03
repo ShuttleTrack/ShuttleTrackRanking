@@ -149,6 +149,7 @@ export interface ReminderRollCall {
   in: ReminderRollCallLine[];
   out: ReminderRollCallLine[];
   yetToVote: ReminderRollCallLine[];
+  waiting: ReminderRollCallLine[];
 }
 
 // 10:00 main-group reminder: same In/Out/Yet to vote lists as the check-in roster (NotVotedList).
@@ -165,8 +166,9 @@ export function reminderRollCall(state: GameDayState): ReminderRollCall {
   const yetToVote = roster.notVoted.map(toLine);
   const voted = inLines.length + outLines.length;
   const holders = voted + yetToVote.length;
+  const waiting = roster.waiting.map((s) => toLine(rosterPlayer(state.players.get(s.playerId)!, state)));
 
-  return { voted, holders, in: inLines, out: outLines, yetToVote };
+  return { voted, holders, in: inLines, out: outLines, yetToVote, waiting };
 }
 
 // NOMINEE: playing in someone else's slot through a one-day nomination - no vote and no

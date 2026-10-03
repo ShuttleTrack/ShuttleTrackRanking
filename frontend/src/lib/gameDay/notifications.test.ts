@@ -45,9 +45,26 @@ describe('the four message bodies', () => {
       ],
       out: [{ name: 'Dan Jones', standingInForName: null }],
       yetToVote: [{ name: 'Eve Black', standingInForName: null }, { name: 'A<b>', standingInForName: null }],
+      waiting: [
+        { name: 'Grace Hopper', standingInForName: null },
+        { name: 'Zed Alpha', standingInForName: null },
+      ],
     });
-    expect(post.text).toContain("Vote by <b>13:00</b> today, or you're out. (No vote = out)");
-    expect(post.text).toContain('<b>13</b> of 18 have voted.');
+    expect(post.text).toContain("Vote by <b>13:00</b> today, or you're considered out.");
+    expect(post.text).toContain('<b>13</b> of 18 have voted and <b>2</b> in open slot waiting list.');
+    const yetToVoteIdx = post.text.indexOf('Yet to vote');
+    const inIdx = post.text.indexOf('\nIn\n');
+    const waitingIdx = post.text.indexOf('\nOpen slot waiting list\n');
+    const outIdx = post.text.indexOf('\nOut\n');
+    expect(yetToVoteIdx).toBeGreaterThan(-1);
+    expect(inIdx).toBeGreaterThan(-1);
+    expect(waitingIdx).toBeGreaterThan(-1);
+    expect(outIdx).toBeGreaterThan(-1);
+    expect(yetToVoteIdx).toBeLessThan(inIdx);
+    expect(inIdx).toBeLessThan(waitingIdx);
+    expect(waitingIdx).toBeLessThan(outIdx);
+    expect(post.text).toContain('⏳ Grace H');
+    expect(post.text).toContain('⏳ Zed A');
     expect(post.text).toContain('✅ Ada L');
     expect(post.text).not.toContain('Lovelace');
     expect(post.text).toContain('✅ Bob S for Carol W');
@@ -69,14 +86,24 @@ describe('the four message bodies', () => {
       in: [{ name: 'Ada', standingInForName: null }],
       out: [],
       yetToVote: [],
+      waiting: [],
     });
+    expect(post.text).toContain('<b>2</b> of 2 have voted and <b>0</b> in open slot waiting list.');
+    expect(post.text).not.toContain('\nOpen slot waiting list\n');
     expect(post.text).not.toContain('\nOut\n');
   });
 
   it('reminder appends the game-day URL when the inline button is unavailable', () => {
     const post = buildReminderMessage(
       { ...ctx, appUrl: 'http://localhost:3000' },
-      { voted: 0, holders: 1, in: [], out: [], yetToVote: [{ name: 'Ada', standingInForName: null }] }
+      {
+        voted: 0,
+        holders: 1,
+        in: [],
+        out: [],
+        yetToVote: [{ name: 'Ada', standingInForName: null }],
+        waiting: [],
+      }
     );
     expect(post.buttons).toBeUndefined();
     expect(post.text).toContain('http://localhost:3000/s/wed/game-day/2026-09-23');

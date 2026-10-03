@@ -38,7 +38,23 @@ describe('reminderRollCall', () => {
 
     expect(roll.yetToVote.map((l) => l.name)).toEqual(['no-vote']);
     expect(roll.in.map((l) => l.name)).toEqual(['voted']);
+    expect(roll.waiting).toEqual([]);
     expect(roll.voted).toBe(roll.in.length + roll.out.length);
     expect(roll.holders).toBe(roll.voted + roll.yetToVote.length);
+  });
+
+  it('lists open-slot waiting players in join order, not assigned entries', async () => {
+    const gd = seedGameDay(db);
+    const zed = openSlotPlayer(db, 'zed');
+    const amy = openSlotPlayer(db, 'amy');
+    const assigned = openSlotPlayer(db, 'assigned');
+    seedOpenSlot(db, gd.id, zed.id, { joinedAt: new Date('2026-09-21T09:00:00Z') });
+    seedOpenSlot(db, gd.id, amy.id, { joinedAt: new Date('2026-09-21T10:00:00Z') });
+    seedOpenSlot(db, gd.id, assigned.id, { status: 'ASSIGNED', joinedAt: new Date('2026-09-21T08:00:00Z') });
+
+    const state = await loadGameDayState(db as never, db.store.gameDay.find((g) => g.id === gd.id)!);
+    const roll = reminderRollCall(state);
+
+    expect(roll.waiting.map((l) => l.name)).toEqual(['zed', 'amy']);
   });
 });
