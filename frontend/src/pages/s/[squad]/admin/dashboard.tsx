@@ -1,7 +1,7 @@
 import { useSession } from 'next-auth/react';
 import { useGames } from '@/hooks/useGames';
 import { DashboardHeader } from '@/components/dashboard/Header';
-import { PlusIcon, UserGroupIcon, PaperAirplaneIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, UserGroupIcon, PaperAirplaneIcon, Cog6ToothIcon, CalendarDaysIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useState } from 'react';
 import { format } from 'date-fns';
@@ -223,6 +223,10 @@ const DashboardPage = () => {
               <Link href={`/s/${slug}/admin/settings`} className={outlineButtonClass}>
                 <Cog6ToothIcon className="h-5 w-5 shrink-0" aria-hidden />
                 Squad Settings
+              </Link>
+              <Link href={`/s/${slug}/admin/open-slot-attendance`} className={outlineButtonClass}>
+                <CalendarDaysIcon className="h-5 w-5 shrink-0" aria-hidden />
+                Open-Slot Attendance
               </Link>
             </div>
           </div>

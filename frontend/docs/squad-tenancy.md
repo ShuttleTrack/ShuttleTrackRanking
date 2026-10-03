@@ -115,7 +115,7 @@ flag - and, later, what signing in requires at all:
 - **User**, continued: `/s/[squad]/game-day/[date]` (`YYYY-MM-DD`) - the game-day check-in page
   (see "Game day check-in & attendance vote" below). Gated by `resolveSquadUserOrRedirect`; a
   superadmin with no `Player` row gets a read-only observer view.
-- **Admin** (signed-in + squad admin, or superadmin): `/s/[squad]/admin/{dashboard,game-day,game-planner,players,score-keeper,settings}`.
+- **Admin** (signed-in + squad admin, or superadmin): `/s/[squad]/admin/{dashboard,game-day,game-planner,open-slot-attendance,players,score-keeper,settings}`. `open-slot-attendance` (linked from the dashboard's Quick Actions) shows one day at a time (a dropdown over the last two months of played/check-in dates, squad-local) with that day's open-slot players in three lists - registered and played, registered but not played, played without registering - plus a CSV download of all days. "Played" = in at least one `Encounter` that date; "registered" = held a place on that date's non-cancelled `GameDay`, read from the raw check-in rows (an `IN` vote, an `ASSIGNED` slot or inherited reservation without an `OUT`, or a live/`SESSION_ENDED` one-day nomination whose nominator voted `IN`; the waiting list alone does not count). Replacement cover and nominations show as notes - for the squad's cost sharing (`lib/reports/openSlotAttendance.ts`, `GET /api/squads/[squadId]/reports/open-slot-attendance`, squad-admin-only).
 - **Platform** (superadmin only): `/platform/squads` - create squads, manage each squad's admins,
   edit `enabled`/`maxPlayers`/`publicWeight`, and **Recalculate public ratings**.
 - **`/`** - **public aggregate leaderboard** (no login). One row per email for people who are
