@@ -57,8 +57,8 @@ describe('posting when voting closes', () => {
     await closeVoting(gd.id, T.atClose);
 
     expect(sentTo()).toEqual([OPS.telegramOpenSlotChatId]);
-    expect(sentTexts()[0]).toContain('Grace is in');
-    expect(sentTexts()[0]).toContain('The session is full.');
+    expect(sentTexts()[0]).toContain('✅ Grace');
+    expect(sentTexts()[0]).toContain('The session is currently full.');
     expect(gameDayRow(gd.id).announcedVacancies).toBe(0);
   });
 
@@ -135,7 +135,8 @@ describe('the "filled up" message', () => {
     fulltimeIn(db, gd.id, 16);
     await closeVoting(gd.id, T.atClose);
     expect(sentTexts()).toHaveLength(1);
-    expect(sentTexts()[0]).toContain('filled up');
+    expect(sentTexts()[0]).toContain('filled up.');
+    expect(sentTexts()[0]).toContain('Currently no open slots available.');
   });
 
   it('is not sent to a group that was never asked for help', async () => {
@@ -230,7 +231,7 @@ describe('a failed send', () => {
     // The retry (the scheduler's Pass B) posts the lost message...
     await syncNow(gd.id, T.afterClose);
     expect(send).toHaveBeenCalledTimes(2);
-    expect(sentTexts()[1]).toContain('The session is full.');
+    expect(sentTexts()[1]).toContain('The session is currently full.');
     expect(gameDayRow(gd.id).announcedVacancies).toBe(0);
     // ...without promoting anyone again, and then goes quiet.
     expect(openSlotsOf(db, gd.id).filter((s) => s.status === 'ASSIGNED')).toHaveLength(2);
