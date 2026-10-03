@@ -19,6 +19,7 @@ const ctx: MessageContext = {
   endTime: '22:00',
 };
 const URL = 'https://brs.example.com/s/wed/game-day/2026-09-23';
+const SQUAD_URL = 'https://brs.example.com/s/wed';
 
 describe('gameDayUrl', () => {
   it('is the absolute, readable-date URL (Decision 1)', () => {
@@ -114,7 +115,12 @@ describe('the four message bodies', () => {
     expect(post.text).toContain('We need <b>4</b> more players for Wednesday 23 Sep, 19:00–22:00');
     expect(post.text).toContain('first come, first served');
     expect(post.text).not.toContain(URL);
-    expect(post.buttons).toEqual({ inline_keyboard: [[{ text: 'Join the waiting list', url: URL }]] });
+    expect(post.buttons).toEqual({
+      inline_keyboard: [
+        [{ text: 'Join the waiting list', url: URL }],
+        [{ text: 'Join the squad', url: SQUAD_URL }],
+      ],
+    });
   });
 
   it('players needed: singular when one short', () => {
@@ -138,6 +144,7 @@ describe('the four message bodies', () => {
     );
     expect(post.buttons).toBeUndefined();
     expect(post.text).toContain('http://localhost:3000/s/wed/game-day/2026-09-23');
+    expect(post.text).toContain('http://localhost:3000/s/wed');
   });
 
   it('vacancy sync: all four cases, and silence when the group was never asked', () => {
@@ -148,7 +155,12 @@ describe('the four message bodies', () => {
     const twoPartPromoted = v(['Ada Lovelace'], 1)!;
     expect(twoPartPromoted).toContain('Ada L is in');
     expect(twoPartPromoted).not.toContain('Lovelace');
-    expect(v(['Ada'], 0)).toMatch(/Ada is in .*\nThe session is full\./);
+    const fullSession = v(['Ada Lovelace'], 0)!;
+    expect(fullSession).toContain('Assigned from the open slot waiting list for Wednesday 23 Sep, 19:00–22:00');
+    expect(fullSession).toContain('✅ Ada L');
+    expect(fullSession).not.toContain('Lovelace');
+    expect(fullSession).toContain('The session is currently full.');
+    expect(fullSession).toContain('\n\nJoin the waiting list to be next in line if someone cancels.');
     const finalCall = buildVacancyMessage(ctx, { promotedNames: [], remaining: 3, previouslyAnnounced: null, pingSent: false })!;
     expect(finalCall.text).toContain('Final call for open slots!');
     expect(finalCall.text).toContain('3 open slots for Wednesday 23 Sep, 19:00–22:00.');
@@ -156,9 +168,34 @@ describe('the four message bodies', () => {
     expect(finalCall.text).not.toContain(URL);
     expect(finalCall.buttons).toEqual({ inline_keyboard: [[{ text: 'Claim a slot', url: URL }]] });
     expect(v([], 1)).toContain('1 open slot for');
-    expect(v([], 0, { pingSent: true })).toContain('filled up — no open slots available');
-    expect(v([], 0, { previouslyAnnounced: 2 })).toContain('filled up');
+    const filledUp = buildVacancyMessage(ctx, {
+      promotedNames: [],
+      remaining: 0,
+      previouslyAnnounced: null,
+      pingSent: true,
+    })!;
+    expect(filledUp.text).toContain('🔒 Wednesday 23 Sep, 19:00–22:00 filled up.');
+    expect(filledUp.text).toContain('Currently no open slots available.');
+    expect(filledUp.text).toContain('\n\nJoin the waiting list to be next in line if someone cancels.');
+    expect(filledUp.text).not.toContain(URL);
+    expect(filledUp.buttons).toEqual({
+      inline_keyboard: [
+        [{ text: 'Join the waiting list', url: URL }],
+        [{ text: 'Join the squad', url: SQUAD_URL }],
+      ],
+    });
+    expect(v([], 0, { previouslyAnnounced: 2 })).toContain('filled up.');
     expect(v([], 0)).toBeNull();
+  });
+
+  it('filled up: appends both URLs when the inline buttons are unavailable', () => {
+    const post = buildVacancyMessage(
+      { ...ctx, appUrl: 'http://localhost:3000' },
+      { promotedNames: [], remaining: 0, previouslyAnnounced: null, pingSent: true }
+    )!;
+    expect(post.buttons).toBeUndefined();
+    expect(post.text).toContain('http://localhost:3000/s/wed/game-day/2026-09-23');
+    expect(post.text).toContain('http://localhost:3000/s/wed');
   });
 
   it('escapes a promoted name that would otherwise break HTML parse mode', () => {

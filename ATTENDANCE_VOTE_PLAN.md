@@ -528,10 +528,10 @@ if no open-slot chat id -> set announcedVacancies = remaining   // so this never
 else if plan.changed:
   message =
     promoted > 0 && remaining > 0  -> "<names> are in. <n> spots still open: <url>"
-    promoted > 0 && remaining == 0 -> "<names> are in. The session is full."
+    promoted > 0 && remaining == 0 -> "Assigned from the open slot waiting list for <session>; one ✅ line per promoted name; The session is currently full.; join waiting list for cancellations."
     promoted == 0 && remaining > 0 -> "<n> open slots for <date>. First come, first served: <url>"
     promoted == 0 && remaining == 0 && a ping went out earlier
-                                   -> "<date> filled up - no open slots needed. Thanks!"
+                                   -> "🔒 <session> filled up.; Currently no open slots available.; join waiting list for cancellations.; buttons: Join the waiting list + Join the squad"
   if send(message) succeeded -> set announcedVacancies = remaining
   // on failure: leave announcedVacancies alone, so the next pass sees changed == true and retries
 ```
@@ -617,7 +617,7 @@ Each squad's tick is wrapped in its own try/catch, so one squad's failure — a 
 |---|---|---|
 | Vote is open | main | on creation, `voteOpensDaysBefore` ahead |
 | Reminder, with current counts | main | 10:00 game day |
-| Players needed — join the waiting list | open-slot | 09:00 game day, `confirmedIn` < minimum |
+| Players needed — join the waiting list (+ **Join the squad** → `/s/{slug}`) | open-slot | 09:00 game day, `confirmedIn` < minimum |
 | Slots assigned / slots available | open-slot | the vacancy sync |
 
 ## API routes

@@ -22,8 +22,16 @@ export interface MessageContext {
   endTime: string;
 }
 
+function appBaseUrl(appUrl: string): string {
+  return appUrl.replace(/\/+$/, '');
+}
+
 export function gameDayUrl(appUrl: string, slug: string, gameDate: string): string {
-  return `${appUrl.replace(/\/+$/, '')}/s/${encodeURIComponent(slug)}/game-day/${gameDate}`;
+  return `${appBaseUrl(appUrl)}/s/${encodeURIComponent(slug)}/game-day/${gameDate}`;
+}
+
+export function squadBoardUrl(appUrl: string, slug: string): string {
+  return `${appBaseUrl(appUrl)}/s/${encodeURIComponent(slug)}`;
 }
 
 // "Wednesday 23 Sep"
@@ -33,15 +41,25 @@ export function formatGameDate(gameDate: string): string {
 
 // Telegram rejects an inline button whose URL it considers unreachable (localhost, a bare IP
 // on a dev box) and fails the WHOLE message - so a local run keeps the link in the text only.
-export function buttonsFor(url: string, label: string): InlineKeyboard | undefined {
+function telegramButtonUrlAllowed(url: string): boolean {
   try {
     const { protocol, hostname } = new URL(url);
-    if (protocol !== 'https:' && protocol !== 'http:') return undefined;
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || !hostname.includes('.')) return undefined;
+    if (protocol !== 'https:' && protocol !== 'http:') return false;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || !hostname.includes('.')) return false;
+    return true;
   } catch {
-    return undefined;
+    return false;
   }
+}
+
+export function buttonsFor(url: string, label: string): InlineKeyboard | undefined {
+  if (!telegramButtonUrlAllowed(url)) return undefined;
   return { inline_keyboard: [[{ text: label, url }]] };
+}
+
+export function buttonsForRows(buttons: { url: string; label: string }[]): InlineKeyboard | undefined {
+  if (buttons.length === 0 || buttons.some((b) => !telegramButtonUrlAllowed(b.url))) return undefined;
+  return { inline_keyboard: buttons.map((b) => [{ text: b.label, url: b.url }]) };
 }
 
 function sessionLine(ctx: MessageContext): string {
@@ -115,9 +133,13 @@ export function buildOpenSlotPingMessage(
     `🙋 We need <b>${short}</b> more ${playerWord} for ${sessionLine(ctx)}`,
     'Join the waiting list — first come, first served.',
   ];
-  const url = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
-  const buttons = buttonsFor(url, 'Join the waiting list');
-  const text = buttons ? lines.join('\n') : [...lines, '', url].join('\n');
+  const gameDay = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
+  const squadBoard = squadBoardUrl(ctx.appUrl, ctx.slug);
+  const buttons = buttonsForRows([
+    { url: gameDay, label: 'Join the waiting list' },
+    { url: squadBoard, label: 'Join the squad' },
+  ]);
+  const text = buttons ? lines.join('\n') : [...lines, '', gameDay, squadBoard].join('\n');
   return { text, buttons };
 }
 
@@ -142,7 +164,18 @@ export function buildVacancyMessage(ctx: MessageContext, input: VacancyMessageIn
     return post(ctx, [`✅ ${names} ${input.promotedNames.length === 1 ? 'is' : 'are'} in for ${sessionLine(ctx)}.`, `${slots(remaining)} still open — first come, first served.`], 'Claim a slot');
   }
   if (input.promotedNames.length > 0) {
-    return post(ctx, [`✅ ${names} ${input.promotedNames.length === 1 ? 'is' : 'are'} in for ${sessionLine(ctx)}.`, 'The session is full.'], 'See who is playing');
+    const nameLines = input.promotedNames.map((n) => `✅ ${telegramPlayerName(n)}`);
+    return post(
+      ctx,
+      [
+        `Assigned from the open slot waiting list for ${sessionLine(ctx)}`,
+        ...nameLines,
+        'The session is currently full.',
+        '',
+        'Join the waiting list to be next in line if someone cancels.',
+      ],
+      'See who is playing'
+    );
   }
   if (remaining > 0) {
     const slotWord = remaining === 1 ? 'slot' : 'slots';
@@ -159,7 +192,20 @@ export function buildVacancyMessage(ctx: MessageContext, input: VacancyMessageIn
   // Nobody promoted, nothing open. Only worth saying to a group that was asked: without this the
   // common case - pinged at 09:00, everyone votes in by 13:00 - never tells them it filled.
   if (input.pingSent || (input.previouslyAnnounced ?? 0) > 0) {
-    return post(ctx, [`👍 ${sessionLine(ctx)} filled up — no open slots available. Thanks!`], 'See who is playing');
+    const lines = [
+      `🔒 ${sessionLine(ctx)} filled up.`,
+      'Currently no open slots available.',
+      '',
+      'Join the waiting list to be next in line if someone cancels.',
+    ];
+    const gameDay = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
+    const squadBoard = squadBoardUrl(ctx.appUrl, ctx.slug);
+    const buttons = buttonsForRows([
+      { url: gameDay, label: 'Join the waiting list' },
+      { url: squadBoard, label: 'Join the squad' },
+    ]);
+    const text = buttons ? lines.join('\n') : [...lines, '', gameDay, squadBoard].join('\n');
+    return { text, buttons };
   }
   return null;
 }
