@@ -22,6 +22,7 @@ import { useMySquads } from '@/hooks/useMySquads';
 import { useUpcomingGameDays } from '@/hooks/useUpcomingGameDays';
 import { SquadSwitcherLinks } from './SquadSwitcherLinks';
 import { JoinSquadMenuSection } from './JoinSquadMenuSection';
+import { publicDisplayName } from '@/utils/string';
 
 const tileClass = (active: boolean) =>
   classNames(
@@ -172,7 +173,7 @@ export function MobileScoreboardMenu({
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate font-headline text-base font-semibold text-on-surface leading-tight">
-                  {session.user?.name ?? 'Account'}
+                  {session.user?.name ? publicDisplayName(session.user.name) : 'Account'}
                 </p>
                 <p className="truncate text-xs text-on-surface-variant leading-tight mt-0.5">
                   {session.user?.email}
@@ -194,7 +195,7 @@ export function MobileScoreboardMenu({
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate font-headline text-base font-semibold text-on-surface leading-tight">
-                  {session.user?.name ?? 'Account'}
+                  {session.user?.name ? publicDisplayName(session.user.name) : 'Account'}
                 </p>
                 <p className="truncate text-xs text-on-surface-variant leading-tight mt-0.5">
                   {session.user?.email}

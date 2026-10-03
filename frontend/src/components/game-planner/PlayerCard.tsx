@@ -1,5 +1,6 @@
+import React from 'react';
 import type { GamePlannerPlayer } from '@/hooks/useGamePlayers';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 
 interface PlayerCardProps {
   player: GamePlannerPlayer;
@@ -21,7 +22,7 @@ export const PlayerCard = ({ player, isSelected, onToggle }: PlayerCardProps) =>
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
         <div className="font-headline font-medium text-on-surface truncate">
-          {capitalizeFirstLetter(player.name)}
+          {publicDisplayName(player.name)}
         </div>
         <div className="text-sm text-on-surface-variant mt-0.5">
           {player.hasScore ? (

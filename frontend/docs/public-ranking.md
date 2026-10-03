@@ -147,7 +147,7 @@ Automatic triggers are non-fatal. The squad action has already succeeded; the bu
 
 The name, squad chips, and primary membership (highest squad `rankScore`, then `playerRank`) come from squad rows. Each chip shows the squad name and that membership’s squad rank (`#N`, sorted by best rank first); at most four chips per player on desktop in a vertical stack beside the name, with any others named in the chip group’s accessible description. Form (wins, losses) is combined across that person’s public-squad player ids. The **Points** column is the stored public rating only — squad ranks on chips are context, not addends.
 
-On pages a visitor can open without signing in, names render as first name plus the first letter of the second name (`Nishan Karunarathna` → `Nishan K`). Stored `Player.name` is unchanged. Admin and signed-in tools still show the full name. See `publicDisplayName` in `frontend/src/utils/string.ts`.
+Player names render as first name plus the first letter of the second name (`Nishan Karunarathna` → `Nishan K`) across the app and squad Telegram posts. Stored `Player.name` is unchanged. Name fields that save to the roster still edit the full value. See `publicDisplayName` in `frontend/src/utils/string.ts`.
 
 ## Constants
 

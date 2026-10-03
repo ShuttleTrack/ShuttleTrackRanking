@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import type { GetServerSideProps } from 'next';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import { validateEditPassword } from '@/utils/password';
 import { ProcessScoresModal } from '@/components/score-keeper/ProcessScoresModal';
 import { usePlayers } from '@/hooks/usePlayers';
@@ -532,7 +532,7 @@ const ScoreKeeperPage = () => {
                     key={player.id}
                     className="px-3 py-1.5 rounded-xl bg-surface-container border border-gray-600 text-sm font-headline font-medium text-on-surface"
                   >
-                    {capitalizeFirstLetter(player.name)}
+                    {publicDisplayName(player.name)}
                   </div>
                 ))}
               </div>
@@ -608,7 +608,7 @@ const ScoreKeeperPage = () => {
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <div className="font-headline font-medium text-center text-on-surface">
-                  {selectedMatch.team1.map(capitalizeFirstLetter).join(' & ')}
+                  {selectedMatch.team1.map(publicDisplayName).join(' & ')}
                 </div>
                 <input
                   type="number"
@@ -628,7 +628,7 @@ const ScoreKeeperPage = () => {
               <div className="text-center font-headline font-bold text-on-surface-variant">vs</div>
               <div className="space-y-2">
                 <div className="font-headline font-medium text-center text-on-surface">
-                  {selectedMatch.team2.map(capitalizeFirstLetter).join(' & ')}
+                  {selectedMatch.team2.map(publicDisplayName).join(' & ')}
                 </div>
                 <input
                   type="number"

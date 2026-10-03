@@ -1,11 +1,11 @@
-import type { CSSProperties } from 'react';
+import React, { type CSSProperties } from 'react';
 import {
   MATCH_RESULT_LOSS,
   MATCH_RESULT_LOSS_TINT,
   MATCH_RESULT_WIN,
   MATCH_RESULT_WIN_TINT,
 } from '@/constants/matchResultColors';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 
 export interface MatchScoreRowProps {
   team1: string[];
@@ -73,8 +73,8 @@ const MatchScoreRow = ({
     >
       {showResultChips && isPlayed && <ResultChip won={won} />}
       <div className="flex flex-col items-center min-w-0">
-        <div className={nameClass}>{capitalizeFirstLetter(players[0])}</div>
-        <div className={nameClass}>{capitalizeFirstLetter(players[1])}</div>
+        <div className={nameClass}>{publicDisplayName(players[0])}</div>
+        <div className={nameClass}>{publicDisplayName(players[1])}</div>
       </div>
     </div>
   );

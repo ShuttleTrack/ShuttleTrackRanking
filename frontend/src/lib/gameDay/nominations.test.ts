@@ -13,7 +13,7 @@ import { createSlotReplacement } from '@/lib/replacements';
 import { computeGameDayCounts } from './counts';
 import { loadGameDayState } from './eligibility';
 import { cancelGameDay, closeVoting, releaseSlot, removeDisabledPlayerFromGameDays } from './lifecycle';
-import { nominate, revokeNomination } from './nominations';
+import { nominate, nomineeRefusal, revokeNomination } from './nominations';
 import { joinOpenSlot } from './openSlots';
 import { runGameDayTick } from './scheduler';
 import { getGameDayAttendance, getGameDayView } from './view';
@@ -58,6 +58,25 @@ const voteOf = (gameDayId: number, playerId: number) => votesOf(db, gameDayId).f
 const entryOf = (gameDayId: number, playerId: number) => openSlotsOf(db, gameDayId).find((s) => s.playerId === playerId) ?? null;
 const activeOf = (gameDayId: number) => nominationsOf(db, gameDayId).filter((n) => n.endedAt === null);
 const countsOf = async (gameDayId: number) => computeGameDayCounts(await loadGameDayState(db as never, gameDayRow(gameDayId)));
+
+describe('publicDisplayName in user-facing copy', () => {
+  it('nomineeRefusal uses the short nominator name', () => {
+    const msg = nomineeRefusal('ada lovelace');
+    expect(msg).toBe("Ada L holds the vote for this slot - tell Ada L if you can't make it");
+    expect(msg).not.toContain('lovelace');
+  });
+
+  it('observerReason shortens a period-replacement cover name', async () => {
+    const gd = seedGameDay(db);
+    const owner = fulltime(db, 'ada lovelace');
+    const filler = openSlotPlayer(db, 'grace hopper');
+    seedReplacement(db, owner.id, filler.id, GAME_DATE, '2026-10-07');
+    const view = await getGameDayView(gameDayRow(gd.id), playerRow(owner.id), T.beforeClose);
+    expect(view.role).toBe('OBSERVER');
+    expect(view.observerReason).toContain('Grace H');
+    expect(view.observerReason).not.toContain('hopper');
+  });
+});
 
 describe('nominate', () => {
   it('passes a holder\'s slot on: their vote goes IN, the nominee leaves the waiting list, and no count moves', async () => {
@@ -149,7 +168,7 @@ describe('nominate', () => {
     const gd = seedGameDay(db);
     const ada = fulltime(db, 'ada');
     const cy = fulltime(db, 'cy');
-    const bob = openSlotPlayer(db, 'bob');
+    const bob = openSlotPlayer(db, 'bob smith');
 
     const results = await Promise.allSettled([
       nominate(1, gd.id, ada.id, bob.id, T.beforeClose),
@@ -158,7 +177,8 @@ describe('nominate', () => {
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
-    expect(rejected.reason.message).toMatch(/bob is already playing in someone else's slot/);
+    expect(rejected.reason.message).toMatch(/Bob S is already playing in someone else's slot/);
+    expect(rejected.reason.message).not.toContain('smith');
     expect(activeOf(gd.id)).toHaveLength(1);
   });
 
@@ -228,7 +248,7 @@ describe('the nominee has no say of their own', () => {
     const bob = openSlotPlayer(db, 'bob');
     await nominate(1, gd.id, ada.id, bob.id, T.beforeClose);
 
-    const refusal = "ada holds the vote for this slot - tell ada if you can't make it";
+    const refusal = "Ada holds the vote for this slot - tell Ada if you can't make it";
     await expect(castVote(1, gd.id, bob.id, 'OUT', T.beforeClose)).rejects.toThrow(refusal);
     await expect(joinOpenSlot(1, gd.id, bob.id, T.beforeClose)).rejects.toThrow(refusal);
 
@@ -453,12 +473,12 @@ describe('a colliding period replacement is rejected (Decision 7)', () => {
 
   it('says "revoke" while the hand-off can still be changed, and succeeds once it is revoked', async () => {
     const gd = seedGameDay(db);
-    const ada = fulltime(db, 'ada');
-    const bob = openSlotPlayer(db, 'bob');
+    const ada = fulltime(db, 'ada lovelace');
+    const bob = openSlotPlayer(db, 'bob smith');
     const filler = openSlotPlayer(db, 'filler');
     await nominate(1, gd.id, ada.id, bob.id, T.beforeClose);
 
-    await expect(window(ada, filler)).rejects.toThrow(/passed your slot for Wednesday 23 Sep to bob - revoke that first/);
+    await expect(window(ada, filler)).rejects.toThrow(/passed your slot for Wednesday 23 Sep to Bob S - revoke that first/);
     expect(db.store.slotReplacement).toEqual([]);
 
     await revokeNomination(1, gd.id, ada.id, T.beforeClose);
@@ -475,7 +495,7 @@ describe('a colliding period replacement is rejected (Decision 7)', () => {
     await closeVoting(gd.id, T.atClose);
     vi.setSystemTime(T.afterClose);
 
-    await expect(window(ada, filler)).rejects.toThrow(/Your hand-off to bob is already locked in for Wednesday 23 Sep/);
+    await expect(window(ada, filler)).rejects.toThrow(/Your hand-off to Bob is already locked in for Wednesday 23 Sep/);
   });
 
   it('rejects a window whose replacement player is someone\'s nominee', async () => {
@@ -485,7 +505,7 @@ describe('a colliding period replacement is rejected (Decision 7)', () => {
     const bob = openSlotPlayer(db, 'bob');
     await nominate(1, gd.id, ada.id, bob.id, T.beforeClose);
 
-    await expect(window(owner, bob)).rejects.toThrow(/bob is playing in ada's slot on Wednesday 23 Sep - ada has to revoke that first/);
+    await expect(window(owner, bob)).rejects.toThrow(/Bob is playing in Ada's slot on Wednesday 23 Sep - Ada has to revoke that first/);
   });
 
   it('stops blocking once the session is over - before the scheduler has stamped it, and after', async () => {

@@ -266,7 +266,7 @@ describe('Pass B - the message and deadline steps', () => {
     await runGameDayTick(T.afterReminder);
     expect(sentTo()).toEqual([OPS.telegramMainChatId]);
     expect(sentTexts()[0]).toContain('<b>12</b> of 12 have voted');
-    expect(sentTexts()[0]).toContain('✅ ft1');
+    expect(sentTexts()[0]).toContain('✅ Ft1');
   });
 
   it('after an outage, skips the late reminder rather than sending it, while voting still closes', async () => {

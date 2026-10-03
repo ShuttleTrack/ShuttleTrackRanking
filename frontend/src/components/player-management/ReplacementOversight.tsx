@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import useSWR from 'swr';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 
 interface ReplacementRow {
   id: number;
@@ -102,8 +102,8 @@ export const ReplacementOversight = ({ squadId }: { squadId: number }) => {
                   const isPending = Boolean(row.cancellationRequestedAt) && !row.cancelledAt;
                   return (
                     <tr key={row.id}>
-                      <td className="font-medium">{capitalizeFirstLetter(row.fulltimePlayer.name)}</td>
-                      <td>{capitalizeFirstLetter(row.replacementPlayer.name)}</td>
+                      <td className="font-medium">{publicDisplayName(row.fulltimePlayer.name)}</td>
+                      <td>{publicDisplayName(row.replacementPlayer.name)}</td>
                       <td className="font-numeric tabular-nums">{toDateOnly(row.startDate)}</td>
                       <td className="font-numeric tabular-nums">{toDateOnly(row.endDate)}</td>
                       <td>

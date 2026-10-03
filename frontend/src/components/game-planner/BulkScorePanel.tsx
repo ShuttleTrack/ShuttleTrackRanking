@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { GamePlannerPlayer } from '@/hooks/useGamePlayers';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 
 interface BulkScorePanelProps {
   players: GamePlannerPlayer[];
@@ -24,7 +24,7 @@ export const BulkScorePanel = ({ players, suggestedScore, onCancel, onSubmit }: 
     for (const player of players) {
       const value = Number(scores[player.id]);
       if (!Number.isFinite(value) || value <= 0) {
-        setError(`Enter a valid score (greater than 0) for ${capitalizeFirstLetter(player.name)}`);
+        setError(`Enter a valid score (greater than 0) for ${publicDisplayName(player.name)}`);
         return;
       }
       assignments.push({ playerId: player.id, rankScore: value });
@@ -52,7 +52,7 @@ export const BulkScorePanel = ({ players, suggestedScore, onCancel, onSubmit }: 
         <div className="space-y-3 max-h-64 overflow-y-auto">
           {players.map((player) => (
             <div key={player.id} className="flex items-center justify-between gap-3">
-              <span className="text-on-surface truncate">{capitalizeFirstLetter(player.name)}</span>
+              <span className="text-on-surface truncate">{publicDisplayName(player.name)}</span>
               <input
                 type="number"
                 min={1}

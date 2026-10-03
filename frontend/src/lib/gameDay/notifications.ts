@@ -4,6 +4,7 @@
 // button, so it works in both Telegram clients.
 import { format, parseISO } from 'date-fns';
 import { escapeTelegramHtml, type InlineKeyboard } from '@/lib/telegram/sendMessage';
+import { publicDisplayName } from '@/utils/string';
 import { VOTES_CLOSE_TIME } from './voteWindow';
 import type { ReminderRollCall } from './view';
 
@@ -64,10 +65,14 @@ export function buildVoteOpenMessage(ctx: MessageContext): TelegramPost {
   return { text, buttons };
 }
 
+function telegramPlayerName(name: string): string {
+  return escapeTelegramHtml(publicDisplayName(name));
+}
+
 function reminderInLine(line: ReminderRollCall['in'][number]): string {
-  const name = escapeTelegramHtml(line.name);
+  const name = telegramPlayerName(line.name);
   return line.standingInForName
-    ? `✅ ${name} for ${escapeTelegramHtml(line.standingInForName)}`
+    ? `✅ ${name} for ${telegramPlayerName(line.standingInForName)}`
     : `✅ ${name}`;
 }
 
@@ -81,10 +86,10 @@ export function buildReminderMessage(ctx: MessageContext, rollCall: ReminderRoll
     lines.push('', 'In', ...rollCall.in.map(reminderInLine));
   }
   if (rollCall.out.length > 0) {
-    lines.push('', 'Out', ...rollCall.out.map((line) => `❌ ${escapeTelegramHtml(line.name)}`));
+    lines.push('', 'Out', ...rollCall.out.map((line) => `❌ ${telegramPlayerName(line.name)}`));
   }
   if (rollCall.yetToVote.length > 0) {
-    lines.push('', 'Yet to vote', ...rollCall.yetToVote.map((line) => `❓ ${escapeTelegramHtml(line.name)}`));
+    lines.push('', 'Yet to vote', ...rollCall.yetToVote.map((line) => `❓ ${telegramPlayerName(line.name)}`));
   }
   const url = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
   const buttons = buttonsFor(url, 'Vote in / out');
@@ -122,7 +127,7 @@ export interface VacancyMessageInput {
 // Open-slot group, from the vacancy sync. Four messages (the plan's table); null when there is
 // genuinely nothing to tell the group - the session filled, but they were never asked for help.
 export function buildVacancyMessage(ctx: MessageContext, input: VacancyMessageInput): TelegramPost | null {
-  const names = input.promotedNames.map((n) => escapeTelegramHtml(n)).join(', ');
+  const names = input.promotedNames.map((n) => telegramPlayerName(n)).join(', ');
   const { remaining } = input;
   const slots = (n: number) => `${n} ${n === 1 ? 'spot' : 'spots'}`;
 
@@ -161,14 +166,14 @@ export type NominationMessageInput =
   | { kind: 'ENDED'; nominatorName: string; previousNomineeName: string };
 
 export function buildNominationMessage(ctx: MessageContext, input: NominationMessageInput): TelegramPost {
-  const nominator = escapeTelegramHtml(input.nominatorName);
+  const nominator = telegramPlayerName(input.nominatorName);
   const slot = `${nominator}'s slot for ${sessionLine(ctx)}`;
   const line =
     input.kind === 'CREATED'
-      ? `🔁 ${escapeTelegramHtml(input.nomineeName)} is playing for ${slot}`
+      ? `🔁 ${telegramPlayerName(input.nomineeName)} is playing for ${slot}`
       : input.kind === 'SWITCHED'
-        ? `🔁 ${escapeTelegramHtml(input.nomineeName)} is playing for ${slot} instead of ${escapeTelegramHtml(input.previousNomineeName)}.`
-        : `↩️ ${escapeTelegramHtml(input.previousNomineeName)} is no longer playing for ${slot}.`;
+        ? `🔁 ${telegramPlayerName(input.nomineeName)} is playing for ${slot} instead of ${telegramPlayerName(input.previousNomineeName)}.`
+        : `↩️ ${telegramPlayerName(input.previousNomineeName)} is no longer playing for ${slot}.`;
   const url = gameDayUrl(ctx.appUrl, ctx.slug, ctx.gameDate);
   const buttons = buttonsFor(url, 'See who is playing');
   const text = buttons ? line : [line, '', url].join('\n');

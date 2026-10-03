@@ -114,7 +114,7 @@ describe('what the open-slot group actually receives', () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0][1]).toBe(OPS.telegramOpenSlotChatId);
     expect(handOffPosts()).toEqual([
-      expect.stringContaining('bob is playing for ada\'s slot for Wednesday 23 Sep, 19:00–22:00'),
+      expect.stringContaining('Bob is playing for Ada\'s slot for Wednesday 23 Sep, 19:00–22:00'),
     ]);
     expect(nominationsOf(db, gd.id)[0].announcedAt).not.toBeNull();
   });
@@ -132,7 +132,7 @@ describe('what the open-slot group actually receives', () => {
     await runGameDayTick(T.afterClose);
 
     expect(handOffPosts()).toHaveLength(2); // the failed attempt, then the retry
-    expect(handOffPosts()[1]).toContain('bob is playing for ada');
+    expect(handOffPosts()[1]).toContain('Bob is playing for Ada');
     expect(nominationsOf(db, gd.id)[0].announcedAt).not.toBeNull();
   });
 
@@ -166,9 +166,9 @@ describe('what the open-slot group actually receives', () => {
 
     const posts = handOffPosts();
     expect(posts).toHaveLength(2);
-    expect(posts[0]).toContain('bob is playing for ada');
-    expect(posts[1]).toContain('carol is playing for ada');
-    expect(posts[1]).toContain('instead of bob');
+    expect(posts[0]).toContain('Bob is playing for Ada');
+    expect(posts[1]).toContain('Carol is playing for Ada');
+    expect(posts[1]).toContain('instead of Bob');
   });
 
   it('turns a switch after an UNdelivered create into a plain "goes to carol" - one post, no "instead of"', async () => {
@@ -184,7 +184,7 @@ describe('what the open-slot group actually receives', () => {
     send.mockClear();
     await runGameDayTick(T.beforeClose);
 
-    expect(handOffPosts()).toEqual([expect.stringContaining('carol is playing for ada')]);
+    expect(handOffPosts()).toEqual([expect.stringContaining('Carol is playing for Ada')]);
     expect(handOffPosts()[0]).not.toContain('instead of');
   });
 
@@ -200,8 +200,8 @@ describe('what the open-slot group actually receives', () => {
     await castVote(1, gd.id, ada.id, 'OUT', T.afterClose);
 
     expect(handOffPosts()).toEqual([
-      expect.stringContaining('bob is playing for ada'),
-      expect.stringContaining('bob is no longer playing for ada'),
+      expect.stringContaining('Bob is playing for Ada'),
+      expect.stringContaining('Bob is no longer playing for Ada'),
     ]);
   });
 

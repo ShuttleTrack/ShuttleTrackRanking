@@ -7,7 +7,7 @@ export const capitalizeFirstLetter = (string: string): string => {
     .join(' ');
 };
 
-/** Public boards and link-public pages: first name plus the second name's initial. */
+/** How player names are shown everywhere in the UI and Telegram; stored `Player.name` stays full. */
 export function publicDisplayName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '';

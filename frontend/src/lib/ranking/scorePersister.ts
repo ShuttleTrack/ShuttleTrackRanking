@@ -14,6 +14,7 @@ import {
 import { absenteeSpellDays, gameDaysSinceLastPlay } from './absenteeSpell';
 import { computeActivationScore } from './activation';
 import { removeDisabledPlayerFromGameDays } from '@/lib/gameDay/lifecycle';
+import { publicDisplayName } from '@/utils/string';
 
 // Ported from backend core/ScorePersister.java + CommonAbsenteeManager.java + PlayerService.java
 // (MIGRATION_PLAN.md Phase 3). DB-orchestrating wrappers around the pure logic in
@@ -90,7 +91,7 @@ function requireScored(players: PrismaPlayer[]): void {
   const scoreless = players.filter((p) => p.rankScore === null);
   if (scoreless.length > 0) {
     throw new Error(
-      `Cannot compute an encounter with scoreless player(s): ${scoreless.map((p) => p.name).join(', ')}`
+      `Cannot compute an encounter with scoreless player(s): ${scoreless.map((p) => publicDisplayName(p.name)).join(', ')}`
     );
   }
 }

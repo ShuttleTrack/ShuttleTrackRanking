@@ -65,12 +65,30 @@ describe('POST /api/squads/[squadId]/games - scoreless player gate', () => {
     await createHandler({ method: 'POST', body: { groups: GROUPS }, query: {} } as NextApiRequest, res);
 
     expect(res.statusCode).toBe(400);
-    expect(res.body.message).toContain('grace');
-    expect(res.body.message).toContain('alan');
+    expect(res.body.message).toContain('Grace');
+    expect(res.body.message).toContain('Alan');
     expect(res.body.scorelessPlayers).toEqual([
       { id: 2, name: 'grace' },
       { id: 3, name: 'alan' },
     ]);
+    expect(gameCreate).not.toHaveBeenCalled();
+  });
+
+  it('shortens two-part names in the rejection message but keeps full names in scorelessPlayers', async () => {
+    playerFindMany.mockResolvedValue([
+      { id: 1, name: 'ada', rankScore: 1000 },
+      { id: 2, name: 'grace hopper', rankScore: null },
+      { id: 3, name: 'alan', rankScore: 950 },
+      { id: 4, name: 'edsger', rankScore: 1100 },
+    ]);
+
+    const res = mockRes();
+    await createHandler({ method: 'POST', body: { groups: GROUPS }, query: {} } as NextApiRequest, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.message).toContain('Grace H');
+    expect(res.body.message).not.toContain('hopper');
+    expect(res.body.scorelessPlayers).toEqual([{ id: 2, name: 'grace hopper' }]);
     expect(gameCreate).not.toHaveBeenCalled();
   });
 
@@ -117,7 +135,7 @@ describe('PUT /api/squads/[squadId]/games/[id] - scoreless player gate', () => {
     );
 
     expect(res.statusCode).toBe(400);
-    expect(res.body.message).toContain('grace');
+    expect(res.body.message).toContain('Grace');
     expect(gameUpdate).not.toHaveBeenCalled();
   });
 

@@ -186,6 +186,17 @@ export function createFakePrisma(): FakePrisma {
   const project = (row: Row, args: any): Row => {
     let out: Row = clone(row);
     if (args?.include?.squad) out.squad = clone(store.squad.find((s) => s.id === row.squadId));
+    if (args?.include?.replacementPlayer) {
+      const player = store.player.find((p) => p.id === row.replacementPlayerId);
+      const rel = args.include.replacementPlayer;
+      if (player && rel?.select) {
+        out.replacementPlayer = Object.fromEntries(
+          Object.keys(rel.select).filter((k) => rel.select[k]).map((k) => [k, player[k]]),
+        );
+      } else if (player) {
+        out.replacementPlayer = clone(player);
+      }
+    }
     if (args?.select) {
       out = Object.fromEntries(Object.keys(args.select).filter((k) => args.select[k]).map((k) => [k, out[k]]));
     }

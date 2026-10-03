@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { GetServerSideProps } from 'next';
 import type { PlayerType } from '@prisma/client';
 import { useAdminPlayers } from '@/hooks/useAdminPlayers';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline';
 import type { Player } from '@/types/player';
 import { AddPlayerModal } from '@/components/player-management/AddPlayerModal';
@@ -47,7 +47,7 @@ const PlayerTable = ({ players, onEdit, onDelete }: {
           {players.map((player) => (
             <tr key={player.id} className="hover">
               <td className="font-medium">
-                {capitalizeFirstLetter(player.name)}
+                {publicDisplayName(player.name)}
               </td>
               <td>{player?.email}</td>
               <td>
@@ -94,7 +94,7 @@ const PlayerTable = ({ players, onEdit, onDelete }: {
           <div className="flex justify-between items-start">
             <div>
               <h3 className="font-medium">
-                {capitalizeFirstLetter(player.name)}
+                {publicDisplayName(player.name)}
               </h3>
               <div className="text-sm text-base-content/70 mt-1">
                 {player?.email}
