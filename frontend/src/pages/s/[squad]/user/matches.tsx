@@ -3,7 +3,7 @@ import type { GetServerSideProps } from 'next';
 import { useMyMatches } from '@/hooks/useMyMatches';
 import { usePlayers } from '@/hooks/usePlayers';
 import { useRequireUser } from '@/hooks/useRequireUser';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import { userScoreService } from '@/services/userScoreService';
 import { isValidMatchScore } from '@/utils/scoreValidation';
 import MatchResultLegend from '@/components/matches/MatchResultLegend';
@@ -51,7 +51,7 @@ const UserMatchesPage = () => {
   };
 
   const teamNames = (ids: string[]) =>
-    ids.map((id) => capitalizeFirstLetter(getPlayerName(id)));
+    ids.map((id) => publicDisplayName(getPlayerName(id)));
 
   const openScoreEntry = (match: SelectedMatch) => {
     setSelectedMatch(match);

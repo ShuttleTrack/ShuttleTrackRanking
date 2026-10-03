@@ -57,7 +57,7 @@ describe('posting when voting closes', () => {
     await closeVoting(gd.id, T.atClose);
 
     expect(sentTo()).toEqual([OPS.telegramOpenSlotChatId]);
-    expect(sentTexts()[0]).toContain('grace is in');
+    expect(sentTexts()[0]).toContain('Grace is in');
     expect(sentTexts()[0]).toContain('The session is full.');
     expect(gameDayRow(gd.id).announcedVacancies).toBe(0);
   });
@@ -84,7 +84,7 @@ describe('posting when voting closes', () => {
     fulltimeIn(db, gd.id, 12);
     seedOpenSlot(db, gd.id, openSlotPlayer(db, 'ada').id);
     await closeVoting(gd.id, T.atClose);
-    expect(sentTexts()[0]).toMatch(/ada is in[^]*\n3 spots still open/);
+    expect(sentTexts()[0]).toMatch(/Ada is in[^]*\n3 spots still open/);
   });
 });
 

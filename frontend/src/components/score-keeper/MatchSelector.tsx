@@ -1,5 +1,5 @@
 import { SelectedMatch } from '@/types/score-keeper';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 
 interface MatchSelectorProps {
   groupName: string;
@@ -32,11 +32,11 @@ export const MatchSelector = ({
       </div>
       <div className="flex flex-col gap-1">
         <div className="text-sm">
-          {team1.map(player => capitalizeFirstLetter(player)).join(' & ')}
+          {team1.map((player) => publicDisplayName(player)).join(' & ')}
         </div>
         <div className="text-xs text-gray-500">vs</div>
         <div className="text-sm">
-          {team2.map(player => capitalizeFirstLetter(player)).join(' & ')}
+          {team2.map((player) => publicDisplayName(player)).join(' & ')}
         </div>
       </div>
     </div>

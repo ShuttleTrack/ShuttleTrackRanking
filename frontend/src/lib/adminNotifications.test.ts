@@ -74,6 +74,37 @@ describe('message builders', () => {
     expect(shorten.text).toContain('Replacement shorten request');
     expect(shorten.text).toContain('to end on Wed 14 Oct 2026.');
   });
+
+  it('shortens two-part player names in join and replacement posts', () => {
+    const join = buildJoinRequestMessage(ctx, {
+      name: 'Nishan Karunarathna',
+      email: 'n@example.com',
+      message: null,
+    });
+    expect(join.text).toContain('<b>Nishan K</b> (n@example.com) wants to join <b>Wed &lt;Smashers&gt;</b>');
+    expect(join.text).not.toContain('Karunarathna');
+
+    const replacement = buildReplacementCreatedMessage(ctx, {
+      ownerName: 'Ada Lovelace',
+      replacementName: 'Bob Smith',
+      startDate: date('2026-10-07'),
+      endDate: date('2026-10-21'),
+    });
+    expect(replacement.text).toContain("Bob S covers Ada L's slot");
+    expect(replacement.text).not.toContain('Lovelace');
+    expect(replacement.text).not.toContain('Smith');
+
+    const cancel = buildCancellationRequestMessage(ctx, {
+      ownerName: 'Ada Lovelace',
+      replacementName: 'Bob Smith',
+      startDate: date('2026-10-07'),
+      endDate: date('2026-10-21'),
+      requestedEndDate: null,
+    });
+    expect(cancel.text).toContain('Ada L asks to cancel Bob S\'s replacement');
+    expect(cancel.text).not.toContain('Lovelace');
+    expect(cancel.text).not.toContain('Smith');
+  });
 });
 
 describe('notifyAdminsOf*', () => {

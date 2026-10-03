@@ -12,6 +12,7 @@ import type { SlotReplacement, SquadJoinRequest } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { buttonsFor, type TelegramPost } from '@/lib/gameDay/notifications';
 import { escapeTelegramHtml, sendTelegramMessage } from '@/lib/telegram/sendMessage';
+import { publicDisplayName } from '@/utils/string';
 
 export interface AdminMessageContext {
   appUrl: string; // NEXT_PUBLIC_APP_URL
@@ -43,7 +44,7 @@ export interface JoinRequestMessageInput {
 
 export function buildJoinRequestMessage(ctx: AdminMessageContext, input: JoinRequestMessageInput): TelegramPost {
   const lines = [
-    `🙋 <b>${escapeTelegramHtml(input.name)}</b> (${escapeTelegramHtml(input.email)}) wants to join <b>${escapeTelegramHtml(ctx.squadName)}</b>`,
+    `🙋 <b>${escapeTelegramHtml(publicDisplayName(input.name))}</b> (${escapeTelegramHtml(input.email)}) wants to join <b>${escapeTelegramHtml(ctx.squadName)}</b>`,
   ];
   if (input.message) {
     lines.push(`Note: ${escapeTelegramHtml(input.message)}`);
@@ -66,7 +67,7 @@ export function buildReplacementCreatedMessage(ctx: AdminMessageContext, input: 
     ctx,
     [
       `🔁 <b>New long-term replacement · ${escapeTelegramHtml(ctx.squadName)}</b>`,
-      `${escapeTelegramHtml(input.replacementName)} covers ${escapeTelegramHtml(input.ownerName)}'s slot ` +
+      `${escapeTelegramHtml(publicDisplayName(input.replacementName))} covers ${escapeTelegramHtml(publicDisplayName(input.ownerName))}'s slot ` +
         `from ${formatWindowDate(input.startDate)} to ${formatWindowDate(input.endDate)}.`,
     ],
     'View replacements'
@@ -83,8 +84,8 @@ export function buildCancellationRequestMessage(
   input: CancellationRequestMessageInput
 ): TelegramPost {
   const window = `${formatWindowDate(input.startDate)} to ${formatWindowDate(input.endDate)}`;
-  const owner = escapeTelegramHtml(input.ownerName);
-  const replacement = escapeTelegramHtml(input.replacementName);
+  const owner = escapeTelegramHtml(publicDisplayName(input.ownerName));
+  const replacement = escapeTelegramHtml(publicDisplayName(input.replacementName));
   const ask = input.requestedEndDate
     ? `${owner} asks to shorten ${replacement}'s replacement (${window}) to end on ${formatWindowDate(input.requestedEndDate)}.`
     : `${owner} asks to cancel ${replacement}'s replacement (${window}).`;

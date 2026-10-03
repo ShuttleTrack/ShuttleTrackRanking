@@ -4,6 +4,7 @@ import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
 import { findScorelessPlayersInGroups } from '@/lib/ranking/players';
 import { isValidationError } from '@/lib/api/validationError';
+import { publicDisplayName } from '@/utils/string';
 
 // A second create for the same game day must be a 400 naming the existing game, not a
 // unique-index 500 (ATTENDANCE_VOTE_PLAN.md, "Game - one nullable link"). Replacing a draft is the
@@ -46,7 +47,7 @@ export default async function handler(
       const scoreless = await findScorelessPlayersInGroups(squadId, groups ?? {});
       if (scoreless.length > 0) {
         return res.status(400).json({
-          message: `These players need a rank score before a game day can be created: ${scoreless.map((p) => p.name).join(', ')}`,
+          message: `These players need a rank score before a game day can be created: ${scoreless.map((p) => publicDisplayName(p.name)).join(', ')}`,
           scorelessPlayers: scoreless,
         });
       }

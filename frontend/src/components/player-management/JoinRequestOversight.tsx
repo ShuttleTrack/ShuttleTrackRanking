@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import type { JoinRequestStatus, PlayerType } from '@prisma/client';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import { MAX_NAME_LENGTH } from '@/lib/joinRequests';
 
 // Self-registration queue for one squad (SELF_REGISTRATION_PLAN.md). Modelled on
@@ -113,7 +113,7 @@ const ApproveModal = ({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 id="approve-join-title" className="mb-1 text-lg font-semibold">
-          Approve {capitalizeFirstLetter(request.name)}
+          Approve {publicDisplayName(request.name)}
         </h3>
         <p className="mb-4 text-sm text-base-content/60">{request.email}</p>
 
@@ -277,7 +277,7 @@ export const JoinRequestOversight = ({
                   const isPending = row.status === 'PENDING';
                   return (
                     <tr key={row.id}>
-                      <td className="font-medium">{capitalizeFirstLetter(row.name)}</td>
+                      <td className="font-medium">{publicDisplayName(row.name)}</td>
                       <td className="text-sm">{row.email}</td>
                       <td className="max-w-xs text-sm text-base-content/70">{row.message ?? '-'}</td>
                       <td className="font-numeric tabular-nums text-sm">{toDateOnly(row.createdAt)}</td>

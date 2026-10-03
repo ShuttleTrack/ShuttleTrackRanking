@@ -1,5 +1,5 @@
 import type { GameDayAttendance } from '@/lib/check-in/types';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 
 interface AttendanceBannerProps {
   attendance: GameDayAttendance;
@@ -8,7 +8,7 @@ interface AttendanceBannerProps {
   releasing?: boolean;
 }
 
-const names = (players: { name: string }[]) => players.map((p) => capitalizeFirstLetter(p.name)).join(', ');
+const names = (players: { name: string }[]) => players.map((p) => publicDisplayName(p.name)).join(', ');
 
 // Game Planner's view of today's closed vote (ATTENDANCE_VOTE_PLAN.md, "UI"): the confirmed
 // players are pre-ticked; this names everyone the admin still has to decide about rather than
@@ -42,7 +42,7 @@ export function AttendanceBanner({ attendance, preTickedCount, onReleaseSlot, re
         <p className="mt-2">
           <span className="font-semibold">Playing in someone else&apos;s slot:</span>{' '}
           {standIns
-            .map((p) => `${capitalizeFirstLetter(p.name)} (for ${capitalizeFirstLetter(p.standingInFor!.name)})`)
+            .map((p) => `${publicDisplayName(p.name)} (for ${publicDisplayName(p.standingInFor!.name)})`)
             .join(', ')}
         </p>
       ) : null}
@@ -62,7 +62,7 @@ export function AttendanceBanner({ attendance, preTickedCount, onReleaseSlot, re
                 key={p.id}
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 py-0.5 pl-3 pr-1"
               >
-                <span>{capitalizeFirstLetter(p.name)}</span>
+                <span>{publicDisplayName(p.name)}</span>
                 <span className="font-label text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
                   {p.reason === 'INHERITED' ? 'slot passed on' : p.source === 'DIRECT' ? 'claimed' : 'from waiting list'}
                 </span>
@@ -72,7 +72,7 @@ export function AttendanceBanner({ attendance, preTickedCount, onReleaseSlot, re
                     className="rounded-full px-2 py-0.5 text-xs text-on-surface-variant hover:bg-white/10 hover:text-red-400 disabled:opacity-50"
                     disabled={releasing}
                     onClick={() => onReleaseSlot(p.id)}
-                    aria-label={`Release ${p.name}'s slot`}
+                    aria-label={`Release ${publicDisplayName(p.name)}'s slot`}
                   >
                     Release
                   </button>

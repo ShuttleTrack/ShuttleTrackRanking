@@ -2,7 +2,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import type { GameDayView } from '@/lib/check-in/types';
 import { formatLocalTime } from '@/lib/check-in/schedule';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import { checkInButtonBase, checkInButtonIdle, checkInButtonOut, checkInButtonPrimary } from './CheckInVoteButtons';
 
 interface NomineeOption {
@@ -23,7 +23,7 @@ const sectionLabel = 'font-label text-xs font-bold uppercase tracking-widest tex
 const inputClass =
   'w-full rounded-xl border border-gray-600 bg-surface-container px-4 py-3 text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40';
 
-const display = (name: string) => capitalizeFirstLetter(name);
+const display = (name: string) => publicDisplayName(name);
 
 function NomineePicker({
   nominationUrl,

@@ -3,7 +3,7 @@ import type { GetServerSideProps } from 'next';
 import useSWR from 'swr';
 import { usePlayers } from '@/hooks/usePlayers';
 import { useRequireUser } from '@/hooks/useRequireUser';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import { PageLoader } from '@/components/common/GameLoader';
 import { resolveSquadUserOrRedirect } from '@/lib/squadPage';
 import { useSquad, type SquadSummary } from '@/contexts/SquadContext';
@@ -103,7 +103,7 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
   const selectedNeedsScore = selected ? nomineeNeedsScore(players, selected.id) : false;
 
   useEffect(() => {
-    if (selected) setQuery(selected.name);
+    if (selected) setQuery(publicDisplayName(selected.name));
   }, [selected]);
 
   const handleSubmit = async () => {
@@ -129,7 +129,7 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
       if (!res.ok) {
         throw new Error(body.message ?? 'Failed to create replacement');
       }
-      setSuccess(`${capitalizeFirstLetter(selected.name)} will cover your slot from ${startDate} to ${endDate}.`);
+      setSuccess(`${publicDisplayName(selected.name)} will cover your slot from ${startDate} to ${endDate}.`);
       setSelected(null);
       setQuery('');
       setStartDate('');
@@ -209,7 +209,7 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
                     className="w-full text-left px-4 py-3 hover:bg-surface-container transition-colors"
                     onClick={() => setSelected(option)}
                   >
-                    <div className="font-medium text-on-surface">{capitalizeFirstLetter(option.name)}</div>
+                    <div className="font-medium text-on-surface">{publicDisplayName(option.name)}</div>
                     <div className="text-xs text-on-surface-variant">{option.maskedEmail}</div>
                   </button>
                 ))
@@ -266,7 +266,7 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
 
         {selectedNeedsScore && (
           <p className="text-sm text-warning">
-            {capitalizeFirstLetter(selected!.name)} hasn&apos;t played yet, so they have no rank
+            {publicDisplayName(selected!.name)} hasn&apos;t played yet, so they have no rank
             score. Missing a day in this window won&apos;t cost them anything until an admin gives
             them a starting score at their first game day.
           </p>
@@ -294,7 +294,7 @@ const ReplacementPage = ({ playerId }: ReplacementPageProps) => {
                 className="flex items-center justify-between gap-3 rounded-xl border border-gray-600 bg-surface-container px-4 py-3"
               >
                 <div>
-                  <div className="font-medium text-on-surface">{capitalizeFirstLetter(r.replacementPlayer.name)}</div>
+                  <div className="font-medium text-on-surface">{publicDisplayName(r.replacementPlayer.name)}</div>
                   <div className="text-xs text-on-surface-variant">
                     {r.startDate.slice(0, 10)} to {r.endDate.slice(0, 10)}
                     {r.cancelledAt ? ' - cancelled' : ''}

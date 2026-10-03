@@ -1,5 +1,6 @@
+import React from 'react';
 import { Player } from '@/types/player';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 
 interface GroupCardProps {
   groupName: string;
@@ -24,7 +25,7 @@ export const GroupCard = ({ groupName, players }: GroupCardProps) => (
         >
           <div className="flex min-w-0 items-center gap-2">
             <span className="font-headline text-sm font-medium text-on-surface truncate">
-              {capitalizeFirstLetter(player.name)}
+              {publicDisplayName(player.name)}
             </span>
             <span className="text-xs text-on-surface-variant shrink-0">
               (#{player.playerRank ? player.playerRank : 'N/A'})

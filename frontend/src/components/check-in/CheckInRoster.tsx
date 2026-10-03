@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { CheckInVote, RosterPlayer, UnconfirmedPlayer } from '@/lib/check-in/types';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import { CheckInPlayerRow } from './CheckInPlayerRow';
 
 type RosterTab = 'IN' | 'OUT';
@@ -53,7 +53,7 @@ function PlayerList({
 // "for Ada": playing in Ada's slot through a one-day hand-off - Ada is not listed separately.
 const inBadge = (player: RosterPlayer) =>
   player.standingInFor
-    ? `for ${capitalizeFirstLetter(player.standingInFor.name)}`
+    ? `for ${publicDisplayName(player.standingInFor.name)}`
     : player.isOpenSlot
       ? 'Open slot'
       : undefined;

@@ -1,5 +1,6 @@
+import React from 'react';
 import Image from 'next/image';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import type { RosterPlayer } from '@/lib/check-in/types';
 
 interface CheckInPlayerRowProps {
@@ -39,7 +40,7 @@ export function CheckInPlayerRow({
         />
       )}
       <span className="min-w-0 flex-1 font-headline text-sm font-semibold truncate">
-        {capitalizeFirstLetter(player.name)}
+        {publicDisplayName(player.name)}
       </span>
       {badge ? (
         <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">

@@ -13,6 +13,7 @@ import type {
   VoteChoice,
 } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { publicDisplayName } from '@/utils/string';
 import { dateOnlyFromIso, isoFromDateOnly } from './clock';
 import { computeGameDayCounts } from './counts';
 import { loadGameDayState, type GameDayState } from './eligibility';
@@ -302,7 +303,7 @@ async function observerReasonFor(state: GameDayState, player: Player | null): Pr
       },
       include: { replacementPlayer: { select: { name: true } } },
     });
-    if (covering) return `You have handed your slot to ${covering.replacementPlayer.name} for this date.`;
+    if (covering) return `You have handed your slot to ${publicDisplayName(covering.replacementPlayer.name)} for this date.`;
   }
   return 'You do not hold a slot on this game day.';
 }

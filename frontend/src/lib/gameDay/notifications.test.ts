@@ -40,16 +40,23 @@ describe('the four message bodies', () => {
       voted: 13,
       holders: 18,
       in: [
-        { name: 'Ada', standingInForName: null },
-        { name: 'Bob', standingInForName: 'Carol' },
+        { name: 'Ada Lovelace', standingInForName: null },
+        { name: 'Bob Smith', standingInForName: 'Carol White' },
       ],
-      out: [{ name: 'Dan', standingInForName: null }],
-      yetToVote: [{ name: 'Eve', standingInForName: null }, { name: 'A<b>', standingInForName: null }],
+      out: [{ name: 'Dan Jones', standingInForName: null }],
+      yetToVote: [{ name: 'Eve Black', standingInForName: null }, { name: 'A<b>', standingInForName: null }],
     });
     expect(post.text).toContain("Vote by <b>13:00</b> today, or you're out. (No vote = out)");
     expect(post.text).toContain('<b>13</b> of 18 have voted.');
-    expect(post.text).toContain('✅ Bob for Carol');
-    expect(post.text).toContain('❌ Dan');
+    expect(post.text).toContain('✅ Ada L');
+    expect(post.text).not.toContain('Lovelace');
+    expect(post.text).toContain('✅ Bob S for Carol W');
+    expect(post.text).not.toContain('Smith');
+    expect(post.text).not.toContain('White');
+    expect(post.text).toContain('❌ Dan J');
+    expect(post.text).not.toContain('Jones');
+    expect(post.text).toContain('❓ Eve B');
+    expect(post.text).not.toContain('Black');
     expect(post.text).toContain('❓ A&lt;b&gt;');
     expect(post.text).not.toContain(URL);
     expect(post.buttons).toEqual({ inline_keyboard: [[{ text: 'Vote in / out', url: URL }]] });
@@ -111,6 +118,9 @@ describe('the four message bodies', () => {
       buildVacancyMessage(ctx, { promotedNames, remaining, previouslyAnnounced: null, pingSent: false, ...extra })?.text ?? null;
 
     expect(v(['Ada', 'Grace'], 2)).toMatch(/Ada, Grace are in .*\n2 spots still open/);
+    const twoPartPromoted = v(['Ada Lovelace'], 1)!;
+    expect(twoPartPromoted).toContain('Ada L is in');
+    expect(twoPartPromoted).not.toContain('Lovelace');
     expect(v(['Ada'], 0)).toMatch(/Ada is in .*\nThe session is full\./);
     const finalCall = buildVacancyMessage(ctx, { promotedNames: [], remaining: 3, previouslyAnnounced: null, pingSent: false })!;
     expect(finalCall.text).toContain('Final call for open slots!');
@@ -145,17 +155,40 @@ describe('the four message bodies', () => {
 describe('slot hand-off posts (SINGLE_DAY_NOMINATION_PLAN.md)', () => {
   it('create, switch and end - names escaped, link via button only', () => {
     const created = buildNominationMessage(ctx, { kind: 'CREATED', nominatorName: 'Ada', nomineeName: 'Bob <3' });
-    expect(created.text).toBe('🔁 Bob &lt;3 is playing for Ada\'s slot for Wednesday 23 Sep, 19:00–22:00');
+    expect(created.text).toBe('🔁 Bob &lt; is playing for Ada\'s slot for Wednesday 23 Sep, 19:00–22:00');
     expect(created.text).not.toContain(URL);
     expect(created.buttons?.inline_keyboard[0][0].url).toBe(URL);
 
-    const switched = buildNominationMessage(ctx, { kind: 'SWITCHED', nominatorName: 'Ada', nomineeName: 'Carol', previousNomineeName: 'Bob' });
-    expect(switched.text).toBe(
-      "🔁 Carol is playing for Ada's slot for Wednesday 23 Sep, 19:00–22:00 instead of Bob."
-    );
+    const createdTwoPart = buildNominationMessage(ctx, {
+      kind: 'CREATED',
+      nominatorName: 'Ada Lovelace',
+      nomineeName: 'Bob Smith',
+    });
+    expect(createdTwoPart.text).toContain('Bob S is playing for Ada L\'s slot');
+    expect(createdTwoPart.text).not.toContain('Lovelace');
+    expect(createdTwoPart.text).not.toContain('Smith');
 
-    const ended = buildNominationMessage(ctx, { kind: 'ENDED', nominatorName: 'Ada', previousNomineeName: 'Bob' });
-    expect(ended.text).toBe("↩️ Bob is no longer playing for Ada's slot for Wednesday 23 Sep, 19:00–22:00.");
+    const switched = buildNominationMessage(ctx, {
+      kind: 'SWITCHED',
+      nominatorName: 'Ada Lovelace',
+      nomineeName: 'Carol White',
+      previousNomineeName: 'Bob Smith',
+    });
+    expect(switched.text).toBe(
+      "🔁 Carol W is playing for Ada L's slot for Wednesday 23 Sep, 19:00–22:00 instead of Bob S."
+    );
+    expect(switched.text).not.toContain('Lovelace');
+    expect(switched.text).not.toContain('Smith');
+    expect(switched.text).not.toContain('White');
+
+    const ended = buildNominationMessage(ctx, {
+      kind: 'ENDED',
+      nominatorName: 'Ada Lovelace',
+      previousNomineeName: 'Bob Smith',
+    });
+    expect(ended.text).toBe("↩️ Bob S is no longer playing for Ada L's slot for Wednesday 23 Sep, 19:00–22:00.");
+    expect(ended.text).not.toContain('Lovelace');
+    expect(ended.text).not.toContain('Smith');
   });
 
   it('hand-off: appends the game-day URL when the inline button is unavailable', () => {

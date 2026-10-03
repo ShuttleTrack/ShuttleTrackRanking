@@ -3,7 +3,7 @@ import Image from 'next/image';
 import type { GetServerSideProps } from 'next';
 import { useRankings } from '@/hooks/useRankings';
 import { useRequireUser } from '@/hooks/useRequireUser';
-import { capitalizeFirstLetter } from '@/utils/string';
+import { publicDisplayName } from '@/utils/string';
 import TrendIndicator from '@/components/leaderboard/TrendIndicator';
 import { PageLoader } from '@/components/common/GameLoader';
 import { UpcomingSessionsList } from '@/components/check-in/UpcomingSessionsList';
@@ -24,7 +24,7 @@ const UserProfilePage = ({ playerId }: UserProfilePageProps) => {
   const { status } = useRequireUser(playerId !== null);
   const { rankings, isLoading: rankingsLoading } = useRankings();
   const currentUser = rankings?.players.find((p) => p.id === playerId);
-  const displayName = capitalizeFirstLetter(currentUser?.name ?? session?.user?.name ?? 'Player');
+  const displayName = publicDisplayName(currentUser?.name ?? session?.user?.name ?? 'Player');
   const avatarInitial = (currentUser?.name ?? session?.user?.name ?? '?').charAt(0).toUpperCase();
   const rankDisplay =
     currentUser?.playerRank != null && currentUser.playerRank > 0 ? `#${currentUser.playerRank}` : '—';

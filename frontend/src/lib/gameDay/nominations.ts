@@ -14,6 +14,7 @@ import { ValidationError } from '@/lib/api/validationError';
 import { isoFromDateOnly } from './clock';
 import { loadGameDayState, type Db, type GameDayState } from './eligibility';
 import { withGameDayLock } from './lock';
+import { publicDisplayName } from '@/utils/string';
 import { formatGameDate } from './notifications';
 import { syncNominationPosts } from './nominationPosts';
 import { sessionPhase, type GameDayClock } from './voteWindow';
@@ -37,7 +38,8 @@ export function isSessionOver(gameDay: Pick<GameDay, 'gameDate' | 'startTime' | 
 // the waiting list: the hand-off was arranged with the nominator, so backing out goes through
 // them (Decision 2).
 export function nomineeRefusal(nominatorName: string): string {
-  return `${nominatorName} holds the vote for this slot - tell ${nominatorName} if you can't make it`;
+  const display = publicDisplayName(nominatorName);
+  return `${display} holds the vote for this slot - tell ${display} if you can't make it`;
 }
 
 // Who a nominee is standing in for, by name.
@@ -170,7 +172,7 @@ export async function nominate(
       const takenBy = state.activeNominationByNominee.get(nomineeId);
       throw new ValidationError(
         takenBy
-          ? `${state.players.get(nomineeId)?.name ?? 'That player'} is already playing in someone else's slot`
+          ? `${publicDisplayName(state.players.get(nomineeId)?.name ?? 'That player')} is already playing in someone else's slot`
           : 'You can only pass your slot to an open-slot player who has no slot on this game day'
       );
     }
@@ -245,8 +247,8 @@ export async function findBlockingNomination(
       tx.player.findUnique({ where: { id: nomination.nomineePlayerId } }),
     ]);
     const date = formatGameDate(isoFromDateOnly(gameDay.gameDate));
-    const nomineeName = nominee?.name ?? 'someone';
-    const nominatorName = nominator?.name ?? 'someone';
+    const nomineeName = publicDisplayName(nominee?.name ?? 'someone');
+    const nominatorName = publicDisplayName(nominator?.name ?? 'someone');
     const changeable = now.getTime() < gameDay.votesCloseAt.getTime();
     if (nomination.nominatorPlayerId === input.ownerId) {
       return changeable
