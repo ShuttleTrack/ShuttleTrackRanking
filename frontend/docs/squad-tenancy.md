@@ -449,8 +449,12 @@ Full design doc: `SELF_REGISTRATION_PLAN.md` at the repo root. What's built:
   its admin opting in. (The first design draft *did* reuse `isPublic`; reversed on review,
   because it made "public board, closed roster" inexpressible and silently changed what a
   shipped toggle did.)
-- **`SquadJoinRequest`** (`squadId`, `email`, `name`, `message`, `status`, decision stamps,
-  `createdPlayerId`). Keyed by **email**, like `SquadAdmin` - no profile/user table was added;
+- **`SquadJoinRequest`** (`squadId`, `email`, `name`, `message`, `requestedPlayerType`,
+  `status`, decision stamps, `createdPlayerId`). `requestedPlayerType` (`PlayerType`, default
+  `OPEN_SLOT`, migration `20261003120000_join_request_player_type`) is the requester's choice of
+  open slot vs full-time in the request modal - a **preference only**: no `maxPlayers` check at
+  request time, since the admin may approve a full-time request as open slot. Rows predating the
+  column backfill to `OPEN_SLOT`, which is what every one of them was. Keyed by **email**, like `SquadAdmin` - no profile/user table was added;
   email remains the single identity key throughout this app, and a `UserProfile` would sit
   alongside that rather than replace it. (It stays addable later as a pure lookup table without
   touching `Player`, auth, or `lib/ranking/`.) Decided rows (`APPROVED`/`REJECTED`/`WITHDRAWN`)
@@ -459,15 +463,18 @@ Full design doc: `SELF_REGISTRATION_PLAN.md` at the repo root. What's built:
     partial unique index, so it's a check-then-insert inside one transaction, exactly like
     `SlotReplacement`'s overlap rule.
 - **Identity on the write path** (`lib/joinRequests.ts`): every function takes an explicit
-  `actorEmail` that routes fill from `getServerSession`. `POST /join-requests` reads only `name`
-  and `message` from the body and **ignores any `email` in it**; `DELETE` decides ownership by
+  `actorEmail` that routes fill from `getServerSession`. `POST /join-requests` reads only `name`,
+  `message` and `playerType` from the body and **ignores any `email` in it**; `DELETE` decides ownership by
   comparing the row's email to the session's, and answers "not found" rather than "forbidden"
   for someone else's row. This is a security property now that any verified Google account can
   sign in, and is unit-tested as one.
-- **Approval creates the `Player` row**, defaulting to `OPEN_SLOT` with **no** starting score,
-  in the same transaction that stamps the request - a created player against a still-`PENDING`
-  row would invite a duplicate second approval. The admin can override to `FULLTIME` (which,
-  unchanged, requires a score > 0). A scoreless open-slot player is already a safe state: they
+- **Approval creates the `Player` row**, defaulting to the request's `requestedPlayerType` (the
+  approve modal pre-selects it; the PATCH falls back to it when the body omits `playerType`), in
+  the same transaction that stamps the request - a created player against a still-`PENDING` row
+  would invite a duplicate second approval. The admin can switch to the other type. `FULLTIME`
+  (unchanged) requires a score > 0 and is blocked in the modal at the `maxPlayers` cap;
+  `OPEN_SLOT` may be approved with no starting score. The oversight table shows the requested
+  type as its own column, and the admin Telegram post names it. A scoreless open-slot player is already a safe state: they
   land in the admin roster's "Not Yet Played" list marked "Needs a score", and the game-planner's
   bulk-assign step plus the server-side gate on game create keep them out of the Elo math.
   - **Idempotent against an existing player**: an admin can add the same email manually while a

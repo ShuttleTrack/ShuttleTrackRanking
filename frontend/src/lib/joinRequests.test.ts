@@ -58,6 +58,7 @@ function pendingRow(overrides: Record<string, unknown> = {}) {
     email: REQUESTER_EMAIL,
     name: 'Newcomer',
     message: null,
+    requestedPlayerType: PlayerType.OPEN_SLOT,
     status: 'PENDING',
     createdPlayerId: null,
     ...overrides,
@@ -109,6 +110,7 @@ describe('createJoinRequest', () => {
         email: REQUESTER_EMAIL,
         name: 'Newcomer',
         message: 'hi',
+        requestedPlayerType: PlayerType.OPEN_SLOT,
         status: 'PENDING',
       },
     });
@@ -180,6 +182,33 @@ describe('createJoinRequest', () => {
     expect(mocked.player.count).not.toHaveBeenCalled();
     expect(mocked.squadJoinRequest.create).toHaveBeenCalled();
   });
+
+  it('records a FULLTIME request, still without consulting maxPlayers', async () => {
+    mocked.squad.findUnique.mockResolvedValue({ ...openSquad, maxPlayers: 1 });
+    mocked.squadJoinRequest.create.mockResolvedValue(pendingRow());
+
+    await createJoinRequest(SQUAD_ID, REQUESTER_EMAIL, {
+      name: 'Newcomer',
+      playerType: PlayerType.FULLTIME,
+    });
+
+    expect(mocked.player.count).not.toHaveBeenCalled();
+    expect(mocked.squadJoinRequest.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ requestedPlayerType: PlayerType.FULLTIME }),
+      })
+    );
+  });
+
+  it('rejects an unknown player type', async () => {
+    await expect(
+      createJoinRequest(SQUAD_ID, REQUESTER_EMAIL, {
+        name: 'Newcomer',
+        playerType: 'CAPTAIN' as PlayerType,
+      })
+    ).rejects.toThrow('Invalid player type');
+    expect(mocked.squadJoinRequest.create).not.toHaveBeenCalled();
+  });
 });
 
 describe('approveJoinRequest', () => {
@@ -215,6 +244,47 @@ describe('approveJoinRequest', () => {
     await expect(
       approveJoinRequest(SQUAD_ID, 10, ADMIN_EMAIL, { playerType: PlayerType.FULLTIME })
     ).rejects.toThrow('starting score is required');
+  });
+
+  it('defaults to the requested FULLTIME type, so a score is required', async () => {
+    mocked.squadJoinRequest.findFirst.mockResolvedValue(
+      pendingRow({ requestedPlayerType: PlayerType.FULLTIME })
+    );
+
+    await expect(approveJoinRequest(SQUAD_ID, 10, ADMIN_EMAIL)).rejects.toThrow(
+      'starting score is required'
+    );
+  });
+
+  it('creates a FULLTIME player for a FULLTIME request when given a score', async () => {
+    mocked.squadJoinRequest.findFirst.mockResolvedValue(
+      pendingRow({ requestedPlayerType: PlayerType.FULLTIME })
+    );
+    mocked.player.count.mockResolvedValue(0);
+    stubPlayerCreate({ playerType: PlayerType.FULLTIME, rankScore: 1200 });
+
+    await approveJoinRequest(SQUAD_ID, 10, ADMIN_EMAIL, { initialScore: 1200 });
+
+    expect(mocked.player.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ playerType: PlayerType.FULLTIME }),
+      })
+    );
+  });
+
+  it('lets the admin approve a FULLTIME request as OPEN_SLOT', async () => {
+    mocked.squadJoinRequest.findFirst.mockResolvedValue(
+      pendingRow({ requestedPlayerType: PlayerType.FULLTIME })
+    );
+    stubPlayerCreate();
+
+    await approveJoinRequest(SQUAD_ID, 10, ADMIN_EMAIL, { playerType: PlayerType.OPEN_SLOT });
+
+    expect(mocked.player.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ playerType: PlayerType.OPEN_SLOT, rankScore: null }),
+      })
+    );
   });
 
   it('refuses a non-positive starting score', async () => {

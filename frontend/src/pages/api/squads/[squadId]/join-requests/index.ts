@@ -20,14 +20,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    // Only name and message are read from the body. The requester's identity comes from the
-    // session and nothing else - any `email` sent by the caller is ignored outright, because
-    // sign-in is now open to every verified Google account and trusting a body field here would
-    // let anyone file a request in someone else's name.
-    const { name, message } = req.body ?? {};
+    // Only name, message and playerType are read from the body. The requester's identity comes
+    // from the session and nothing else - any `email` sent by the caller is ignored outright,
+    // because sign-in is now open to every verified Google account and trusting a body field here
+    // would let anyone file a request in someone else's name.
+    const { name, message, playerType } = req.body ?? {};
 
     try {
-      const request = await createJoinRequest(squadId, session.user.email, { name, message });
+      const request = await createJoinRequest(squadId, session.user.email, {
+        name,
+        message,
+        playerType,
+      });
       // Not awaited: the request has committed, and a slow Telegram must not hold the response.
       // Never rejects - failures are logged (lib/adminNotifications.ts).
       void notifyAdminsOfJoinRequest(request);
