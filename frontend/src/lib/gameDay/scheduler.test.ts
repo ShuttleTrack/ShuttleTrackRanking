@@ -17,8 +17,10 @@ import {
   T,
   WEDNESDAY_SCHEDULE,
   fulltimeIn,
+  openSlotPlayer,
   resetIds,
   seedGameDay,
+  seedOpenSlot,
   seedSquad,
 } from './testing/scenario';
 
@@ -105,10 +107,12 @@ describe('candidateDates', () => {
 });
 
 describe('decideOpenSlotPing', () => {
-  it('needs a minimum and a shortfall', () => {
-    expect(decideOpenSlotPing({ minPlayers: null, confirmedIn: 0 })).toMatchObject({ send: false });
-    expect(decideOpenSlotPing({ minPlayers: 16, confirmedIn: 16 })).toMatchObject({ send: false });
-    expect(decideOpenSlotPing({ minPlayers: 16, confirmedIn: 15 })).toEqual({ send: true });
+  it('needs a minimum and sends while in plus waiting is at or below it', () => {
+    expect(decideOpenSlotPing({ minPlayers: null, confirmedIn: 0, waiting: 0 })).toMatchObject({ send: false });
+    expect(decideOpenSlotPing({ minPlayers: 16, confirmedIn: 16, waiting: 0 })).toEqual({ send: true });
+    expect(decideOpenSlotPing({ minPlayers: 16, confirmedIn: 15, waiting: 0 })).toEqual({ send: true });
+    expect(decideOpenSlotPing({ minPlayers: 16, confirmedIn: 12, waiting: 4 })).toEqual({ send: true });
+    expect(decideOpenSlotPing({ minPlayers: 16, confirmedIn: 16, waiting: 1 })).toMatchObject({ send: false });
   });
 });
 
@@ -249,14 +253,39 @@ describe('Pass B - the message and deadline steps', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('does not ping when the minimum is already met - but still stamps, so it never retries', async () => {
+  it('pings the covered message when in alone meets the minimum', async () => {
     seedSquad(db);
     const gd = seedGameDay(db, { announcedAt: T.twoDaysBefore });
     fulltimeIn(db, gd.id, 16);
 
     await runGameDayTick(T.afterPing);
+    expect(sentTo()).toEqual([OPS.telegramOpenSlotChatId]);
+    expect(sentTexts()[0]).toContain('is covered.');
+    expect(sentTexts()[0]).toContain('16 in.');
+    expect(rowFor('2026-09-23')).toMatchObject({ openSlotPingedAt: T.afterPing, openSlotPingSent: true });
+  });
+
+  it('does not ping when in plus waiting exceeds the minimum - but still stamps', async () => {
+    seedSquad(db);
+    const gd = seedGameDay(db, { announcedAt: T.twoDaysBefore });
+    fulltimeIn(db, gd.id, 16);
+    seedOpenSlot(db, gd.id, openSlotPlayer(db, 'extra').id);
+
+    await runGameDayTick(T.afterPing);
     expect(send).not.toHaveBeenCalled();
     expect(rowFor('2026-09-23')).toMatchObject({ openSlotPingedAt: T.afterPing, openSlotPingSent: false });
+  });
+
+  it('counts the waiting list toward the shortfall in the ping body', async () => {
+    seedSquad(db);
+    const gd = seedGameDay(db, { announcedAt: T.twoDaysBefore });
+    fulltimeIn(db, gd.id, 10);
+    seedOpenSlot(db, gd.id, openSlotPlayer(db, 'w1').id);
+    seedOpenSlot(db, gd.id, openSlotPlayer(db, 'w2').id);
+
+    await runGameDayTick(T.afterPing);
+    expect(sentTexts()[0]).toContain('We need <b>4</b> more players');
+    expect(sentTexts()[0]).toContain('Including 2 already on the waiting list.');
   });
 
   it('sends the 10:00 reminder with the current count', async () => {

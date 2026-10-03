@@ -111,7 +111,7 @@ describe('the four message bodies', () => {
   });
 
   it('players needed: the shortfall headline and waiting-list rule, link via button only', () => {
-    const post = buildOpenSlotPingMessage(ctx, { confirmedIn: 12, minPlayers: 16 });
+    const post = buildOpenSlotPingMessage(ctx, { confirmedIn: 12, waiting: 0, minPlayers: 16 });
     expect(post.text).toContain('We need <b>4</b> more players for Wednesday 23 Sep, 19:00–22:00');
     expect(post.text).toContain('first come, first served');
     expect(post.text).not.toContain(URL);
@@ -123,9 +123,35 @@ describe('the four message bodies', () => {
     });
   });
 
+  it('players needed: waiting list counts toward the shortfall', () => {
+    const post = buildOpenSlotPingMessage(ctx, { confirmedIn: 12, waiting: 2, minPlayers: 16 });
+    expect(post.text).toContain('We need <b>2</b> more players for');
+    expect(post.text).toContain('Including 2 already on the waiting list.');
+  });
+
   it('players needed: singular when one short', () => {
-    const text = buildOpenSlotPingMessage(ctx, { confirmedIn: 15, minPlayers: 16 }).text;
+    const text = buildOpenSlotPingMessage(ctx, { confirmedIn: 15, waiting: 0, minPlayers: 16 }).text;
     expect(text).toContain('We need <b>1</b> more player for');
+  });
+
+  it('players needed: singular waiting line', () => {
+    const text = buildOpenSlotPingMessage(ctx, { confirmedIn: 14, waiting: 1, minPlayers: 16 }).text;
+    expect(text).toContain('We need <b>1</b> more player for');
+    expect(text).toContain('Including 1 already on the waiting list.');
+  });
+
+  it('players needed: covered when in plus waiting meets the minimum', () => {
+    const post = buildOpenSlotPingMessage(ctx, { confirmedIn: 12, waiting: 4, minPlayers: 16 });
+    expect(post.text).toContain('Wednesday 23 Sep, 19:00–22:00 is covered.');
+    expect(post.text).toContain('12 in and 4 on the waiting list.');
+    expect(post.text).toContain('\n\nJoin the waiting list to be next in line if someone cancels.');
+  });
+
+  it('players needed: covered with no waiting list', () => {
+    const post = buildOpenSlotPingMessage(ctx, { confirmedIn: 16, waiting: 0, minPlayers: 16 });
+    expect(post.text).toContain('is covered.');
+    expect(post.text).toContain('16 in.');
+    expect(post.text).toContain('Join the waiting list to be next in line if someone cancels.');
   });
 
   it('final call: appends the game-day URL when the inline button is unavailable', () => {
@@ -140,7 +166,7 @@ describe('the four message bodies', () => {
   it('players needed: appends the game-day URL when the inline button is unavailable', () => {
     const post = buildOpenSlotPingMessage(
       { ...ctx, appUrl: 'http://localhost:3000' },
-      { confirmedIn: 12, minPlayers: 16 }
+      { confirmedIn: 12, waiting: 0, minPlayers: 16 }
     );
     expect(post.buttons).toBeUndefined();
     expect(post.text).toContain('http://localhost:3000/s/wed/game-day/2026-09-23');

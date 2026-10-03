@@ -15,7 +15,7 @@ import { parseGameDayOps, type GameDayOpsData } from '@/lib/gameDayOps';
 import { isPlayingDay } from '@/lib/scheduling/playingDayCalculator';
 import { scheduleTimezone, type SquadScheduleData } from '@/lib/squadSchedule';
 import { addCalendarDays, dateOnlyFromIso, instantAt, isoFromDateOnly, localDateIso } from './clock';
-import { computeGameDayCounts } from './counts';
+import { computeGameDayCounts, countOpenSlotWaiting } from './counts';
 import { loadGameDayState } from './eligibility';
 import { cancelGameDay, closeVoting } from './lifecycle';
 import { GAME_DAY_TX_OPTIONS, lockGameDay, withGameDayLock } from './lock';
@@ -134,15 +134,20 @@ export function decideGameDayActions(gameDay: DecisionRow, now: Date): GameDayAc
   };
 }
 
-// The 09:00 ping additionally needs the minimum configured and confirmedIn below it. A skip
+// The 09:00 ping needs the minimum configured and confirmedIn + waiting at or below it. A skip
 // reason is logged and the stamp set either way, so a decided-not-to-send never retries.
 export function decideOpenSlotPing(input: {
   minPlayers: number | null;
   confirmedIn: number;
+  waiting: number;
 }): { send: true } | { send: false; reason: string } {
   if (input.minPlayers === null) return { send: false, reason: 'no open-slot minimum on this game day' };
-  if (input.confirmedIn >= input.minPlayers) {
-    return { send: false, reason: `already ${input.confirmedIn}/${input.minPlayers} confirmed` };
+  const shortfall = input.minPlayers - input.confirmedIn - input.waiting;
+  if (shortfall < 0) {
+    return {
+      send: false,
+      reason: `already ${input.confirmedIn + input.waiting}/${input.minPlayers} in or on the waiting list`,
+    };
   }
   return { send: true };
 }
@@ -311,7 +316,12 @@ async function runStepsPass(gameDay: GameDay & { squad: Squad }, now: Date, summ
       console.log(`[game-day] ${squad.slug}: skipped open-slot ping for ${label} (past the deadline)`);
       await stamp(gameDay.id, 'openSlotPingedAt', now);
     } else if (actions.ping === 'send') {
-      const verdict = decideOpenSlotPing({ minPlayers: gameDay.minPlayers, confirmedIn: counts.confirmedIn });
+      const waiting = countOpenSlotWaiting(state);
+      const verdict = decideOpenSlotPing({
+        minPlayers: gameDay.minPlayers,
+        confirmedIn: counts.confirmedIn,
+        waiting,
+      });
       if (!verdict.send) {
         console.log(`[game-day] ${squad.slug}: skipped open-slot ping for ${label} (${verdict.reason})`);
         await stamp(gameDay.id, 'openSlotPingedAt', now);
@@ -320,7 +330,11 @@ async function runStepsPass(gameDay: GameDay & { squad: Squad }, now: Date, summ
           sendGameDayPost(
             squad,
             'openSlot',
-            buildOpenSlotPingMessage(ctx, { confirmedIn: counts.confirmedIn, minPlayers: gameDay.minPlayers! })
+            buildOpenSlotPingMessage(ctx, {
+              confirmedIn: counts.confirmedIn,
+              waiting,
+              minPlayers: gameDay.minPlayers!,
+            })
           )
         );
         if (outcome) logSend(squad, `open-slot ping for ${label}`, outcome);

@@ -7,13 +7,17 @@
 //     -> governs how many more people may be let in (the vacancy sync).
 //
 //   confirmedIn = IN votes the voter cast themselves (inheritedFromPlayerId null)
-//     -> what the 09:00 minimum check compares, what the roster shows, what the planner
-//        pre-ticks.
+//     -> what the roster shows, what the planner pre-ticks. The 09:00 open-slot ping also
+//        counts WAITING-list rows (countOpenSlotWaiting) toward the minimum.
 //
 // slotsHeld >= confirmedIn always; the difference is exactly the people holding a slot without
 // having confirmed - unconfirmed assignees, plus inherited reservations from a post-deadline
 // transfer.
 import type { GameDayState } from './eligibility';
+
+export function countOpenSlotWaiting(state: Pick<GameDayState, 'openSlots' | 'openSlotPoolIds'>): number {
+  return state.openSlots.filter((s) => s.status === 'WAITING' && state.openSlotPoolIds.has(s.playerId)).length;
+}
 
 export interface GameDayCounts {
   slotsHeld: number;
