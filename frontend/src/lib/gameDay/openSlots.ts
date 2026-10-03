@@ -127,8 +127,9 @@ export async function deliverVacancyPlans(plans: (VacancyPlan | null)[]): Promis
   }
 }
 
-// Join the waiting list (voting open) or claim a slot directly (voting closed). The acting
-// player comes from the session, never the request body - see the route.
+// Join the waiting list (voting open, or voting closed with the session full) or claim a slot
+// directly (voting closed with a slot free). The acting player comes from the session, never the
+// request body - see the route.
 export async function joinOpenSlot(
   squadId: number,
   gameDayId: number,
@@ -167,19 +168,22 @@ export async function joinOpenSlot(
       return { entry: existing, plan: null };
     }
 
-    if (gameDay.status === 'VOTING_OPEN') {
-      // The waiting list is open from creation - the 09:00 ping is an announcement, not a gate.
+    const joinWaitingList = async () => {
       if (existing) return { entry: existing, plan: null };
       const created = await tx.gameDayOpenSlot.create({ data: { gameDayId, playerId, status: 'WAITING', joinedAt: now } });
       return { entry: created, plan: null };
-    }
+    };
 
-    // VOTING_CLOSED: a direct claim, recomputed inside the lock so two concurrent claims for the
-    // last slot leave exactly one winner.
+    // The waiting list is open from creation - the 09:00 ping is an announcement, not a gate.
+    if (gameDay.status === 'VOTING_OPEN') return joinWaitingList();
+
+    // VOTING_CLOSED: recomputed inside the lock, so two concurrent claims for the last slot leave
+    // exactly one winner - the other lands on the waiting list. A full session queues the player
+    // at the back until slotLockAt: a slot given up before then goes to whoever has waited
+    // longest, since the sync promotes the head of the queue in the same transaction as the
+    // drop-out - a vacancy is never left claimable while anyone is waiting.
     const vacancies = computeGameDayCounts(state).vacancies ?? 0;
-    if (vacancies <= 0) {
-      throw new ValidationError('No open slots available');
-    }
+    if (vacancies <= 0) return joinWaitingList();
     // Inserted BEFORE the sync counts, or the claim would not be in the count.
     const claimed = existing
       ? await tx.gameDayOpenSlot.update({

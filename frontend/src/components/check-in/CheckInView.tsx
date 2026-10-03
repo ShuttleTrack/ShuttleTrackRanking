@@ -207,18 +207,35 @@ function VoterPanel({
   );
 }
 
-function OpenSlotPanel({ view, pending, onJoinOrClaim, onLeave }: Pick<CheckInViewProps, 'view' | 'pending' | 'onJoinOrClaim' | 'onLeave'>) {
+function OpenSlotPanel({
+  view,
+  now,
+  pending,
+  onJoinOrClaim,
+  onLeave,
+}: Pick<CheckInViewProps, 'view' | 'now' | 'pending' | 'onJoinOrClaim' | 'onLeave'>) {
   const { actions, myOpenSlot } = view;
   const closesAt = formatLocalTime(view.votesCloseAt, view.timezone);
+  const lockTime = formatLocalTime(view.slotLockAt, view.timezone);
+  const pastLock = now.getTime() >= new Date(view.slotLockAt).getTime();
   const vacancies = view.counts.vacancies ?? 0;
 
   let body: React.ReactNode;
-  if (myOpenSlot?.status === 'WAITING') {
+  if (myOpenSlot?.status === 'WAITING' && pastLock) {
+    body = (
+      <p className="mt-2 text-sm text-on-surface-variant">
+        Open slots locked at {lockTime} and no slot opened up for you this time.
+      </p>
+    );
+  } else if (myOpenSlot?.status === 'WAITING') {
     body = (
       <>
         <p className="mt-2 text-sm text-on-surface">
           You&apos;re <span className="font-numeric tabular-nums">#{myOpenSlot.waitingPosition ?? '?'}</span> on the waiting
-          list. It&apos;s first come, first served. When voting closes at {closesAt}, you&apos;ll get a slot if any are left.
+          list. It&apos;s first come, first served.{' '}
+          {view.status === 'VOTING_OPEN'
+            ? `When voting closes at ${closesAt}, you'll get a slot if any are left - if not, you stay in line until ${lockTime} in case someone drops out.`
+            : `If someone drops out before ${lockTime}, their slot goes to the first person in line.`}
         </p>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:gap-4">
           <button type="button" className={`${checkInButtonBase} ${checkInButtonPrimary}`} disabled aria-pressed>
@@ -239,8 +256,9 @@ function OpenSlotPanel({ view, pending, onJoinOrClaim, onLeave }: Pick<CheckInVi
     body = (
       <>
         <p className="mt-2 text-sm text-on-surface">
-          Join the waiting list for an open slot. It&apos;s first come, first served. When voting closes at {closesAt},
-          you&apos;ll get a slot if any are left.
+          {view.status === 'VOTING_OPEN'
+            ? `Join the waiting list for an open slot. It's first come, first served. When voting closes at ${closesAt}, you'll get a slot if any are left.`
+            : `The session is full. Join the waiting list - if someone drops out before ${lockTime}, their slot goes to the first person in line.`}
         </p>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:gap-4">
           <button type="button" className={`${checkInButtonBase} ${checkInButtonPrimary}`} disabled={pending} onClick={onJoinOrClaim}>
@@ -264,7 +282,7 @@ function OpenSlotPanel({ view, pending, onJoinOrClaim, onLeave }: Pick<CheckInVi
       </>
     );
   } else {
-    const reason = view.status === 'VOTING_OPEN' ? actions.joinWaitingList : actions.claimSlot;
+    const reason = view.status === 'VOTING_OPEN' || vacancies <= 0 ? actions.joinWaitingList : actions.claimSlot;
     body = <p className="mt-2 text-sm text-on-surface-variant">{!reason.ok ? `${reason.reason}.` : null}</p>;
   }
 
@@ -341,7 +359,7 @@ export function CheckInView({
             ) : view.role === 'NOMINEE' ? (
               <NomineePanel view={view} />
             ) : view.role === 'OPEN_SLOT' ? (
-              <OpenSlotPanel view={view} pending={pending} onJoinOrClaim={onJoinOrClaim} onLeave={onLeave} />
+              <OpenSlotPanel view={view} now={now} pending={pending} onJoinOrClaim={onJoinOrClaim} onLeave={onLeave} />
             ) : (
               <>
                 <p className={sectionLabel}>Viewing only</p>

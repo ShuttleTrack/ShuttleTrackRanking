@@ -6,10 +6,12 @@ vi.mock('@/lib/telegram/sendMessage', async (importOriginal) => ({
   sendTelegramMessage: vi.fn(async () => ({ ok: true })),
 }));
 
+import type { GameDay, Player } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import type { FakePrisma } from './testing/fakePrisma';
 import { closeVoting } from './lifecycle';
 import { joinOpenSlot, leaveOpenSlot, planVacancySync } from './openSlots';
+import { getGameDayView } from './view';
 import { castVote } from './votes';
 import {
   T,
@@ -101,22 +103,23 @@ describe('joining and claiming', () => {
     await expect(joinOpenSlot(1, gd.id, ft.id, T.beforeClose)).rejects.toThrow(/already hold a slot/);
   });
 
-  it('a direct claim after the deadline succeeds while vacancies remain, then 400s at zero', async () => {
+  it('after the deadline, claims directly while vacancies remain, then queues once the session is full', async () => {
     const gd = seedGameDay(db, { status: 'VOTING_CLOSED', minPlayers: 16 });
     fulltimeIn(db, gd.id, 14);
     const [a, b, c] = [openSlotPlayer(db, 'a'), openSlotPlayer(db, 'b'), openSlotPlayer(db, 'c')];
 
     await joinOpenSlot(1, gd.id, a.id, T.afterClose);
     await joinOpenSlot(1, gd.id, b.id, T.afterClose);
-    await expect(joinOpenSlot(1, gd.id, c.id, T.afterClose)).rejects.toThrow('No open slots available');
+    await joinOpenSlot(1, gd.id, c.id, T.afterClose);
 
     expect(openSlotsOf(db, gd.id).map((s) => [s.playerId, s.status, s.source])).toEqual([
       [a.id, 'ASSIGNED', 'DIRECT'],
       [b.id, 'ASSIGNED', 'DIRECT'],
+      [c.id, 'WAITING', null],
     ]);
   });
 
-  it('two concurrent claims for the last slot leave exactly one winner and no phantom row', async () => {
+  it('two concurrent claims for the last slot leave exactly one winner; the other is queued', async () => {
     const gd = seedGameDay(db, { status: 'VOTING_CLOSED', minPlayers: 16 });
     fulltimeIn(db, gd.id, 15);
     const [a, b] = [openSlotPlayer(db, 'a'), openSlotPlayer(db, 'b')];
@@ -126,9 +129,49 @@ describe('joining and claiming', () => {
       joinOpenSlot(1, gd.id, b.id, T.afterClose),
     ]);
 
-    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
-    expect(rejected.reason.message).toBe('No open slots available');
+    expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
+    const rows = openSlotsOf(db, gd.id);
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((s) => s.status === 'ASSIGNED' && s.source === 'DIRECT')).toHaveLength(1);
+    expect(rows.filter((s) => s.status === 'WAITING')).toHaveLength(1);
+  });
+
+  it('a player who queued after the deadline is promoted when a holder drops out before slotLockAt', async () => {
+    const gd = seedGameDay(db, { status: 'VOTING_CLOSED', minPlayers: 16 });
+    const [ft1] = fulltimeIn(db, gd.id, 16);
+    const late = openSlotPlayer(db, 'late');
+
+    await joinOpenSlot(1, gd.id, late.id, T.afterClose);
+    expect(statusOf(gd.id, late.id)).toBe('WAITING');
+
+    await castVote(1, gd.id, ft1.id, 'OUT', T.afterClose);
+    const entry = openSlotsOf(db, gd.id).find((s) => s.playerId === late.id);
+    expect(entry).toMatchObject({ status: 'ASSIGNED', source: 'WAITING_LIST' });
+  });
+
+  it('someone left waiting at the deadline stays ahead of a player who queued after it', async () => {
+    const gd = seedGameDay(db); // minPlayers 16
+    const [ft1] = fulltimeIn(db, gd.id, 15);
+    const [early1, early2] = waitingList(gd.id, 2); // early2 joined first
+    await closeVoting(gd.id, T.atClose);
+    expect(statusOf(gd.id, early2.id)).toBe('ASSIGNED');
+
+    const late = openSlotPlayer(db, 'late');
+    await joinOpenSlot(1, gd.id, late.id, T.afterClose);
+    expect(statusOf(gd.id, late.id)).toBe('WAITING');
+
+    await castVote(1, gd.id, ft1.id, 'OUT', T.afterClose);
+    expect(statusOf(gd.id, early1.id)).toBe('ASSIGNED');
+    expect(statusOf(gd.id, late.id)).toBe('WAITING');
+  });
+
+  it('joining again while already queued after the deadline is a no-op', async () => {
+    const gd = seedGameDay(db, { status: 'VOTING_CLOSED', minPlayers: 16 });
+    fulltimeIn(db, gd.id, 16);
+    const p = openSlotPlayer(db, 'p');
+    const first = await joinOpenSlot(1, gd.id, p.id, T.afterClose);
+    const again = await joinOpenSlot(1, gd.id, p.id, T.afterClose);
+    expect(again.id).toBe(first.id);
     expect(openSlotsOf(db, gd.id)).toHaveLength(1);
   });
 
@@ -168,5 +211,34 @@ describe('leaving the waiting list', () => {
     const p = openSlotPlayer(db, 'p');
     seedOpenSlot(db, gd.id, p.id, { status: 'ASSIGNED', source: 'WAITING_LIST' });
     await expect(leaveOpenSlot(1, gd.id, p.id)).rejects.toThrow(/I'm out/);
+  });
+});
+
+describe("the page's open-slot actions after the deadline", () => {
+  const gameDayRow = (id: number) => db.store.gameDay.find((g) => g.id === id)! as unknown as GameDay;
+  const playerRow = (id: number) => db.store.player.find((p) => p.id === id) as unknown as Player;
+
+  it('offers the waiting list while the session is full, and a claim while a slot is free', async () => {
+    const full = seedGameDay(db, { status: 'VOTING_CLOSED', minPlayers: 16 });
+    fulltimeIn(db, full.id, 16);
+    const p = openSlotPlayer(db, 'p');
+    const fullView = await getGameDayView(gameDayRow(full.id), playerRow(p.id), T.afterClose);
+    expect(fullView.actions.joinWaitingList).toEqual({ ok: true });
+    expect(fullView.actions.claimSlot).toEqual({ ok: false, reason: 'No open slots available' });
+
+    const short = seedGameDay(db, { gameDate: '2026-09-30', status: 'VOTING_CLOSED', minPlayers: 16 });
+    fulltimeIn(db, short.id, 15, 's');
+    const shortView = await getGameDayView(gameDayRow(short.id), playerRow(p.id), T.afterClose);
+    expect(shortView.actions.claimSlot).toEqual({ ok: true });
+    expect(shortView.actions.joinWaitingList).toEqual({ ok: false, reason: 'There is an open slot - claim it instead' });
+  });
+
+  it('offers neither past slotLockAt', async () => {
+    const gd = seedGameDay(db, { status: 'VOTING_CLOSED', minPlayers: 16 });
+    fulltimeIn(db, gd.id, 16);
+    const p = openSlotPlayer(db, 'p');
+    const view = await getGameDayView(gameDayRow(gd.id), playerRow(p.id), T.afterLock);
+    expect(view.actions.joinWaitingList.ok).toBe(false);
+    expect(view.actions.claimSlot.ok).toBe(false);
   });
 });
