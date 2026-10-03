@@ -543,6 +543,19 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   deadline a holder cannot vote IN (unless they gained the slot after it) and can vote OUT only
   from an IN; a `WAITING_LIST` assignee can give the slot back until `slotLockAt`; a `DIRECT`
   claimer never can (an admin can release it).
+- **The waiting list after the deadline** (`joinOpenSlot`, `view.ts`'s `openSlotActions`): the
+  queue does not close at 13:00, it stays open until `slotLockAt` (start - 2h), because a slot
+  given up between 13:00 and the lock is re-offered. Whoever is still waiting after the 13:00
+  allocation keeps their place, and an open-slot player can still join - but only while the
+  session is **full**. With a slot free after 13:00 there is no queue, just a `DIRECT` claim; the
+  server decides which under the row lock, so of two concurrent joins for the last slot one
+  claims it and the other is queued. Since the sync promotes the head of the queue in the same
+  transaction as the drop-out, a vacancy is never claimable while anyone is waiting. Order stays
+  strictly `joinedAt`, so anyone queued before 13:00 is ahead of a late joiner. A late
+  promotion is a `WAITING_LIST` assignment like any other: announced in the open-slot group,
+  confirmable, and returnable until the lock. Anyone still waiting at `slotLockAt` simply did not
+  get a slot - the page says so; nothing is posted. (This used to close at 13:00, refusing a
+  late join to a full session - while the "filled up" posts already invited people to join.)
 - **The vacancy sync** (`lib/gameDay/openSlots.ts`): `planVacancySync(tx, id)` runs inside the
   caller's locked transaction and always promotes waiting-list players, strictly by `joinedAt`,
   up to the gap; `deliverVacancyPlan` posts to the open-slot group *after* commit and only then
@@ -641,9 +654,9 @@ arranged between the two of them beforehand. Summary of what's built (`lib/gameD
   *nominee* also deletes the nominator's IN, which was cast on their behalf), `GAME_DAY_CANCELLED`
   (inside `cancelGameDay` - every cancellation path goes through it; `cancelOpenGameDays` is only the
   disable path's loop). `recreateCancelledGameDay` deletes nomination rows with the votes. Once a
-  nomination ends early, the nominee is back in the pool: before 13:00 they can rejoin the waiting
-  list at the back; after it there is no queue, only a direct claim of a slot left over after the
-  waiting list was promoted.
+  nomination ends early, the nominee is back in the pool and goes through `joinOpenSlot` like
+  anyone else: the back of the waiting list, or - after 13:00, with a slot free and nobody
+  waiting - a direct claim (see "The waiting list after the deadline" above).
 - **The roster swap lives in `buildRoster` (`lib/gameDay/view.ts`)** and nowhere else: an IN by a
   nominator with an active (or `SESSION_ENDED`) nomination lists the nominee instead, with
   `standingInFor`. `getGameDayAttendance().confirmed` comes from it, so Game Planner pre-ticks - and
