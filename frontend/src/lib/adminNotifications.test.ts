@@ -133,6 +133,7 @@ describe('notifyAdminsOf*', () => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', fetchMock);
     vi.stubEnv('TELEGRAM_BOT_TOKEN', 'token');
+    vi.stubEnv('TELEGRAM_SEND_ENABLED', 'true');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://brs.example.com');
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});

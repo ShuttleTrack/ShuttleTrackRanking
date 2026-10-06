@@ -112,15 +112,17 @@ async function sendAdminPost(squadId: number, what: string, build: (ctx: AdminMe
     console.log(`[admin-notify] ${squad.slug}: skipped ${what} (no admin group chat id configured)`);
     return;
   }
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!botToken) {
-    console.error(`[admin-notify] ${squad.slug}: failed to send ${what}: TELEGRAM_BOT_TOKEN is not set`);
-    return;
-  }
   const post = build({ appUrl: process.env.NEXT_PUBLIC_APP_URL ?? '', squadName: squad.name, slug: squad.slug });
-  const result = await sendTelegramMessage(botToken, squad.adminTelegramChatId, post.text, post.buttons);
+  const result = await sendTelegramMessage(
+    process.env.TELEGRAM_BOT_TOKEN,
+    squad.adminTelegramChatId,
+    post.text,
+    post.buttons
+  );
   if (result.ok) {
     console.log(`[admin-notify] ${squad.slug}: sent ${what}`);
+  } else if (result.skipped) {
+    console.log(`[admin-notify] ${squad.slug}: skipped ${what} (${result.description})`);
   } else {
     console.error(`[admin-notify] ${squad.slug}: failed to send ${what}: ${result.description ?? 'unknown error'}`);
   }
