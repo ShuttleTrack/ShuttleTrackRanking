@@ -42,6 +42,9 @@ jobs:
           echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env.production
           # Only the live image talks to Telegram; dev servers log the messages instead.
           echo "TELEGRAM_SEND_ENABLED=true" >> .env.production
+          # Marks this as the live deployment; any other server suffixes its Telegram posts with
+          # " - Testing message. Please ignore."
+          echo "APP_ENV=production" >> .env.production
           echo "SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}" >> .env.production
           echo "NEXT_PUBLIC_BUILD_IDENTIFIER=v3.0-migration-$(TZ=Europe/Amsterdam date '+%Y-%m-%d %H:%M:%S')" >> .env.production
           echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
