@@ -590,7 +590,10 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   per-squad. `GET /api/squads/[squadId]` unpacks it into flat `gameDayXxx` fields.
 - **Score keeper notifications** (game started / completed / cancelled): `POST
   /api/squads/[squadId]/notify` (`{ event, gameId }`, squad admins) posts to the same
-  `telegramMainChatId` via `sendGameDayPost`; `lib/gameNotifications.ts` builds the text and the
+  `telegramMainChatId` via `sendGameDayPost`. For a **public** squad (`isPublic`), started and
+  completed are also posted to `telegramOpenSlotChatId` (`gameEventGroups`; cancelled stays
+  main-only, and an open-slot chat id equal to the main one is posted once) - the response status
+  follows the main post, with the open-slot outcome alongside. `lib/gameNotifications.ts` builds the text and the
   squad-scoped links (`/s/[slug]/game-viewer?gameId=…`, `/s/[slug]`) server-side, so the client
   only names the event. With check-in off there is no chat id, and the route answers `skipped`.
   This replaced the old flat `/api/notify`, which was superadmin-only and always posted to one

@@ -2,11 +2,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '@/lib/prisma';
 import { requireSquadAdmin } from '@/lib/auth';
 import { parseSquadId } from '@/lib/api/squadParam';
-import { buildGameMessage, isGameEvent } from '@/lib/gameNotifications';
-import { logSend, sendGameDayPost } from '@/lib/gameDay/telegram';
+import { buildGameMessage, gameEventGroups, isGameEvent } from '@/lib/gameNotifications';
+import { chatIdFor, logSend, sendGameDayPost, type GameDayGroup, type SendOutcome } from '@/lib/gameDay/telegram';
 
 // POST { event: 'started' | 'completed' | 'cancelled', gameId } - the score keeper's Telegram
-// post to this squad's main group (gameDayOps.telegramMainChatId), squad admins. The server
+// post to this squad's main group (gameDayOps.telegramMainChatId), squad admins; a public squad's
+// start/completion also goes to its open-slot group (gameEventGroups). The server
 // builds the text and links; the client only names the event. The game row is not looked up:
 // 'cancelled' fires after the row is deleted, 'completed' just before.
 //
@@ -42,13 +43,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       slug: squad.slug,
       gameId,
     });
-    const outcome = await sendGameDayPost(squad, 'main', message);
-    logSend(squad, `game ${event} notification`, outcome);
-
-    if (outcome.status === 'failed') {
-      return res.status(502).json({ message: `Failed to send notification: ${outcome.reason}` });
+    const groups = gameEventGroups(event, squad, {
+      main: chatIdFor(squad, 'main'),
+      openSlot: chatIdFor(squad, 'openSlot'),
+    });
+    const outcomes: Partial<Record<GameDayGroup, SendOutcome>> = {};
+    for (const group of groups) {
+      const outcome = await sendGameDayPost(squad, group, message);
+      logSend(squad, `game ${event} notification (${group} group)`, outcome);
+      outcomes[group] = outcome;
     }
-    res.status(200).json(outcome);
+
+    // The main post's outcome is the response status, as before; an open-slot failure is logged
+    // and reported alongside but does not fail a request whose main post went out.
+    const main = outcomes.main!;
+    if (main.status === 'failed') {
+      return res.status(502).json({ message: `Failed to send notification: ${main.reason}` });
+    }
+    res.status(200).json({ ...main, openSlot: outcomes.openSlot });
   } catch (error) {
     console.error('Notify API Error:', error);
     res.status(500).json({ message: 'Failed to send notification' });
