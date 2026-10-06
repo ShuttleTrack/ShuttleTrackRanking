@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildGameMessage, isGameEvent, type GameMessageContext } from './gameNotifications';
+import { buildGameMessage, gameEventGroups, isGameEvent, type GameMessageContext } from './gameNotifications';
 
 const ctx: GameMessageContext = {
   appUrl: 'https://brs.example.com/',
@@ -48,5 +48,28 @@ describe('isGameEvent', () => {
     expect(isGameEvent('cancelled')).toBe(true);
     expect(isGameEvent('deleted')).toBe(false);
     expect(isGameEvent(undefined)).toBe(false);
+  });
+});
+
+describe('gameEventGroups', () => {
+  const chatIds = { main: '-100main', openSlot: '-100open' };
+
+  it('adds the open-slot group for a public squad on start and completion', () => {
+    expect(gameEventGroups('started', { isPublic: true }, chatIds)).toEqual(['main', 'openSlot']);
+    expect(gameEventGroups('completed', { isPublic: true }, chatIds)).toEqual(['main', 'openSlot']);
+  });
+
+  it('keeps cancellations main-only', () => {
+    expect(gameEventGroups('cancelled', { isPublic: true }, chatIds)).toEqual(['main']);
+  });
+
+  it('keeps a private squad main-only', () => {
+    expect(gameEventGroups('started', { isPublic: false }, chatIds)).toEqual(['main']);
+    expect(gameEventGroups('completed', { isPublic: false }, chatIds)).toEqual(['main']);
+  });
+
+  it('skips the open-slot group when unset or the same chat as main', () => {
+    expect(gameEventGroups('started', { isPublic: true }, { main: '-100main', openSlot: null })).toEqual(['main']);
+    expect(gameEventGroups('started', { isPublic: true }, { main: '-100x', openSlot: '-100x' })).toEqual(['main']);
   });
 });

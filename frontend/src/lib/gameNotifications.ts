@@ -1,8 +1,10 @@
 // Message bodies for the score keeper's Telegram posts (a game started / completed / cancelled).
 // Built on the server from the squad and game id alone - the client only names the event - so
 // the links always point at this squad's pages and nothing posted can be steered by a request
-// body. Sent to the squad's main group (gameDayOps.telegramMainChatId) via sendGameDayPost.
+// body. Sent to the squad's main group (gameDayOps.telegramMainChatId) via sendGameDayPost, and
+// for a public squad's start/completion also to its open-slot group - see gameEventGroups.
 import { buttonsFor, type TelegramPost } from '@/lib/gameDay/notifications';
+import type { GameDayGroup } from '@/lib/gameDay/telegram';
 import { escapeTelegramHtml } from '@/lib/telegram/sendMessage';
 
 export const GAME_EVENTS = ['started', 'completed', 'cancelled'] as const;
@@ -10,6 +12,21 @@ export type GameEvent = (typeof GAME_EVENTS)[number];
 
 export function isGameEvent(value: unknown): value is GameEvent {
   return typeof value === 'string' && (GAME_EVENTS as readonly string[]).includes(value);
+}
+
+// The groups a game event is posted to. Always the main group; a public squad's start and
+// completion also go to the open-slot group, so the people queueing for spare spots can follow
+// the games. Cancellations stay main-only. When both groups are the same chat it is posted once.
+export function gameEventGroups(
+  event: GameEvent,
+  squad: { isPublic: boolean },
+  chatIds: { main: string | null; openSlot: string | null }
+): GameDayGroup[] {
+  const groups: GameDayGroup[] = ['main'];
+  if (squad.isPublic && event !== 'cancelled' && chatIds.openSlot && chatIds.openSlot !== chatIds.main) {
+    groups.push('openSlot');
+  }
+  return groups;
 }
 
 export interface GameMessageContext {

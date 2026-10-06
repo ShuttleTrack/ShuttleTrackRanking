@@ -8,7 +8,8 @@ const TITLES: Record<GameEvent, string> = {
 
 class NotificationService {
   // The server (pages/api/squads/[squadId]/notify.ts) builds the message and its links and sends
-  // it to this squad's own main Telegram group - the client only names the event.
+  // it to this squad's main Telegram group (plus the open-slot group for a public squad's start or
+  // completion) - the client only names the event.
   private async sendNotification(squadId: number, event: GameEvent, gameId: string) {
     try {
       const response = await fetch(`/api/squads/${squadId}/notify`, {
@@ -44,7 +45,7 @@ class NotificationService {
                 <p class="text-sm mt-2 text-base-content/70">Post this to the squad's Telegram group?</p>
               </div>
               <p class="text-sm text-base-content/70">
-                It goes to the main group set in this squad's game-day settings.
+                It goes to the main group set in this squad's game-day settings${event === 'cancelled' ? '' : ' (and the open-slot group, if the squad is public)'}.
               </p>
             </div>
             <div class="modal-action">
