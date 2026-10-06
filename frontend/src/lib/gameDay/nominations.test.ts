@@ -417,7 +417,9 @@ describe('the roster swap lives in buildRoster', () => {
     const ada = fulltime(db, 'ada');
     const cy = fulltime(db, 'cy');
     const bob = openSlotPlayer(db, 'bob');
+    const adaVotedAt = new Date('2026-09-21T10:30:00.000Z');
     seedVote(db, gd.id, cy.id, 'IN');
+    seedVote(db, gd.id, ada.id, 'IN', { votedAt: adaVotedAt });
     await nominate(1, gd.id, ada.id, bob.id, T.beforeClose);
     await closeVoting(gd.id, T.atClose);
 
@@ -425,6 +427,7 @@ describe('the roster swap lives in buildRoster', () => {
 
     expect(attendance.confirmed.map((p) => p.id).sort()).toEqual([bob.id, cy.id].sort());
     expect(attendance.confirmed.find((p) => p.id === bob.id)?.standingInFor).toEqual({ id: ada.id, name: 'ada' });
+    expect(attendance.confirmed.find((p) => p.id === bob.id)?.votedAt).toBe(adaVotedAt.toISOString());
     expect(attendance.counts.confirmedIn).toBe(2);
     expect(attendance.nominations).toEqual([
       expect.objectContaining({ nominatorName: 'ada', nomineeName: 'bob', endReason: null }),

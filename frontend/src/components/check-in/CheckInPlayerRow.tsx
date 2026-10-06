@@ -1,10 +1,12 @@
 import React from 'react';
 import Image from 'next/image';
 import { publicDisplayName } from '@/utils/string';
+import { formatVoteTimeAmsterdam } from '@/lib/check-in/schedule';
+import { DEFAULT_TIMEZONE } from '@/lib/gameDay/clock';
 import type { RosterPlayer } from '@/lib/check-in/types';
 
 interface CheckInPlayerRowProps {
-  player: Pick<RosterPlayer, 'id' | 'name' | 'colorHex' | 'playerRank'>;
+  player: Pick<RosterPlayer, 'id' | 'name' | 'colorHex' | 'votedAt'>;
   isCurrentUser: boolean;
   avatarUrl?: string;
   staggerIndex?: number;
@@ -47,9 +49,12 @@ export function CheckInPlayerRow({
           {badge}
         </span>
       ) : null}
-      {(player.playerRank ?? 0) > 0 ? (
-        <span className="font-numeric text-xs tabular-nums opacity-80 shrink-0">
-          #{String(player.playerRank).padStart(2, '0')}
+      {player.votedAt ? (
+        <span
+          className="font-numeric text-xs tabular-nums opacity-80 shrink-0"
+          title={`Voted (${DEFAULT_TIMEZONE})`}
+        >
+          {formatVoteTimeAmsterdam(player.votedAt)}
         </span>
       ) : null}
       {isCurrentUser ? (

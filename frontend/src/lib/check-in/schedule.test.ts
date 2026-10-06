@@ -4,6 +4,7 @@ import {
   formatSessionTimeRange,
   formatSessionTitle,
   formatTimezoneCity,
+  formatVoteTimeAmsterdam,
 } from './schedule';
 
 describe('check-in display helpers', () => {
@@ -24,5 +25,10 @@ describe('check-in display helpers', () => {
   it('shortens IANA zones to a city label', () => {
     expect(formatTimezoneCity('Europe/Amsterdam')).toBe('Amsterdam');
     expect(formatTimezoneCity('America/New_York')).toBe('New York');
+  });
+
+  it('formats vote instants in Europe/Amsterdam', () => {
+    expect(formatVoteTimeAmsterdam('2026-09-23T11:00:00.000Z')).toBe('23 Sep, 13:00');
+    expect(formatVoteTimeAmsterdam('2026-10-05T22:30:00.000Z')).toBe('6 Oct, 00:30');
   });
 });

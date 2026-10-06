@@ -4,7 +4,10 @@
 // it was created - ATTENDANCE_VOTE_PLAN.md), and the phase/countdown arithmetic is
 // lib/gameDay/voteWindow.ts's, shared with the server.
 import { format, parseISO } from 'date-fns';
+import { DEFAULT_TIMEZONE, wallClockIn } from '@/lib/gameDay/clock';
 import { localTimeOf, type GameDayClock } from '@/lib/gameDay/voteWindow';
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export {
   durationUntilLabel,
@@ -33,4 +36,12 @@ export function formatTimezoneCity(timezone: string): string {
   const segment = timezone.split('/').pop();
   if (!segment) return timezone;
   return segment.replace(/_/g, ' ');
+}
+
+// Check-in In/Out roster: when someone voted, always shown in Europe/Amsterdam (not the viewer's zone).
+export function formatVoteTimeAmsterdam(isoInstant: string): string {
+  const clock = wallClockIn(new Date(isoInstant), DEFAULT_TIMEZONE);
+  const hh = String(clock.hour).padStart(2, '0');
+  const mm = String(clock.minute).padStart(2, '0');
+  return `${clock.day} ${SHORT_MONTHS[clock.month - 1]}, ${hh}:${mm}`;
 }
