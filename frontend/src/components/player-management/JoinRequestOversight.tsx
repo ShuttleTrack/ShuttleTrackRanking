@@ -17,6 +17,7 @@ interface JoinRequestRow {
   email: string;
   name: string;
   message: string | null;
+  requestedPlayerType: PlayerType;
   status: JoinRequestStatus;
   createdAt: string;
   decidedAt: string | null;
@@ -42,6 +43,10 @@ function statusOf(status: JoinRequestStatus): { label: string; className: string
   }
 }
 
+function playerTypeLabel(type: PlayerType): string {
+  return type === 'OPEN_SLOT' ? 'Open slot' : 'Full-time';
+}
+
 function toDateOnly(value: string): string {
   return value.slice(0, 10);
 }
@@ -63,7 +68,8 @@ const ApproveModal = ({
   onClose,
   onDone,
 }: ApproveModalProps) => {
-  const [playerType, setPlayerType] = useState<PlayerType>('OPEN_SLOT');
+  // Defaults to what they asked for; the admin can still switch it.
+  const [playerType, setPlayerType] = useState<PlayerType>(request.requestedPlayerType);
   const [name, setName] = useState(request.name);
   const [initialScore, setInitialScore] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -128,7 +134,12 @@ const ApproveModal = ({
           onChange={(e) => setName(e.target.value)}
         />
 
-        <span className="mb-1 block text-sm font-medium">Player type</span>
+        <span className="mb-1 block text-sm font-medium">
+          Player type{' '}
+          <span className="text-base-content/60">
+            (requested {playerTypeLabel(request.requestedPlayerType).toLowerCase()})
+          </span>
+        </span>
         <div className="mb-4 flex gap-4">
           {(['OPEN_SLOT', 'FULLTIME'] as PlayerType[]).map((type) => (
             <label key={type} className="flex cursor-pointer items-center gap-2">
@@ -138,7 +149,7 @@ const ApproveModal = ({
                 checked={playerType === type}
                 onChange={() => setPlayerType(type)}
               />
-              <span className="text-sm">{type === 'OPEN_SLOT' ? 'Open slot' : 'Full-time'}</span>
+              <span className="text-sm">{playerTypeLabel(type)}</span>
             </label>
           ))}
         </div>
@@ -242,8 +253,8 @@ export const JoinRequestOversight = ({
           {pendingCount > 0 && <span className="badge badge-warning">{pendingCount} pending</span>}
         </h2>
         <p className="text-sm text-base-content/60">
-          People who asked to join this squad. Approving adds them to the roster — open slot by
-          default, so they don&apos;t take a full-time place.
+          People who asked to join this squad, as an open-slot or full-time player. Approving adds
+          them to the roster as the type they asked for, unless you change it.
         </p>
       </div>
 
@@ -265,6 +276,7 @@ export const JoinRequestOversight = ({
                 <tr>
                   <th>Name</th>
                   <th>Email</th>
+                  <th>Type</th>
                   <th>Message</th>
                   <th>Requested</th>
                   <th>Status</th>
@@ -279,6 +291,15 @@ export const JoinRequestOversight = ({
                     <tr key={row.id}>
                       <td className="font-medium">{publicDisplayName(row.name)}</td>
                       <td className="text-sm">{row.email}</td>
+                      <td>
+                        <span
+                          className={`badge badge-outline whitespace-nowrap ${
+                            row.requestedPlayerType === 'FULLTIME' ? 'badge-primary' : ''
+                          }`}
+                        >
+                          {playerTypeLabel(row.requestedPlayerType)}
+                        </span>
+                      </td>
                       <td className="max-w-xs text-sm text-base-content/70">{row.message ?? '-'}</td>
                       <td className="font-numeric tabular-nums text-sm">{toDateOnly(row.createdAt)}</td>
                       <td>

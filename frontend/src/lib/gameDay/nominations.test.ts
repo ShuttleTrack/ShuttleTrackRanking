@@ -293,7 +293,7 @@ describe('an OUT voids the hand-off', () => {
     expect(attendance.confirmed.map((p) => p.id)).toEqual([ada.id]);
   });
 
-  it('after 13:00: the vacancy goes to the waiting list, and the ex-nominee gets no WAITING row back', async () => {
+  it('after 13:00: the vacancy goes to the waiting list, and the ex-nominee can only queue behind it', async () => {
     const gd = seedGameDay(db);
     fulltimeIn(db, gd.id, 15);
     const ada = fulltime(db, 'ada');
@@ -309,8 +309,10 @@ describe('an OUT voids the hand-off', () => {
     expect(nominationsOf(db, gd.id)[0]).toMatchObject({ endReason: 'NOMINATOR_OUT' });
     expect(entryOf(gd.id, grace.id)).toMatchObject({ status: 'ASSIGNED', source: 'WAITING_LIST' });
     expect(entryOf(gd.id, bob.id)).toBeNull();
-    // A closed vote has no queue: Bob's join is a direct claim, and the slot has just gone to Grace.
-    await expect(joinOpenSlot(1, gd.id, bob.id, T.afterClose)).rejects.toThrow(/No open slots available/);
+    // The slot has just gone to Grace, so the session is full again: Bob joins the back of the
+    // queue (open until slotLockAt) rather than claiming anything.
+    await joinOpenSlot(1, gd.id, bob.id, T.afterClose);
+    expect(entryOf(gd.id, bob.id)).toMatchObject({ status: 'WAITING' });
   });
 
   it('after 13:00 with nobody waiting, the ex-nominee can direct-claim the leftover slot', async () => {

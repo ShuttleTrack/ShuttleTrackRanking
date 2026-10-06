@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import type { PlayerType } from '@prisma/client';
 import { MAX_MESSAGE_LENGTH, MAX_NAME_LENGTH } from '@/lib/joinRequests';
 
 // Shared by the /squads/browse cards and the squad board's own "Request to join" CTA
 // (SELF_REGISTRATION_PLAN.md).
 //
-// Posts { name, message } only - deliberately no email field. The requester's identity comes
+// Posts { name, message, playerType } only - deliberately no email field. The requester's identity comes
 // from the session server-side; a body-supplied email would let anyone file a request as
 // someone else now that sign-in is open to every verified Google account.
 
@@ -15,6 +16,13 @@ const outlineBtn =
   'inline-flex min-h-[36px] items-center justify-center rounded-lg border border-white/10 px-4 text-sm font-medium text-on-surface transition-colors hover:border-primary/40 disabled:opacity-50';
 const primaryBtn =
   'inline-flex min-h-[36px] items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed';
+
+// Open slot first and the default: it's the common self-registration case, and full-time places
+// are capped (Squad.maxPlayers) so the admin may not be able to grant one anyway.
+const PLAYER_TYPE_OPTIONS: { value: PlayerType; label: string; hint: string }[] = [
+  { value: 'OPEN_SLOT', label: 'Open slot', hint: 'Play when a spot opens up' },
+  { value: 'FULLTIME', label: 'Full-time', hint: 'A regular place every game day' },
+];
 
 interface JoinRequestModalProps {
   squadId: number;
@@ -27,6 +35,7 @@ export function JoinRequestModal({ squadId, squadName, onClose, onSubmitted }: J
   const { data: session } = useSession();
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
+  const [playerType, setPlayerType] = useState<PlayerType>('OPEN_SLOT');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -48,7 +57,7 @@ export function JoinRequestModal({ squadId, squadName, onClose, onSubmitted }: J
       const res = await fetch(`/api/squads/${squadId}/join-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName, message: message.trim() || null }),
+        body: JSON.stringify({ name: trimmedName, message: message.trim() || null, playerType }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -79,9 +88,33 @@ export function JoinRequestModal({ squadId, squadName, onClose, onSubmitted }: J
           Request to join {squadName}
         </h3>
         <p className="mb-4 text-sm text-on-surface-variant">
-          Subject to squad admin approval. If the roster is full, you&apos;ll be added as an
-          open-slot player.
+          Subject to squad admin approval. The admin may offer you the other type, e.g. an open
+          slot if the full-time roster is full.
         </p>
+
+        <span className="mb-1 block text-sm font-medium text-on-surface">Join as</span>
+        <div className="mb-4 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Join as">
+          {PLAYER_TYPE_OPTIONS.map((option) => {
+            const selected = playerType === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                  selected
+                    ? 'border-primary bg-primary/10'
+                    : 'border-gray-600 hover:border-primary/40'
+                }`}
+                onClick={() => setPlayerType(option.value)}
+              >
+                <span className="block text-sm font-semibold text-on-surface">{option.label}</span>
+                <span className="block text-xs text-on-surface-variant">{option.hint}</span>
+              </button>
+            );
+          })}
+        </div>
 
         <div className="mb-1 flex items-baseline justify-between">
           <label className="block text-sm font-medium text-on-surface" htmlFor="join-name">

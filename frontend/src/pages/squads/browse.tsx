@@ -184,6 +184,9 @@ const BrowseSquadsPage = () => {
                   <span className="min-w-0 flex-1 truncate font-headline text-sm font-semibold text-on-surface">
                     {request.squadName}
                   </span>
+                  <span className="text-xs text-on-surface-variant">
+                    {request.requestedPlayerType === 'FULLTIME' ? 'Full-time' : 'Open slot'}
+                  </span>
                   <span className={chipWarning}>Request pending</span>
                   {!request.squadStillOpen && (
                     <span className="text-xs text-on-surface-variant">

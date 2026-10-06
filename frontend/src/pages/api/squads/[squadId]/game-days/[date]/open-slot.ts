@@ -5,7 +5,8 @@ import { resolveGameDayParam } from '@/lib/api/gameDayParam';
 import { isValidationError } from '@/lib/api/validationError';
 import { joinOpenSlot, leaveOpenSlot } from '@/lib/gameDay/openSlots';
 
-// POST: join the waiting list (voting open) or claim a slot directly (voting closed).
+// POST: join the waiting list (voting open, or closed with the session full) or claim a slot
+// directly (voting closed with a slot free).
 // DELETE: leave the waiting list - giving up an ASSIGNED slot is PUT vote { OUT } instead.
 // Neither carries a body: the acting player comes from the session only.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

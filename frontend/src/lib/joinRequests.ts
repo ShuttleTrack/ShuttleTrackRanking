@@ -1,6 +1,7 @@
 // Self-service squad join requests (SELF_REGISTRATION_PLAN.md). A signed-in person asks to join
-// a squad that has opted in (Squad.openForOpenSlot); a squad admin approves - creating the
-// Player row, open-slot by default - or rejects.
+// a squad that has opted in (Squad.openForOpenSlot), as either an open-slot or a full-time
+// player; a squad admin approves - creating the Player row as the requested type
+// unless they pick the other - or rejects.
 //
 // Sits outside lib/ranking/ for the same reason lib/replacements.ts does: this is roster
 // membership, not scoring. Throws ValidationError for caller error so routes can answer 400
@@ -26,6 +27,9 @@ export const MAX_MESSAGE_LENGTH = 500;
 export interface JoinRequestInput {
   name: string;
   message?: string | null;
+  // What the requester wants to join as. Defaults to OPEN_SLOT, the original (and still most
+  // common) self-registration case. Only a preference - the admin decides on approval.
+  playerType?: PlayerType;
 }
 
 export interface ApprovalInput {
@@ -69,14 +73,22 @@ function validateMessage(raw: string | null | undefined): string | null {
   return message;
 }
 
+function validatePlayerType(raw: unknown): PlayerType {
+  if (raw === undefined || raw === null) return PlayerType.OPEN_SLOT;
+  if (raw !== PlayerType.FULLTIME && raw !== PlayerType.OPEN_SLOT) {
+    throw new ValidationError(`Invalid player type: ${String(raw)}`);
+  }
+  return raw;
+}
+
 // Check-then-insert inside one transaction. The real rule is "at most one PENDING row per
 // (squadId, email)", which MySQL can't express as a partial unique index - same situation as
 // SlotReplacement's overlap rule, and handled the same way rather than inventing a second
 // pattern.
 //
-// Deliberately does NOT check maxPlayers: that caps the FULLTIME roster only, and a request is
-// approved as OPEN_SLOT by default, so a squad at its fulltime cap is still open for open-slot
-// registration. Blocking here would defeat the point of the feature.
+// Deliberately does NOT check maxPlayers, even for a FULLTIME request: that caps the FULLTIME
+// roster only, the requested type is just a preference, and the admin can still approve a
+// full-time request as OPEN_SLOT. The cap is enforced at approval (the approve modal + addPlayer).
 export async function createJoinRequest(
   squadId: number,
   actorEmail: string,
@@ -85,6 +97,7 @@ export async function createJoinRequest(
   const email = normaliseEmail(actorEmail);
   const name = validateName(input.name);
   const message = validateMessage(input.message);
+  const requestedPlayerType = validatePlayerType(input.playerType);
 
   return prisma.$transaction(async (tx) => {
     const squad = await tx.squad.findUnique({ where: { id: squadId } });
@@ -107,7 +120,7 @@ export async function createJoinRequest(
     }
 
     return tx.squadJoinRequest.create({
-      data: { squadId, email, name, message, status: JoinRequestStatus.PENDING },
+      data: { squadId, email, name, message, requestedPlayerType, status: JoinRequestStatus.PENDING },
     });
   });
 }
@@ -141,6 +154,7 @@ export interface MyJoinRequest {
   squadStillOpen: boolean;
   name: string;
   message: string | null;
+  requestedPlayerType: PlayerType;
   status: JoinRequestStatus;
   createdAt: string;
   decidedAt: string | null;
@@ -164,6 +178,7 @@ export async function listJoinRequestsForEmail(actorEmail: string): Promise<MyJo
     squadStillOpen: row.squad.enabled && row.squad.openForOpenSlot,
     name: row.name,
     message: row.message,
+    requestedPlayerType: row.requestedPlayerType,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     decidedAt: row.decidedAt?.toISOString() ?? null,
@@ -224,12 +239,8 @@ export async function approveJoinRequest(
   input: ApprovalInput = {}
 ): Promise<ApprovalResult> {
   const decidedByEmail = normaliseEmail(actorEmail);
-  const playerType = input.playerType ?? PlayerType.OPEN_SLOT;
   const hasScore = input.initialScore !== undefined && input.initialScore !== null;
 
-  if (playerType === PlayerType.FULLTIME && (!hasScore || Number(input.initialScore) <= 0)) {
-    throw new ValidationError('A starting score is required for a full-time player');
-  }
   if (hasScore && Number(input.initialScore) <= 0) {
     throw new ValidationError('Starting score must be greater than 0');
   }
@@ -237,6 +248,11 @@ export async function approveJoinRequest(
   try {
     return await prisma.$transaction(async (tx) => {
       const row = await loadPendingForSquad(tx, squadId, id);
+      // The admin may override the requested type; absent an explicit choice, honour the request.
+      const playerType = input.playerType ?? row.requestedPlayerType;
+      if (playerType === PlayerType.FULLTIME && !hasScore) {
+        throw new ValidationError('A starting score is required for a full-time player');
+      }
       // Re-validated because the admin may have edited it in the approve modal, and addPlayer
       // performs no length check of its own.
       const name = validateName(input.name ?? row.name);

@@ -29,27 +29,34 @@ describe('message builders', () => {
   it('links to the admin players page via button only on a real host', () => {
     const playersUrl = 'https://brs.example.com/s/wednesday/admin/players';
     expect(adminPlayersUrl(ctx)).toBe(playersUrl);
-    const post = buildJoinRequestMessage(ctx, { name: 'Sam', email: 'sam@example.com', message: null });
+    const post = buildJoinRequestMessage(ctx, { name: 'Sam', email: 'sam@example.com', message: null, requestedPlayerType: 'OPEN_SLOT' });
     expect(post.text).not.toContain(playersUrl);
     expect(post.text).toContain('<b>Sam</b> (sam@example.com) wants to join <b>Wed &lt;Smashers&gt;</b>');
     expect(post.buttons?.inline_keyboard[0][0].url).toBe(playersUrl);
     expect(post.buttons?.inline_keyboard[0][0].text).toBe('Review request');
   });
 
+  it('names the requested player type', () => {
+    const open = buildJoinRequestMessage(ctx, { name: 'Sam', email: 'sam@example.com', message: null, requestedPlayerType: 'OPEN_SLOT' });
+    expect(open.text).toContain('as an open-slot player');
+    const fulltime = buildJoinRequestMessage(ctx, { name: 'Sam', email: 'sam@example.com', message: null, requestedPlayerType: 'FULLTIME' });
+    expect(fulltime.text).toContain('as a full-time player');
+  });
+
   it('omits the note line when message is null', () => {
-    const post = buildJoinRequestMessage(ctx, { name: 'Sam', email: 'sam@example.com', message: null });
+    const post = buildJoinRequestMessage(ctx, { name: 'Sam', email: 'sam@example.com', message: null, requestedPlayerType: 'OPEN_SLOT' });
     expect(post.text).not.toContain('Note:');
   });
 
   it('escapes user-supplied text in a join request', () => {
-    const post = buildJoinRequestMessage(ctx, { name: 'A<b>', email: 'a@example.com', message: 'hi & bye' });
+    const post = buildJoinRequestMessage(ctx, { name: 'A<b>', email: 'a@example.com', message: 'hi & bye', requestedPlayerType: 'OPEN_SLOT' });
     expect(post.text).toContain('<b>A&lt;b&gt;</b> (a@example.com) wants to join <b>Wed &lt;Smashers&gt;</b>');
     expect(post.text).toContain('Note: hi &amp; bye');
   });
 
   it('appends the players URL when the inline button is unavailable (localhost)', () => {
     const localCtx = { appUrl: 'http://localhost:3000/', squadName: 'Wed', slug: 'wednesday' };
-    const post = buildJoinRequestMessage(localCtx, { name: 'Sam', email: 'sam@example.com', message: null });
+    const post = buildJoinRequestMessage(localCtx, { name: 'Sam', email: 'sam@example.com', message: null, requestedPlayerType: 'OPEN_SLOT' });
     expect(post.buttons).toBeUndefined();
     expect(post.text).toContain('http://localhost:3000/s/wednesday/admin/players');
   });
@@ -80,6 +87,7 @@ describe('message builders', () => {
       name: 'Nishan Karunarathna',
       email: 'n@example.com',
       message: null,
+      requestedPlayerType: 'OPEN_SLOT',
     });
     expect(join.text).toContain('<b>Nishan K</b> (n@example.com) wants to join <b>Wed &lt;Smashers&gt;</b>');
     expect(join.text).not.toContain('Karunarathna');
@@ -109,7 +117,7 @@ describe('message builders', () => {
 
 describe('notifyAdminsOf*', () => {
   const fetchMock = vi.fn();
-  const joinRequest = { id: 3, squadId: 1, name: 'Sam', email: 'sam@example.com', message: null } as SquadJoinRequest;
+  const joinRequest = { id: 3, squadId: 1, name: 'Sam', email: 'sam@example.com', message: null, requestedPlayerType: 'OPEN_SLOT' } as SquadJoinRequest;
   const replacement = {
     id: 9,
     squadId: 1,

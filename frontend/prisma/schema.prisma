@@ -137,6 +137,10 @@ model SquadJoinRequest {
   // validating the length here means the approval insert can't fail on it.
   name    String @db.VarChar(32)
   message String? @db.VarChar(500)
+  // What the requester asked to join as. Only a preference: the admin's approve modal defaults to
+  // it but may approve as either type. Existing rows backfill to OPEN_SLOT - every request before
+  // this column existed was filed against the open-slot-only flow.
+  requestedPlayerType PlayerType @default(OPEN_SLOT) @map("requested_player_type")
 
   status         JoinRequestStatus @default(PENDING)
   createdAt      DateTime          @default(now()) @map("created_at")

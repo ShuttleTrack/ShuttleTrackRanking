@@ -115,7 +115,7 @@ flag - and, later, what signing in requires at all:
 - **User**, continued: `/s/[squad]/game-day/[date]` (`YYYY-MM-DD`) - the game-day check-in page
   (see "Game day check-in & attendance vote" below). Gated by `resolveSquadUserOrRedirect`; a
   superadmin with no `Player` row gets a read-only observer view.
-- **Admin** (signed-in + squad admin, or superadmin): `/s/[squad]/admin/{dashboard,game-day,game-planner,players,score-keeper,settings}`.
+- **Admin** (signed-in + squad admin, or superadmin): `/s/[squad]/admin/{dashboard,game-day,game-planner,open-slot-attendance,players,score-keeper,settings}`. `open-slot-attendance` (linked from the dashboard's Quick Actions) shows one day at a time (a dropdown over the last two months of played/check-in dates, squad-local) with that day's open-slot players in three lists - registered and played, registered but not played, played without registering - plus a CSV download of all days. "Played" = in at least one `Encounter` that date; "registered" = held a place on that date's non-cancelled `GameDay`, read from the raw check-in rows (an `IN` vote, an `ASSIGNED` slot or inherited reservation without an `OUT`, or a live/`SESSION_ENDED` one-day nomination whose nominator voted `IN`; the waiting list alone does not count). Replacement cover and nominations show as notes - for the squad's cost sharing (`lib/reports/openSlotAttendance.ts`, `GET /api/squads/[squadId]/reports/open-slot-attendance`, squad-admin-only).
 - **Platform** (superadmin only): `/platform/squads` - create squads, manage each squad's admins,
   edit `enabled`/`maxPlayers`/`publicWeight`, and **Recalculate public ratings**.
 - **`/`** - **public aggregate leaderboard** (no login). One row per email for people who are
@@ -449,8 +449,12 @@ Full design doc: `SELF_REGISTRATION_PLAN.md` at the repo root. What's built:
   its admin opting in. (The first design draft *did* reuse `isPublic`; reversed on review,
   because it made "public board, closed roster" inexpressible and silently changed what a
   shipped toggle did.)
-- **`SquadJoinRequest`** (`squadId`, `email`, `name`, `message`, `status`, decision stamps,
-  `createdPlayerId`). Keyed by **email**, like `SquadAdmin` - no profile/user table was added;
+- **`SquadJoinRequest`** (`squadId`, `email`, `name`, `message`, `requestedPlayerType`,
+  `status`, decision stamps, `createdPlayerId`). `requestedPlayerType` (`PlayerType`, default
+  `OPEN_SLOT`, migration `20261003120000_join_request_player_type`) is the requester's choice of
+  open slot vs full-time in the request modal - a **preference only**: no `maxPlayers` check at
+  request time, since the admin may approve a full-time request as open slot. Rows predating the
+  column backfill to `OPEN_SLOT`, which is what every one of them was. Keyed by **email**, like `SquadAdmin` - no profile/user table was added;
   email remains the single identity key throughout this app, and a `UserProfile` would sit
   alongside that rather than replace it. (It stays addable later as a pure lookup table without
   touching `Player`, auth, or `lib/ranking/`.) Decided rows (`APPROVED`/`REJECTED`/`WITHDRAWN`)
@@ -459,15 +463,18 @@ Full design doc: `SELF_REGISTRATION_PLAN.md` at the repo root. What's built:
     partial unique index, so it's a check-then-insert inside one transaction, exactly like
     `SlotReplacement`'s overlap rule.
 - **Identity on the write path** (`lib/joinRequests.ts`): every function takes an explicit
-  `actorEmail` that routes fill from `getServerSession`. `POST /join-requests` reads only `name`
-  and `message` from the body and **ignores any `email` in it**; `DELETE` decides ownership by
+  `actorEmail` that routes fill from `getServerSession`. `POST /join-requests` reads only `name`,
+  `message` and `playerType` from the body and **ignores any `email` in it**; `DELETE` decides ownership by
   comparing the row's email to the session's, and answers "not found" rather than "forbidden"
   for someone else's row. This is a security property now that any verified Google account can
   sign in, and is unit-tested as one.
-- **Approval creates the `Player` row**, defaulting to `OPEN_SLOT` with **no** starting score,
-  in the same transaction that stamps the request - a created player against a still-`PENDING`
-  row would invite a duplicate second approval. The admin can override to `FULLTIME` (which,
-  unchanged, requires a score > 0). A scoreless open-slot player is already a safe state: they
+- **Approval creates the `Player` row**, defaulting to the request's `requestedPlayerType` (the
+  approve modal pre-selects it; the PATCH falls back to it when the body omits `playerType`), in
+  the same transaction that stamps the request - a created player against a still-`PENDING` row
+  would invite a duplicate second approval. The admin can switch to the other type. `FULLTIME`
+  (unchanged) requires a score > 0 and is blocked in the modal at the `maxPlayers` cap;
+  `OPEN_SLOT` may be approved with no starting score. The oversight table shows the requested
+  type as its own column, and the admin Telegram post names it. A scoreless open-slot player is already a safe state: they
   land in the admin roster's "Not Yet Played" list marked "Needs a score", and the game-planner's
   bulk-assign step plus the server-side gate on game create keep them out of the Elo math.
   - **Idempotent against an existing player**: an admin can add the same email manually while a
@@ -536,6 +543,19 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   deadline a holder cannot vote IN (unless they gained the slot after it) and can vote OUT only
   from an IN; a `WAITING_LIST` assignee can give the slot back until `slotLockAt`; a `DIRECT`
   claimer never can (an admin can release it).
+- **The waiting list after the deadline** (`joinOpenSlot`, `view.ts`'s `openSlotActions`): the
+  queue does not close at 13:00, it stays open until `slotLockAt` (start - 2h), because a slot
+  given up between 13:00 and the lock is re-offered. Whoever is still waiting after the 13:00
+  allocation keeps their place, and an open-slot player can still join - but only while the
+  session is **full**. With a slot free after 13:00 there is no queue, just a `DIRECT` claim; the
+  server decides which under the row lock, so of two concurrent joins for the last slot one
+  claims it and the other is queued. Since the sync promotes the head of the queue in the same
+  transaction as the drop-out, a vacancy is never claimable while anyone is waiting. Order stays
+  strictly `joinedAt`, so anyone queued before 13:00 is ahead of a late joiner. A late
+  promotion is a `WAITING_LIST` assignment like any other: announced in the open-slot group,
+  confirmable, and returnable until the lock. Anyone still waiting at `slotLockAt` simply did not
+  get a slot - the page says so; nothing is posted. (This used to close at 13:00, refusing a
+  late join to a full session - while the "filled up" posts already invited people to join.)
 - **The vacancy sync** (`lib/gameDay/openSlots.ts`): `planVacancySync(tx, id)` runs inside the
   caller's locked transaction and always promotes waiting-list players, strictly by `joinedAt`,
   up to the gap; `deliverVacancyPlan` posts to the open-slot group *after* commit and only then
@@ -634,9 +654,9 @@ arranged between the two of them beforehand. Summary of what's built (`lib/gameD
   *nominee* also deletes the nominator's IN, which was cast on their behalf), `GAME_DAY_CANCELLED`
   (inside `cancelGameDay` - every cancellation path goes through it; `cancelOpenGameDays` is only the
   disable path's loop). `recreateCancelledGameDay` deletes nomination rows with the votes. Once a
-  nomination ends early, the nominee is back in the pool: before 13:00 they can rejoin the waiting
-  list at the back; after it there is no queue, only a direct claim of a slot left over after the
-  waiting list was promoted.
+  nomination ends early, the nominee is back in the pool and goes through `joinOpenSlot` like
+  anyone else: the back of the waiting list, or - after 13:00, with a slot free and nobody
+  waiting - a direct claim (see "The waiting list after the deadline" above).
 - **The roster swap lives in `buildRoster` (`lib/gameDay/view.ts`)** and nowhere else: an IN by a
   nominator with an active (or `SESSION_ENDED`) nomination lists the nominee instead, with
   `standingInFor`. `getGameDayAttendance().confirmed` comes from it, so Game Planner pre-ticks - and

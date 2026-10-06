@@ -272,9 +272,18 @@ function openSlotActions(state: GameDayState, playerId: number, now: Date, vacan
             : entry?.status === 'WITHDRAWN'
               ? 'You gave your slot for this game day back, so you cannot rejoin'
               : null;
+  // After the deadline the queue stays open while the session is full (joinOpenSlot): a free slot
+  // is a direct claim instead, never a place in a queue nobody is ahead of you in.
+  const closedWithSlotFree = gameDay.status === 'VOTING_CLOSED' && (vacancies ?? 0) > 0;
   return {
     joinWaitingList:
-      blocked !== null ? no(blocked) : gameDay.status !== 'VOTING_OPEN' ? no('Voting has closed') : entry ? no('You are already on the waiting list') : yes,
+      blocked !== null
+        ? no(blocked)
+        : entry
+          ? no('You are already on the waiting list')
+          : closedWithSlotFree
+            ? no('There is an open slot - claim it instead')
+            : yes,
     leaveWaitingList: entry?.status === 'WAITING' ? yes : no('You are not on the waiting list'),
     claimSlot:
       blocked !== null

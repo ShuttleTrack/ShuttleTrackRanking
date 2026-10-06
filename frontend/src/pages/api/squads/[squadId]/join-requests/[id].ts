@@ -7,8 +7,8 @@ import { parseSquadId } from '@/lib/api/squadParam';
 import { isValidationError } from '@/lib/api/validationError';
 import { approveJoinRequest, rejectJoinRequest, withdrawJoinRequest } from '@/lib/joinRequests';
 
-// PATCH: a squad admin decides a pending request - approving creates the Player row (open-slot
-// by default). DELETE: the requester withdraws their own. Closest existing template is
+// PATCH: a squad admin decides a pending request - approving creates the Player row (as the
+// requested type unless the body's playerType overrides it). DELETE: the requester withdraws their own. Closest existing template is
 // replacements/[id]/cancellation.ts, down to the { decision } body shape, so the two admin
 // decision surfaces read alike. (SELF_REGISTRATION_PLAN.md)
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

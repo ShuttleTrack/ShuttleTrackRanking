@@ -8,7 +8,7 @@
 // Those never throw: a Telegram outage or a missing chat id must not turn a request that already
 // committed into an error response.
 import { format, parseISO } from 'date-fns';
-import type { SlotReplacement, SquadJoinRequest } from '@prisma/client';
+import type { PlayerType, SlotReplacement, SquadJoinRequest } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { buttonsFor, type TelegramPost } from '@/lib/gameDay/notifications';
 import { escapeTelegramHtml, sendTelegramMessage } from '@/lib/telegram/sendMessage';
@@ -40,11 +40,13 @@ export interface JoinRequestMessageInput {
   name: string;
   email: string;
   message: string | null;
+  requestedPlayerType: PlayerType;
 }
 
 export function buildJoinRequestMessage(ctx: AdminMessageContext, input: JoinRequestMessageInput): TelegramPost {
+  const asType = input.requestedPlayerType === 'FULLTIME' ? 'a full-time' : 'an open-slot';
   const lines = [
-    `🙋 <b>${escapeTelegramHtml(publicDisplayName(input.name))}</b> (${escapeTelegramHtml(input.email)}) wants to join <b>${escapeTelegramHtml(ctx.squadName)}</b>`,
+    `🙋 <b>${escapeTelegramHtml(publicDisplayName(input.name))}</b> (${escapeTelegramHtml(input.email)}) wants to join <b>${escapeTelegramHtml(ctx.squadName)}</b> as ${asType} player`,
   ];
   if (input.message) {
     lines.push(`Note: ${escapeTelegramHtml(input.message)}`);
@@ -148,7 +150,12 @@ export function notifyAdminsOfJoinRequest(request: SquadJoinRequest): Promise<vo
   const what = `join request #${request.id}`;
   return neverThrow(what, () =>
     sendAdminPost(request.squadId, what, (ctx) =>
-      buildJoinRequestMessage(ctx, { name: request.name, email: request.email, message: request.message })
+      buildJoinRequestMessage(ctx, {
+        name: request.name,
+        email: request.email,
+        message: request.message,
+        requestedPlayerType: request.requestedPlayerType,
+      })
     )
   );
 }
