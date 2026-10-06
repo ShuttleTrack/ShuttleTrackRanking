@@ -44,6 +44,9 @@ export interface RosterPlayer {
   playerRank: number | null;
   isOpenSlot: boolean;
   hasScore: boolean;
+  // When this row is on the In/Out list: the vote instant that put them there (ISO). Nominees
+  // inherit the nominator's In vote time. Null for awaiting confirmation, waiting list, not voted.
+  votedAt: string | null;
   // Set when this player is in the roster through a one-day nomination: playing in that
   // fulltime player's slot, who is then not listed themselves (SINGLE_DAY_NOMINATION_PLAN.md).
   standingInFor: { id: number; name: string } | null;
@@ -56,7 +59,7 @@ export interface UnconfirmedPlayer extends RosterPlayer {
   source: OpenSlotClaimSource | null;
 }
 
-function rosterPlayer(player: Player, state: GameDayState): RosterPlayer {
+function rosterPlayer(player: Player, state: GameDayState, votedAt: Date | null = null): RosterPlayer {
   return {
     id: player.id,
     name: player.name,
@@ -64,6 +67,7 @@ function rosterPlayer(player: Player, state: GameDayState): RosterPlayer {
     playerRank: player.playerRank !== null && player.playerRank > 0 ? player.playerRank : null,
     isOpenSlot: state.assignedIds.has(player.id),
     hasScore: player.rankScore !== null,
+    votedAt: votedAt?.toISOString() ?? null,
     standingInFor: null,
   };
 }
@@ -102,10 +106,13 @@ function buildRoster(state: GameDayState) {
       const nominee = standIn ? state.players.get(standIn.nomineePlayerId) : undefined;
       inPlayers.push(
         nominee
-          ? { ...rosterPlayer(nominee, state), standingInFor: { id: player.id, name: player.name } }
-          : rosterPlayer(player, state)
+          ? {
+              ...rosterPlayer(nominee, state, vote.votedAt),
+              standingInFor: { id: player.id, name: player.name },
+            }
+          : rosterPlayer(player, state, vote.votedAt)
       );
-    } else if (vote.choice === 'OUT') outPlayers.push(rosterPlayer(player, state));
+    } else if (vote.choice === 'OUT') outPlayers.push(rosterPlayer(player, state, vote.votedAt));
   }
   const unconfirmed: UnconfirmedPlayer[] = [
     ...counts.unconfirmedAssigneeIds.map((id) => ({

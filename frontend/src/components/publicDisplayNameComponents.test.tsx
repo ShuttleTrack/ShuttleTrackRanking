@@ -15,7 +15,7 @@ const rosterPlayer = {
   id: 1,
   name: FULL_NAME,
   colorHex: 'aabbcc',
-  playerRank: 3,
+  votedAt: '2026-09-23T11:00:00.000Z',
 };
 
 const plannerPlayer: GamePlannerPlayer = {

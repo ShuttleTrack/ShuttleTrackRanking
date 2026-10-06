@@ -106,13 +106,13 @@ export function buildReminderMessage(ctx: MessageContext, rollCall: ReminderRoll
   if (rollCall.in.length > 0) {
     lines.push('', 'In', ...rollCall.in.map(reminderInLine));
   }
-  if (rollCall.waiting.length > 0) {
-    lines.push(
-      '',
-      'Open slot waiting list',
-      ...rollCall.waiting.map((line) => `⏳ ${telegramPlayerName(line.name)}`)
-    );
-  }
+  // if (rollCall.waiting.length > 0) {
+  //   lines.push(
+  //     '',
+  //     'Open slot waiting list',
+  //     ...rollCall.waiting.map((line) => `⏳ ${telegramPlayerName(line.name)}`)
+  //   );
+  // }
   if (rollCall.out.length > 0) {
     lines.push('', 'Out', ...rollCall.out.map((line) => `❌ ${telegramPlayerName(line.name)}`));
   }
