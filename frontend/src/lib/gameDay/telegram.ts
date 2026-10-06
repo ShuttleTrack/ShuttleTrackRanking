@@ -40,13 +40,11 @@ export async function sendGameDayPost(
   if (!chatId) {
     return { status: 'skipped', reason: `no ${group === 'main' ? 'main' : 'open-slot'} group chat id configured` };
   }
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!botToken) {
-    return { status: 'failed', reason: 'TELEGRAM_BOT_TOKEN is not set' };
-  }
   try {
-    const result = await sendTelegramMessage(botToken, chatId, message.text, message.buttons);
-    return result.ok ? { status: 'sent' } : { status: 'failed', reason: result.description ?? 'unknown error' };
+    const result = await sendTelegramMessage(process.env.TELEGRAM_BOT_TOKEN, chatId, message.text, message.buttons);
+    if (result.ok) return { status: 'sent' };
+    if (result.skipped) return { status: 'skipped', reason: result.description ?? 'sending disabled' };
+    return { status: 'failed', reason: result.description ?? 'unknown error' };
   } catch (error) {
     return { status: 'failed', reason: error instanceof Error ? error.message : String(error) };
   }

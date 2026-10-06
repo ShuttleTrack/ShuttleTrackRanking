@@ -587,7 +587,12 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   page; turning it off cancels every open vote in the same request, and so does disabling the
   squad from platform admin (`PATCH /api/squads/[squadId]`, a different handler) - both via
   `cancelOpenGameDays`. The bot token stays the one shared `TELEGRAM_BOT_TOKEN`; only chat ids are
-  per-squad. `GET /api/squads/[squadId]` unpacks it into flat `gameDayXxx` fields.
+  per-squad. **Every** Telegram send (check-in, score keeper, admin group) is also gated on the
+  process env `TELEGRAM_SEND_ENABLED=true` (`lib/telegram/sendMessage.ts`), set only on the live
+  deployment: the chat ids live in the DB, so a dev server on a copy of live data would otherwise
+  post to the real groups - and the game-day send-once stamps dedupe within one database only.
+  Without the flag a send is logged (chat id + text) and treated as `skipped`, never retried.
+  `GET /api/squads/[squadId]` unpacks it into flat `gameDayXxx` fields.
 - **Score keeper notifications** (game started / completed / cancelled): `POST
   /api/squads/[squadId]/notify` (`{ event, gameId }`, squad admins) posts to the same
   `telegramMainChatId` via `sendGameDayPost`. For a **public** squad (`isPublic`), started and
