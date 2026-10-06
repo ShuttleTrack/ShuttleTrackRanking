@@ -36,12 +36,22 @@ export function isTelegramSendEnabled(): boolean {
   return process.env.TELEGRAM_SEND_ENABLED === 'true';
 }
 
+// Only the live deployment sets APP_ENV=production. Any other server marks its posts, so one that
+// reaches a real group by mistake says so. NODE_ENV cannot tell these apart - every built image is
+// 'production'.
+export const TESTING_MESSAGE_SUFFIX = ' - Testing message. Please ignore.';
+
+export function isProductionApp(): boolean {
+  return process.env.APP_ENV === 'production';
+}
+
 export async function sendTelegramMessage(
   botToken: string | undefined,
   chatId: string,
   text: string,
   buttons?: InlineKeyboard
 ): Promise<SendMessageResult> {
+  if (!isProductionApp()) text += TESTING_MESSAGE_SUFFIX;
   if (!isTelegramSendEnabled()) {
     const buttonLines = (buttons?.inline_keyboard ?? []).flat().map((b) => `  [${b.text}] ${b.url ?? b.callback_data ?? ''}`);
     console.log(

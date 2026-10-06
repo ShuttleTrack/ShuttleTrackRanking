@@ -48,4 +48,20 @@ describe('sendTelegramMessage', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.telegram.org/bottoken/sendMessage');
     expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
   });
+
+  const sentText = () => JSON.parse(fetchMock.mock.calls[0][1].body).text;
+
+  it('sends the text unchanged on production', async () => {
+    vi.stubEnv('TELEGRAM_SEND_ENABLED', 'true');
+    vi.stubEnv('APP_ENV', 'production');
+    await sendTelegramMessage('token', '-100123', 'Are you in?');
+    expect(sentText()).toBe('Are you in?');
+  });
+
+  it('marks the text as a testing message off production', async () => {
+    vi.stubEnv('TELEGRAM_SEND_ENABLED', 'true');
+    vi.stubEnv('APP_ENV', '');
+    await sendTelegramMessage('token', '-100123', 'Are you in?');
+    expect(sentText()).toBe('Are you in? - Testing message. Please ignore.');
+  });
 });

@@ -592,6 +592,8 @@ Full design doc: `ATTENDANCE_VOTE_PLAN.md` at the repo root (PR #210), including
   deployment: the chat ids live in the DB, so a dev server on a copy of live data would otherwise
   post to the real groups - and the game-day send-once stamps dedupe within one database only.
   Without the flag a send is logged (chat id + text) and treated as `skipped`, never retried.
+  Separately, unless the process has `APP_ENV=production` (also set only on the live
+  deployment), every message text gets ` - Testing message. Please ignore.` appended.
   `GET /api/squads/[squadId]` unpacks it into flat `gameDayXxx` fields.
 - **Score keeper notifications** (game started / completed / cancelled): `POST
   /api/squads/[squadId]/notify` (`{ event, gameId }`, squad admins) posts to the same
