@@ -41,9 +41,16 @@ export function CheckInPlayerRow({
           aria-hidden
         />
       )}
-      <span className="min-w-0 flex-1 font-headline text-sm font-semibold truncate">
-        {publicDisplayName(player.name)}
-      </span>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="min-w-0 truncate font-headline text-sm font-semibold">
+          {publicDisplayName(player.name)}
+        </span>
+        {isCurrentUser ? (
+          <span className="shrink-0 rounded-full bg-primary/20 px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-wide text-primary">
+            You
+          </span>
+        ) : null}
+      </div>
       {badge ? (
         <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
           {badge}
@@ -51,15 +58,10 @@ export function CheckInPlayerRow({
       ) : null}
       {player.votedAt ? (
         <span
-          className="font-numeric text-xs tabular-nums opacity-80 shrink-0"
+          className="shrink-0 font-numeric text-xs tabular-nums opacity-80"
           title={`Voted (${DEFAULT_TIMEZONE})`}
         >
           {formatVoteTimeAmsterdam(player.votedAt)}
-        </span>
-      ) : null}
-      {isCurrentUser ? (
-        <span className="shrink-0 rounded-full bg-primary/20 px-2 py-0.5 font-label text-[10px] font-bold uppercase tracking-wide text-primary">
-          You
         </span>
       ) : null}
     </li>
