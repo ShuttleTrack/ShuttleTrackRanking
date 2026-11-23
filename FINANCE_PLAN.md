@@ -1,6 +1,6 @@
 # Squad Finances (Cost Sharing & Collection) — Design Plan
 
-**Status:** Draft, for review. Nothing here is implemented yet.
+**Status:** Draft, for review. Nothing here is implemented yet. All open questions from the first draft are resolved (see the end).
 
 **Scope in one line:** give each squad a **running ledger per player**, fed by a day-after open-slot fee report and a month-end cost split across fulltime players, with money collected through **Tikkie links the treasurer pastes in** and payments **claimed by players and approved by the treasurer** — all announced to the squad's existing Telegram groups.
 
@@ -12,7 +12,7 @@ The app already knows most of what this needs:
 
 - **Who is fulltime vs open-slot** — `Player.playerType` (`OPEN_SLOT_PLAYERS_PLAN.md`).
 - **Which open-slot players played on a date, and whether they were covering someone's slot** — `lib/reports/openSlotAttendance.ts` (the `open-slot-attendance` admin page), which already exists "for the squad's cost sharing".
-- **Where to post** — `Squad.gameDayOps.telegramMainChatId` / `telegramOpenSlotChatId` (`lib/gameDay/telegram.ts:chatIdFor`) and `Squad.adminTelegramChatId` (`lib/adminNotifications.ts`).
+- **Where to post** — `Squad.gameDayOps.telegramMainChatId` / `telegramOpenSlotChatId` (`lib/gameDay/telegram.ts:chatIdFor`); `lib/telegram/sendMessage.ts` for the send itself.
 - **A background tick** — the every-5-minutes `node-cron` job in `src/instrumentation.ts`.
 - **Every person has an email and a login** — `Player.email` is required, and one email may be a separate `Player` row in more than one squad.
 
@@ -30,7 +30,7 @@ What it doesn't have: any notion of money, a join date on `Player`, or a Telegra
 - Treasurer-entered payments (no claim needed).
 - Cross-squad reimbursement for an expense paid by someone who isn't a member of that squad.
 - A cross-squad "My finances" page for every signed-in player, and a treasurer workspace.
-- A daily 18:00 pending-claims digest to the admin group.
+- A daily 18:00 pending-claims digest to a single treasurer Telegram chat.
 - `Player.createdAt` and `Player.telegramHandle`.
 
 **Explicitly out of scope:**
@@ -73,7 +73,7 @@ A running ledger rather than per-month bills because under/over-payment, late pa
 ### 4. Open-slot fee: day-after report, fixed fee, fixed-amount Tikkie
 
 - **Fee:** a fixed amount per squad, a new `Squad.openSlotFeeCents` setting (treasurer-editable). Snapshotted onto each report so a later fee change can't rewrite history.
-- **Draft:** the morning after each date that has open-slot players in `getOpenSlotAttendance`, the finance tick creates an `OpenSlotFeeReport` (`DRAFT`) for that squad + date and posts "open-slot report for <date> ready to review" to the squad's admin group. Lines are seeded from the attendance report:
+- **Draft:** at 09:00 squad-local the morning after each date that has open-slot players in `getOpenSlotAttendance`, the finance tick creates an `OpenSlotFeeReport` (`DRAFT`) for that squad + date and posts "open-slot report for <squad>, <date> ready to review" to the treasurer chat (Decision 11). Lines are seeded from the attendance report:
   - *registered and played* and *played without registering* → **ticked**;
   - *registered but not played* → listed, **unticked** (the treasurer decides on no-shows);
   - anyone **covering a fulltime slot** (a `SlotReplacement` or one-day nomination that date) → listed, **unticked**, with the reason. A replacement plays on the fulltime player's monthly share and pays nothing (settled in discussion).
@@ -91,7 +91,7 @@ A **claim** is "I paid €X on <date>, covering these players":
 - **Status:** `PENDING → APPROVED | REJECTED`, or `WITHDRAWN` by the claimant while pending. A pending claim has **no effect on balances**; "My finances" shows it as "awaiting confirmation".
 - **Approval is all-or-nothing.** The treasurer sees the full breakdown and either approves (one `PAYMENT` entry per line, in each line's squad, in one transaction) or rejects with an optional reason. Partial approval is deliberately not offered — rejecting lets the claimant resubmit a corrected claim, which is simpler than half-applied claims.
 - **Treasurer direct entry:** the same form, used by the treasurer on anyone's behalf (e.g. a cash payment, or someone who didn't mark it). It is created already `APPROVED`, with `source = TREASURER`, so the history reads the same either way.
-- **Digest:** at 18:00 Europe/Amsterdam, if any claims are pending, one message to the admin group of each squad that has a pending claim line: "N payment claims waiting for review (€total)" + link to the treasurer queue. Nothing on quiet days; no per-claim pings.
+- **Digest:** at 18:00 Europe/Amsterdam, if any claims are pending, one message to the treasurer chat (Decision 11): "N payment claims waiting for review (€total)" + link to the treasurer queue. Nothing on quiet days; no per-claim pings.
 
 ### 6. Month-end settlement: reviewed snapshot, rounded up to €0.50
 
@@ -146,6 +146,18 @@ A fully open balance sheet was considered (everyone sees everyone) because peopl
 - **`telegramHandle`** (nullable `VARCHAR(32)`, stored without the `@`, validated against Telegram's username rules: 5–32 chars, `[A-Za-z0-9_]`). Editable by the player on `/s/[squad]/user/profile` and by squad admins on the players page. Since it's a property of the person, saving it on one squad's profile updates **every** `Player` row with that email. Used only for @mentions in group posts; players without one are listed by name.
 - **`createdAt`** (nullable `DATETIME`, `DEFAULT CURRENT_TIMESTAMP` for new rows). **Not backfilled**: existing players stay `NULL`, which the snapshot treats as "not new" — correct, since they all predate the feature. Used only by Decision 6's first-month-free default.
 
+### 11. Treasurer notifications go to one chat, from env
+
+A new `TREASURER_TELEGRAM_CHAT_ID` env var (app configuration, not a squad setting) receives everything meant for the treasurer: the open-slot draft-ready pings and the 18:00 pending-claims digest. Unset = nothing sent; the pages still show the work. Squads' `adminTelegramChatId` is **not** used for finance, so squad admins who aren't the treasurer don't see payment details.
+
+### 12. Go-live: November 2026 is the first month settled in the app
+
+The first settlement is **November 2026**, closed in the first week of December. Nothing before it is imported; the existing Google Sheet stays the record of older history.
+
+- **Opening balances:** before closing November, the treasurer enters one `ADJUSTMENT` per player with a non-zero balance ("opening balance from the sheet as of <date>"). There is no history view for anything older.
+- **First settlement overrides:** November is the only month with no previous closed month, so its settlement page lets the treasurer type `carryForwardIn` by hand. If the open-slot reports (build step 4) aren't live yet, it also lets them type November's `openSlotIncome` by hand. Any unpaid November open-slot fees go into the opening balances. Both overrides are recorded on `FinanceMonth` with a flag saying they were manual, and are offered only when there is no earlier `FinanceMonth` for that squad.
+- **No `FinanceMonth` before November 2026** is ever created. Expenses and reports dated earlier are refused rather than stamped into November.
+
 ## Data model
 
 All new tables carry `squadId` where they belong to a squad, map to `UPPER_SNAKE` table names like the rest of the schema, and come in one additive migration.
@@ -174,6 +186,8 @@ model FinanceMonth {            // one per squad per month, created lazily when 
   closedAt         DateTime?
   closedByEmail    String?
   announcedAt      DateTime?              // null after a failed post → retry button
+  manualCarryForwardIn   Boolean @default(false)   // Decision 12, first settlement only
+  manualOpenSlotIncome   Boolean @default(false)
   members          FinanceMonthMember[]
   @@unique([squadId, month])
 }
@@ -285,14 +299,14 @@ The source-reference columns get **unique** indexes (e.g. one `FinanceEntry` per
 The money calculations (`ceilToHalfEuro`, the settlement formula, finance-month resolution, claim pre-fill, draft-line seeding) live in a pure `lib/finance/` module with unit tests, separate from the Prisma paths — the same split as `lib/gameDay/`.
 
 **Scheduler:** a `runFinanceTick()` added to the existing 5-minute cron in `instrumentation.ts`, guarded by stamps (never "now == threshold"), so a missed tick catches up:
-- Draft open-slot reports for each squad's past dates (from the morning after, squad-local) that have open-slot players and no report yet — looking back a bounded window (e.g. 14 days) so turning the feature on doesn't flood the admin group with old dates.
+- Draft open-slot reports for each squad's past dates (from 09:00 squad-local the next morning) that have open-slot players and no report yet. Looking back a bounded window (e.g. 14 days) means turning the feature on doesn't flood the treasurer chat with old dates. Scores are normally submitted and processed on the game day itself, so by 09:00 the next day the encounters are in. A date whose encounters are still missing is simply not drafted yet, and gets picked up by a later tick once they appear.
 - The 18:00 pending-claims digest, once per day (stamped).
 
 ## Docs to update in the implementation PR
 
 - `frontend/docs/squad-tenancy.md` — a new "Finances" section (per-squad books, treasurer role, new `Squad`/`Player` fields, Telegram posts), per `CLAUDE.md`.
 - `CLAUDE.md` — a "Where things live" bullet for `lib/finance/` and the `TREASURER_EMAILS` env var.
-- `.env.example` / deployment env — `TREASURER_EMAILS`.
+- `.env.example` / deployment env — `TREASURER_EMAILS`, `TREASURER_TELEGRAM_CHAT_ID`.
 
 ## Suggested build order
 
@@ -302,13 +316,12 @@ The money calculations (`ceilToHalfEuro`, the settlement formula, finance-month 
 4. **Open-slot reports** (scheduler draft, review, Telegram post).
 5. **Households and cross-squad reimbursements.**
 
-Each step is shippable on its own; the treasurer can enter open-slot fees as adjustments until step 4 lands.
+Each step is shippable on its own. **Steps 1–2 have to be live by the first week of December 2026** to settle November in the app (Decision 12). Until step 4 lands, the treasurer can use the first-settlement override for open-slot income, and adjustments for the per-player fees.
 
-## Open questions
+## Resolved questions
 
-1. **Opening balances.** People already carry balances in the current manual record. Proposal: on go-live, the treasurer enters one `ADJUSTMENT` per player ("opening balance as of <date>") and the first in-app month's `carryForwardIn` is set by hand on the first settlement. OK?
-2. **First in-app month.** Which month is the first one settled in the app? Months before it are never created.
-3. **Open-slot report timing.** Draft "the morning after" — is 09:00 squad-local fine, or should it wait until the day's `Game` is processed (so encounters are final)?
-4. **Admin-group posts.** The draft-ready ping and the digest go to each squad's `adminTelegramChatId`. Is the treasurer in both squads' admin groups, or should finance posts go to a single treasurer chat (a new `TREASURER_TELEGRAM_CHAT_ID` env var)?
-
-**Resolved while drafting:** leaving players. Nothing in the app deletes a `Player` row (leaving is a status change), so someone who left keeps their login and their "My finances" balance until it's settled. Finance tables reference `Player` with ordinary foreign keys, so a future delete path would have to deal with existing ledger rows first.
+1. **Opening balances:** one manual `ADJUSTMENT` per player, with no history view; old history stays in the Google Sheet (Decision 12).
+2. **First in-app month:** November 2026, settled in the first week of December (Decision 12).
+3. **Open-slot report timing:** 09:00 squad-local the next morning. Games are normally processed on the day itself; a date without encounters yet waits for a later tick (Scheduler).
+4. **Treasurer posts:** one treasurer chat, `TREASURER_TELEGRAM_CHAT_ID` env var (Decision 11).
+5. **Leaving players:** nothing in the app deletes a `Player` row (leaving is a status change), so someone who left keeps their login and their "My finances" balance until it's settled. Finance tables reference `Player` with ordinary foreign keys, so a future delete path would have to deal with existing ledger rows first.
